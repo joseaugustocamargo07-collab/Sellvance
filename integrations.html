@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Configurações{% endblock %}
+{% block topbar_title %}⚙️ Configurações{% endblock %}
+
+{% block content %}
+<div style="max-width:520px">
+  {% if msg %}
+  <div class="alert alert-success">✅ {{ msg }}</div>
+  {% endif %}
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="sec-title">👤 Minha Conta</div>
+    <form method="POST">
+      <div class="form-group">
+        <label class="form-label">Nome</label>
+        <input class="form-input" name="name" value="{{ session.user_name }}" placeholder="Seu nome">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nova Senha <span style="color:var(--text3)">(deixe em branco para não alterar)</span></label>
+        <input class="form-input" type="password" name="password" placeholder="••••••••" minlength="6">
+      </div>
+      <button type="submit" class="btn btn-primary">💾 Salvar alterações</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div class="sec-title">🏢 Informações do Plano</div>
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--text2)">Organização</span>
+        <span style="font-weight:600">{{ session.org_name }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <span style="color:var(--text2)">Plano atual</span>
+        <span class="badge b-purple">✦ Growth</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:10px 0">
+        <span style="color:var(--text2)">Email de acesso</span>
+        <span style="color:var(--text2)">{{ session.get('email', 'admin@sellvance.com') }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

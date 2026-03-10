@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sellvance — Login</title>
+<style>
+:root{--bg:#0a0a0f;--card:#16161f;--border:#2a2a3d;--text:#e8e8f0;--text2:#9090a8;--accent:#6c63ff;--accent2:#8b5cf6;--red:#ef4444;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.wrap{width:100%;max-width:400px;padding:24px;}
+.logo{text-align:center;margin-bottom:36px;}
+.logo-name{font-size:36px;font-weight:900;background:linear-gradient(135deg,#a78bfa,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.logo-sub{font-size:13px;color:var(--text2);margin-top:4px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:32px;}
+h1{font-size:18px;font-weight:700;margin-bottom:24px;}
+.form-group{margin-bottom:16px;}
+label{display:block;font-size:12px;color:var(--text2);margin-bottom:6px;}
+input{width:100%;background:#1a1a28;border:1px solid var(--border);border-radius:8px;padding:11px 14px;color:var(--text);font-size:14px;outline:none;transition:border .15s;}
+input:focus{border-color:var(--accent);}
+.btn{width:100%;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:none;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));margin-top:8px;transition:opacity .15s;}
+.btn:hover{opacity:.85;}
+.error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#fca5a5;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;}
+.hint{background:rgba(108,99,255,.08);border:1px solid rgba(108,99,255,.2);border-radius:10px;padding:14px;margin-top:20px;font-size:12px;color:var(--text2);line-height:1.7;}
+.hint strong{color:var(--accent);}
+.footer{text-align:center;margin-top:20px;font-size:11px;color:#3a3a55;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-name">Sellvance</div>
+    <div class="logo-sub">Marketing CRM para Ecommerce Brasileiro</div>
+  </div>
+  <div class="card">
+    <h1>Entrar na plataforma</h1>
+    {% if error %}
+    <div class="error">⚠️ {{ error }}</div>
+    {% endif %}
+    <form method="POST">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" name="email" placeholder="seu@email.com" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Senha</label>
+        <input type="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn">→ Entrar</button>
+    </form>
+    <div class="hint">
+      <strong>🧪 Conta demo:</strong><br>
+      Email: <strong>admin@sellvance.com</strong><br>
+      Senha: <strong>sellvance123</strong>
+    </div>
+  </div>
+  <div class="footer">Sellvance © 2026 · Todos os direitos reservados</div>
+</div>
+</body>
+</html>

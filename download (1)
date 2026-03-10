@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+sellvance.db
+.env
+*.tar.gz
+*.zip

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>App não configurado — Sellvance</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #060608; color: #f0f0f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .card { background: #111116; border: 1px solid rgba(245,158,11,.3); border-radius: 20px; padding: 48px 40px; max-width: 520px; width: 100%; }
+  h1 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  p { font-size: 14px; color: #8888a0; line-height: 1.6; margin-bottom: 16px; }
+  .badge { display: inline-block; background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); color: #fcd34d; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; margin-bottom: 20px; }
+  .env-list { background: #0c0c10; border: 1px solid #222230; border-radius: 10px; padding: 16px; margin: 16px 0; }
+  .env-item { font-family: monospace; font-size: 13px; color: #a5b4fc; padding: 4px 0; }
+  .btn { display: inline-block; margin-top: 20px; padding: 11px 28px; border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none; background: #6c63ff; color: #fff; border: none; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">⚙️ Configuração necessária</div>
+    <h1>App {{ platform_name }} não configurado</h1>
+    <p>Para ativar a conexão OAuth com {{ platform_name }}, você precisa configurar as variáveis de ambiente do Sellvance com as credenciais do app que você registrou na plataforma.</p>
+    <p><strong>Adicione no Replit (Secrets) ou no seu servidor:</strong></p>
+    <div class="env-list">
+      {% for var in env_vars %}
+      <div class="env-item">{{ var }}=<span style="color:#86efac">sua_chave_aqui</span></div>
+      {% endfor %}
+    </div>
+    <p style="font-size:12px;color:#4a4a60">Após adicionar as variáveis, reinicie o servidor e tente conectar novamente. O guia completo de como obter essas credenciais está no documento "Guia de Registro nas Plataformas de API".</p>
+    <a href="/integrations" class="btn">← Voltar</a>
+  </div>
+</body>
+</html>

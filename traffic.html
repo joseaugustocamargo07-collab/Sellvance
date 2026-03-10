@@ -1,0 +1,524 @@
+{% extends "base.html" %}
+{% block title %}Marketplaces{% endblock %}
+{% block topbar_title %}🏪 Inteligência de Marketplaces{% endblock %}
+
+{% block content %}
+{% set mp_icons  = {'mercado_livre':'🛒','amazon':'📦','tiktok_shop':'🎵'} %}
+{% set mp_names  = {'mercado_livre':'Mercado Livre','amazon':'Amazon','tiktok_shop':'TikTok Shop'} %}
+{% set mp_colors = {'mercado_livre':'#ffe600','amazon':'#ff9900','tiktok_shop':'#ff0050'} %}
+{% set mp_color  = mp_colors[mp] %}
+{% set mp_name   = mp_names[mp] %}
+
+<!-- MARKETPLACE SWITCHER -->
+<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+  {% for m in all_mp %}
+  <a href="/marketplaces?mp={{ m.id }}&tab={{ tab }}"
+     style="display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;font-weight:700;font-size:13px;text-decoration:none;transition:all .15s;
+       {% if mp == m.id %}background:{{ m.color }}22;border:2px solid {{ m.color }};color:{{ m.color }}
+       {% else %}background:var(--card);border:2px solid var(--border);color:var(--text2){% endif %}">
+    <span style="font-size:18px">{{ m.icon }}</span> {{ m.name }}
+    {% if mp == m.id %}<span style="font-size:10px">▼</span>{% endif %}
+  </a>
+  {% endfor %}
+  <button onclick="getAISuggestions()" class="btn btn-primary" style="margin-left:auto">
+    🤖 Sugestões da IA
+  </button>
+</div>
+
+<!-- TABS -->
+<div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
+  {% for t, label in [('overview','📊 Visão Geral'),('competitors','🔍 Concorrentes'),('ads','🎯 Anúncios'),('returns','↩️ Devoluções'),('keywords','🔑 Palavras-chave')] %}
+  <a href="/marketplaces?mp={{ mp }}&tab={{ t }}"
+     style="padding:9px 16px;font-size:13px;font-weight:600;border-radius:8px 8px 0 0;text-decoration:none;
+       {% if tab == t %}background:var(--card);color:var(--accent);border:1px solid var(--border);border-bottom:1px solid var(--card)
+       {% else %}color:var(--text2){% endif %}">
+    {{ label }}
+  </a>
+  {% endfor %}
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- TAB: VISÃO GERAL -->
+{% if tab == 'overview' %}
+
+<!-- Saúde da Conta -->
+<div class="grid g2" style="margin-bottom:20px">
+  <div class="card" style="border-top:3px solid {{ mp_color }}">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div class="sec-title" style="margin-bottom:0">🏥 Saúde da Conta</div>
+      <div style="font-size:28px;font-weight:900;color:{% if health.score >= 85 %}var(--green){% elif health.score >= 70 %}var(--yellow){% else %}var(--red){% endif %}">
+        {{ health.score }}<span style="font-size:14px">/100</span>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
+      {% for metric, val in health.metrics.items() %}
+      <div style="background:var(--card2);border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:11px;color:var(--text2)">{{ metric }}</span>
+        <span style="font-size:11px;font-weight:700;color:{% if val.ok %}var(--green){% else %}var(--red){% endif %}">
+          {% if not val.ok %}⚠️ {% endif %}{{ val.val }}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    {% if health.alerts %}
+    {% for alert in health.alerts %}
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:8px 12px;font-size:12px;color:#fcd34d;margin-bottom:6px">{{ alert }}</div>
+    {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- Minha posição vs concorrentes -->
+  <div class="card">
+    <div class="sec-title">📍 Posição no Mercado</div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Preço Cooler 32L vs concorrentes</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="font-size:11px;color:var(--text3);width:60px">Mínimo</div>
+        <div style="flex:1;height:6px;background:var(--border);border-radius:3px;position:relative">
+          {% set range = comp_analysis.max_price_32l - comp_analysis.min_price_32l %}
+          {% set my_pos = ((my.price_32l - comp_analysis.min_price_32l) / (range or 1) * 100)|int %}
+          <div style="position:absolute;left:{{ my_pos }}%;top:-4px;width:14px;height:14px;border-radius:50%;background:{{ mp_color }};border:2px solid #fff;transform:translateX(-50%)"></div>
+          <div style="width:100%;height:100%;background:linear-gradient(90deg,var(--green),var(--yellow),var(--red));border-radius:3px"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);width:60px;text-align:right">Máximo</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)">
+        <span>R$ {{ comp_analysis.min_price_32l }}</span>
+        <span style="color:{{ mp_color }};font-weight:700">Você: R$ {{ my.price_32l }}</span>
+        <span>R$ {{ comp_analysis.max_price_32l }}</span>
+      </div>
+      <div style="margin-top:8px;padding:6px 10px;border-radius:7px;font-size:12px;
+        {% if comp_analysis.price_position == 'acima' %}background:rgba(239,68,68,.1);color:#fca5a5
+        {% elif comp_analysis.price_position == 'abaixo' %}background:rgba(16,185,129,.1);color:var(--green)
+        {% else %}background:rgba(108,99,255,.1);color:var(--accent){% endif %}">
+        Preço {{ comp_analysis.price_position }} da média (R$ {{ comp_analysis.avg_price_32l }})
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Sua avaliação vs mercado</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="font-size:26px;font-weight:900;color:var(--yellow)">{{ my.rating }}⭐</div>
+      <div style="font-size:12px;color:var(--text2)">{{ "{:,}".format(my.reviews) }} avaliações<br><span style="color:var(--green)">Top {{ loop.index if loop else 1 }}% do marketplace</span></div>
+    </div>
+
+    <!-- Oportunidades -->
+    {% for opp in comp_analysis.opportunities %}
+    <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:700;color:var(--green)">{{ opp.icon }} {{ opp.title }}</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:3px">{{ opp.text }}</div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <span style="font-size:10px;background:rgba(16,185,129,.15);color:var(--green);padding:2px 7px;border-radius:8px">Impacto {{ opp.impact }}</span>
+        <span style="font-size:10px;background:var(--card2);color:var(--text2);padding:2px 7px;border-radius:8px">{{ opp.urgency }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Performance do Marketplace no banco de dados -->
+{% set my_data = mp_totals.get(mp, {}) %}
+<div class="grid g3" style="margin-bottom:20px">
+  <div class="card">
+    <div class="card-title">💰 Receita (últimos 30d)</div>
+    <div class="kpi-val" style="color:var(--green)">R$ {{ "{:,.0f}".format(my_data.get('revenue', 0)) }}</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:72%;background:var(--green)"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">🛒 Pedidos</div>
+    <div class="kpi-val" style="color:var(--accent)">{{ my_data.get('orders', 0) }}</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:60%;background:var(--accent)"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">↩️ Taxa de Devolução</div>
+    <div class="kpi-val" style="color:{% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}">{{ returns.return_rate }}%</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:{{ returns.return_rate * 10 }}%;background:{% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}"></div></div>
+  </div>
+</div>
+
+<!-- Top Anúncios do MP -->
+<div class="card">
+  <div class="sec-title">🎯 Top Anúncios — {{ mp_name }}</div>
+  <table class="tbl">
+    <thead><tr><th>Anúncio</th><th>Tipo</th><th>ACoS</th><th>ROAS</th><th>CTR</th><th>Conversões</th><th>Receita</th><th>Ação IA</th></tr></thead>
+    <tbody>
+    {% for ad in ads[:4] %}
+    <tr>
+      <td style="font-weight:600;font-size:12px">{{ ad.name }}</td>
+      <td><span class="badge b-purple" style="font-size:10px">{{ ad.type }}</span></td>
+      <td style="color:{% if ad.acos <= 20 %}var(--green){% elif ad.acos <= 30 %}var(--yellow){% else %}var(--red){% endif %};font-weight:700">{{ ad.acos }}%</td>
+      <td style="font-weight:700;color:{% if ad.roas >= 5 %}var(--green){% elif ad.roas >= 3 %}var(--yellow){% else %}var(--red){% endif %}">{{ ad.roas }}x</td>
+      <td style="color:var(--text2)">{{ ad.ctr }}%</td>
+      <td style="color:var(--accent)">{{ ad.conversions }}</td>
+      <td style="color:var(--green);font-weight:700">R$ {{ "{:,.0f}".format(ad.revenue) }}</td>
+      <td><span style="font-size:12px">{{ ad.action_label }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+{% elif tab == 'competitors' %}
+
+<div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
+  <div class="sec-title" style="margin-bottom:0">🔍 {{ competitors|length }} Concorrentes — {{ mp_name }}</div>
+  <div style="font-size:12px;color:var(--text2)">Atualizado agora</div>
+</div>
+
+<!-- Você vs todos -->
+<div class="card" style="margin-bottom:20px;border:2px solid {{ mp_color }}">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+    <span style="font-size:22px">{{ mp_icons[mp] }}</span>
+    <div>
+      <div style="font-weight:900;font-size:15px">Primeplas Coolers <span style="color:{{ mp_color }};font-size:12px">● VOCÊ</span></div>
+      <div style="font-size:11px;color:var(--text2)">{{ my.badge or 'Seller padrão' }} · Fulfillment: {{ 'Sim ✅' if my.fulfillment else 'Não ❌' }}</div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:20px">
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--yellow)">{{ my.rating }}⭐</div><div style="font-size:10px;color:var(--text3)">Avaliação</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900">{{ "{:,}".format(my.reviews) }}</div><div style="font-size:10px;color:var(--text3)">Reviews</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_32l }}</div><div style="font-size:10px;color:var(--text3)">Cooler 32L</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_20l }}</div><div style="font-size:10px;color:var(--text3)">Cooler 20L</div></div>
+      <div style="text-align:center">
+        <div style="font-size:18px;font-weight:900;color:{% if my.stock_32l > 20 %}var(--green){% elif my.stock_32l > 5 %}var(--yellow){% else %}var(--red){% endif %}">{{ my.stock_32l }}</div>
+        <div style="font-size:10px;color:var(--text3)">Estoque 32L</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:18px;font-weight:900;color:{% if my.stock_20l > 20 %}var(--green){% elif my.stock_20l > 5 %}var(--yellow){% else %}var(--red){% endif %}">{{ my.stock_20l }}</div>
+        <div style="font-size:10px;color:var(--text3)">Estoque 20L</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabela de concorrentes -->
+<div class="card" style="padding:0;overflow:hidden">
+  <table class="tbl">
+    <thead><tr>
+      <th>Concorrente</th><th>Avaliação</th><th>Reviews</th>
+      <th>Preço 32L</th><th>Preço 20L</th>
+      <th>Estoque</th><th>Patrocinado</th><th>Badge</th><th>Frete</th><th>IA</th>
+    </tr></thead>
+    <tbody>
+    {% for c in competitors %}
+    {% set stock_color = '#10b981' if c.stock == 'ok' else '#f59e0b' if c.stock == 'low' else '#ef4444' %}
+    {% set stock_label = '✅ OK' if c.stock == 'ok' else '⚠️ Baixo' if c.stock == 'low' else '🔴 Crítico' if c.stock == 'critical' else '❌ Sem estoque' %}
+    <tr>
+      <td style="font-weight:700">{{ c.name }}</td>
+      <td>
+        <span style="color:var(--yellow);font-weight:700">{{ c.rating }}⭐</span>
+        {% if c.rating > my.rating %}<span style="font-size:10px;color:#fca5a5"> ▲</span>
+        {% elif c.rating < my.rating %}<span style="font-size:10px;color:var(--green)"> ▼</span>{% endif %}
+      </td>
+      <td style="color:var(--text2)">{{ "{:,}".format(c.reviews) }}</td>
+      <td>
+        <span style="font-weight:700;color:{% if c.price_32l < my.price_32l %}var(--red){% elif c.price_32l > my.price_32l %}var(--green){% else %}var(--text){% endif %}">
+          R$ {{ c.price_32l }}
+        </span>
+        {% if c.price_32l < my.price_32l %}<span style="font-size:10px;color:#fca5a5"> -R${{ (my.price_32l - c.price_32l)|round(2) }}</span>{% endif %}
+      </td>
+      <td>
+        <span style="color:{% if c.price_20l < my.price_20l %}var(--red){% elif c.price_20l > my.price_20l %}var(--green){% else %}var(--text){% endif %}">
+          R$ {{ c.price_20l }}
+        </span>
+      </td>
+      <td><span style="color:{{ stock_color }};font-weight:600;font-size:12px">{{ stock_label }}</span></td>
+      <td>{% if c.sponsored %}<span class="badge b-purple" style="font-size:10px">Sim</span>{% else %}<span style="color:var(--text3);font-size:11px">Não</span>{% endif %}</td>
+      <td style="font-size:11px;color:var(--yellow)">{{ c.badge or '—' }}</td>
+      <td style="font-size:12px;color:var(--text2)">{{ c.shipping }}</td>
+      <td>
+        {% if c.stock in ('critical', 'out') %}
+        <span class="badge b-green" style="font-size:10px">📦 Oportunidade!</span>
+        {% elif c.price_32l < my.price_32l and c.rating < my.rating %}
+        <span class="badge b-purple" style="font-size:10px">⚔️ Ameaça de preço</span>
+        {% else %}
+        <span style="font-size:10px;color:var(--text3)">Monitorar</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+{% elif tab == 'ads' %}
+
+<div style="margin-bottom:16px">
+  <div class="sec-title">🎯 Gestão de Anúncios — {{ mp_name }}</div>
+  <div style="font-size:12px;color:var(--text2)">ACoS = Advertising Cost of Sale (quanto % da receita vai para anúncios — menor é melhor)</div>
+</div>
+
+<div class="grid g4" style="margin-bottom:20px">
+  {% set total_spend = ads | sum(attribute='spend') %}
+  {% set total_revenue = ads | sum(attribute='revenue') %}
+  {% set total_conv = ads | sum(attribute='conversions') %}
+  {% set avg_acos = (total_spend / total_revenue * 100) | round(1) if total_revenue > 0 else 0 %}
+  <div class="card">
+    <div class="card-title">💸 Total Investido</div>
+    <div class="kpi-val">R$ {{ "{:,.0f}".format(total_spend) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">💰 Receita de Ads</div>
+    <div class="kpi-val" style="color:var(--green)">R$ {{ "{:,.0f}".format(total_revenue) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">📊 ACoS Médio</div>
+    <div class="kpi-val" style="color:{% if avg_acos <= 20 %}var(--green){% elif avg_acos <= 30 %}var(--yellow){% else %}var(--red){% endif %}">{{ avg_acos }}%</div>
+  </div>
+  <div class="card">
+    <div class="card-title">✅ Conversões</div>
+    <div class="kpi-val" style="color:var(--accent)">{{ total_conv }}</div>
+  </div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+{% for ad in ads %}
+{% set acos_color = '#10b981' if ad.acos <= 20 else '#f59e0b' if ad.acos <= 30 else '#ef4444' %}
+<div class="card" style="border-left:4px solid {{ acos_color }}">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div style="width:52px;height:52px;border-radius:10px;background:{{ acos_color }}22;border:2px solid {{ acos_color }};display:flex;align-items:center;justify-content:center;flex-direction:column;flex-shrink:0">
+      <div style="font-size:14px;font-weight:900;color:{{ acos_color }}">{{ ad.acos }}%</div>
+      <div style="font-size:8px;color:{{ acos_color }}">ACoS</div>
+    </div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:13px;margin-bottom:3px">{{ ad.name }}</div>
+      <div style="font-size:11px;color:var(--text3)">{{ ad.type }} · {{ ad.action_label }}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;text-align:center;flex-shrink:0">
+      {% for label, val, color in [
+        ('ROAS', ad.roas|string + 'x', '#10b981' if ad.roas >= 5 else '#f59e0b' if ad.roas >= 3 else '#ef4444'),
+        ('CTR',  ad.ctr|string + '%',  'var(--text)'),
+        ('CPC',  'R$' + "{:.2f}".format(ad.cpc), 'var(--text)'),
+        ('Conv', ad.conversions|string, 'var(--accent)'),
+        ('Receita', 'R$' + "{:,.0f}".format(ad.revenue), 'var(--green)'),
+      ] %}
+      <div>
+        <div style="font-size:14px;font-weight:800;color:{{ color }}">{{ val }}</div>
+        <div style="font-size:10px;color:var(--text3)">{{ label }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0">
+      {% if ad.action == 'pause' %}
+      <button onclick="toggleMpAd('{{ ad.name }}','pause')" style="padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.3)">⏸ Pausar</button>
+      {% elif ad.action == 'scale' %}
+      <button onclick="toggleMpAd('{{ ad.name }}','scale')" style="padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.3)">🚀 Escalar +20%</button>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+{% elif tab == 'returns' %}
+
+<div class="grid g4" style="margin-bottom:20px">
+  <div class="card" style="border-top:3px solid {% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}">
+    <div class="card-title">📊 Taxa de Devolução</div>
+    <div class="kpi-val" style="color:{% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}">{{ returns.return_rate }}%</div>
+    <div style="font-size:12px;color:var(--text2)">Benchmark: &lt; 5%
+      {% if returns.trend == 'down' %}<span style="color:var(--green)"> ↓ Melhorando</span>
+      {% elif returns.trend == 'up' %}<span style="color:var(--red)"> ↑ Piorando</span>
+      {% else %}<span style="color:var(--text2)"> → Estável</span>{% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">📦 Total de Pedidos</div>
+    <div class="kpi-val">{{ returns.total_orders }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">↩️ Total Devolvido</div>
+    <div class="kpi-val" style="color:var(--red)">{{ returns.total_returns }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">💸 Receita Perdida</div>
+    <div class="kpi-val" style="color:var(--red)">R$ {{ "{:,.0f}".format(returns.refunded_revenue) }}</div>
+    <div style="font-size:12px;color:var(--text2)">{{ returns.avg_resolution_days }} dias médio de resolução</div>
+  </div>
+</div>
+
+<div class="grid g2">
+  <div class="card">
+    <div class="sec-title">📋 Motivos de Devolução</div>
+    {% for r in returns.reasons %}
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span>{{ r.reason }}</span>
+        <span style="font-weight:700">{{ r.count }} ({{ r.pct }}%)</span>
+      </div>
+      <div class="prog">
+        <div class="prog-fill" style="width:{{ r.pct }}%;background:{% if r.pct > 30 %}var(--red){% elif r.pct > 20 %}var(--yellow){% else %}var(--accent){% endif %}"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <div class="sec-title">🤖 Plano de Ação para Reduzir Devoluções</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      {% if returns.reasons[0].reason == 'Produto diferente do anunciado' %}
+      <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:12px">
+        <div style="font-size:12px;font-weight:700;color:#fca5a5;margin-bottom:6px">⚠️ Principal causa: Expectativa vs Realidade</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7">→ Adicionar vídeo de 360° mostrando dimensões reais<br>→ Incluir foto com objeto de referência (garrafa, pessoa)<br>→ Revisar título para não criar expectativas incorretas</div>
+      </div>
+      {% endif %}
+      <div style="background:rgba(108,99,255,.06);border:1px solid rgba(108,99,255,.2);border-radius:8px;padding:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px">💡 Ação imediata de maior impacto</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7">
+          Adicionar chat pós-venda automático: "Recebeu seu cooler? Ficou com dúvidas?" — reduz devoluções por arrependimento em ~40% ao aumentar percepção de suporte.
+        </div>
+      </div>
+      <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">📈 Meta: Reduzir para {{ [returns.return_rate - 1.5, 2.0]|max|round(1) }}%</div>
+        <div style="font-size:12px;color:var(--text2)">
+          Isso representa economia de R$ {{ "{:,.0f}".format(returns.refunded_revenue * 0.30) }} por mês e melhora o score da conta.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+{% elif tab == 'keywords' %}
+
+<div style="margin-bottom:16px">
+  <div class="sec-title">🔑 Oportunidades de Palavras-chave — {{ mp_name }}</div>
+  <div style="font-size:12px;color:var(--text2)">Volume de busca mensal · Sua posição atual · Potencial de ROI</div>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+  <table class="tbl">
+    <thead><tr>
+      <th>Palavra-chave</th><th>Volume/mês</th><th>Concorrência</th>
+      <th>Sua posição</th><th>CPC Est.</th><th>Oportunidade</th><th>Ação</th>
+    </tr></thead>
+    <tbody>
+    {% for kw in keywords %}
+    {% set opp_color = '#10b981' if kw.opportunity == 'muito alto' else '#6c63ff' if kw.opportunity == 'alto' else '#f59e0b' %}
+    <tr>
+      <td style="font-weight:700;font-size:13px">{{ kw.kw }}</td>
+      <td>
+        <div style="font-weight:700">{{ "{:,}".format(kw.volume) }}</div>
+        <div class="prog" style="margin-top:4px">
+          <div class="prog-fill" style="width:{{ [kw.volume / 2000, 100]|min }}%;background:var(--accent)"></div>
+        </div>
+      </td>
+      <td>
+        <span class="badge {% if kw.competition == 'baixa' %}b-green{% elif kw.competition == 'média' %}b-yellow{% else %}b-red{% endif %}" style="font-size:10px">
+          {{ kw.competition|title }}
+        </span>
+      </td>
+      <td>
+        {% if kw.your_pos %}
+        <span style="font-weight:700;color:{% if kw.your_pos <= 3 %}var(--green){% elif kw.your_pos <= 8 %}var(--yellow){% else %}var(--red){% endif %}">
+          #{{ kw.your_pos }}
+        </span>
+        {% else %}
+        <span style="color:var(--red);font-size:12px">Não rankeando</span>
+        {% endif %}
+      </td>
+      <td style="color:var(--text2)">R$ {{ kw.cpc_est }}</td>
+      <td>
+        <span class="badge" style="background:{{ opp_color }}22;color:{{ opp_color }};font-size:10px">
+          {{ kw.opportunity|title }}
+        </span>
+      </td>
+      <td>
+        {% if kw.your_pos and kw.your_pos > 3 %}
+        <span style="font-size:11px;color:var(--accent)">↑ Aumentar lance</span>
+        {% elif not kw.your_pos %}
+        <span style="font-size:11px;color:var(--green)">+ Criar anúncio</span>
+        {% else %}
+        <span style="font-size:11px;color:var(--text3)">Manter</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- MODAL IA SUGGESTIONS -->
+<div id="modal-ai" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;width:660px;max-height:85vh;overflow-y:auto;padding:28px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div>
+        <div style="font-size:16px;font-weight:900">🤖 Sugestões da IA — {{ mp_name }}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Ações práticas baseadas nos seus dados</div>
+      </div>
+      <button onclick="document.getElementById('modal-ai').style.display='none'"
+              style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--text2);cursor:pointer">✕</button>
+    </div>
+    <div id="modal-ai-body">
+      <div style="text-align:center;padding:40px;color:var(--text2)">
+        <div style="font-size:36px;margin-bottom:12px">🤖</div>
+        <div>Analisando seus dados...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" style="display:none;position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999"></div>
+
+<script>
+async function getAISuggestions() {
+  var modal = document.getElementById('modal-ai');
+  var body  = document.getElementById('modal-ai-body');
+  modal.style.display = 'flex';
+  body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text2)"><div style="font-size:36px;margin-bottom:12px;display:inline-block;animation:spin 1s linear infinite">🤖</div><div>Analisando dados do marketplace...</div></div><style>@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>';
+
+  try {
+    var res  = await fetch('/marketplaces/ai-suggestions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ marketplace: '{{ mp }}' })
+    });
+    var data = await res.json();
+    var actions = data.actions || [];
+
+    var catColors = { 'Preço':'#10b981','Anúncios':'#6c63ff','Estoque':'#f59e0b','Reputação':'#3b82f6','Conteúdo':'#ec4899','Fulfillment':'#8b5cf6','Afiliados':'#ff0050','Live':'#ff6b35' };
+    var html = '';
+    actions.forEach(function(a) {
+      var color = catColors[a.category] || '#6c63ff';
+      var impactColor = a.impact === 'Alto' ? 'var(--green)' : a.impact === 'Médio' ? 'var(--yellow)' : 'var(--text2)';
+      html += '<div style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:10px">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+      html += '<span style="background:'+color+'22;color:'+color+';border:1px solid '+color+'44;padding:3px 10px;border-radius:8px;font-size:11px;font-weight:700">'+a.category+'</span>';
+      html += '<span style="font-size:13px;font-weight:700">'+a.title+'</span>';
+      html += '<span style="margin-left:auto;font-size:11px;color:'+impactColor+';font-weight:700">● '+a.impact+'</span>';
+      html += '</div>';
+      html += '<div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:8px">'+a.description+'</div>';
+      html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">';
+      html += '<span>⏱️ '+a.time_to_implement+'</span><span style="color:var(--green)">📈 '+a.expected_result+'</span>';
+      html += '</div></div>';
+    });
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = '<div style="padding:20px;color:#fca5a5">Erro ao carregar sugestões.</div>';
+  }
+}
+
+function toggleMpAd(name, action) {
+  var verb = action === 'pause' ? 'pausar' : 'escalar';
+  if (!confirm('Deseja ' + verb + ' o anúncio "' + name + '"?')) return;
+  fetch('/marketplaces/ads/toggle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, action: action })
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    showToast(d.msg, action === 'pause' ? 'warn' : 'success');
+  });
+}
+
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  var s = { success: 'background:#052e16;border:1px solid #10b981;color:#6ee7b7', warn: 'background:#1c1003;border:1px solid #f59e0b;color:#fcd34d' };
+  t.setAttribute('style', (s[type]||s.warn) + ';position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999');
+  t.textContent = msg;
+  setTimeout(function(){ t.style.display = 'none'; }, 3000);
+}
+</script>
+{% endblock %}
