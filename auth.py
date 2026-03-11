@@ -1,12 +1,24 @@
-modules = ["python-3.11"]
+import hashlib
+import os
+from functools import wraps
+from flask import session, redirect, url_for
 
-[nix]
-channel = "stable-24_05"
+def hash_password(password: str) -> str:
+    salt = os.urandom(16).hex()
+    hashed = hashlib.sha256((password + salt).encode()).hexdigest()
+    return f"{salt}:{hashed}"
 
-[deployment]
-run = ["python", "main.py"]
-deploymentTarget = "cloudrun"
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        salt, hashed = stored.split(':')
+        return hashlib.sha256((password + salt).encode()).hexdigest() == hashed
+    except Exception:
+        return False
 
-[[ports]]
-localPort = 8080
-externalPort = 80
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
