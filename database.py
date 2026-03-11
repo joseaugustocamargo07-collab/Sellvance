@@ -183,7 +183,7 @@ def init_db():
         ('google', 'goog_1', 'Shopping — Cooler Caixa Térmica', 'shopping',   'smart',          3800, 180, 22040, 180000, 5400,  98, 0,        0, 0,      'active',  0, ''),
         ('google', 'goog_2', 'Search Branded — Primeplas',      'search',     'branded',         890,  60, 10680,  48000, 2340,  44, 0,        0, 0,      'active',  0, ''),
         ('google', 'goog_3', 'Search Genérico — Cooler',        'search',     'generico',       1200,  80,  3480,  62000, 1860,  22, 0,        0, 0,      'active',  0, ''),
-        ('google', 'goog_4', 'PMax — Catálogo Completo',         'pmax',       'smart',          2100, 120, 14700,  95000, 3800,  70, 0,        0, 0,      'active',  0, ''),
+        ('google', 'goog_4', 'PMax — Catálogo Completo',        'pmax',       'smart',          2100, 120, 14700,  95000, 3800,  70, 0,        0, 0,      'active',  0, ''),
         ('google', 'goog_5', 'Display Remarketing',             'display',    'remarketing',     480,  40,   720,  390000, 1200,  9, 0,        0, 0,      'active',  0, ''),
         ('tiktok', 'tik_1',  'TikTok Shop — Boost Cooler 32L', 'shop',       'broad',          2100, 120, 15750, 420000,12600, 210, 0,   380000, 290000, 'active',  0, ''),
         ('tiktok', 'tik_2',  'Viral Verão — Unboxing',          'video',      'interesse_18_35', 1800, 100, 13500, 380000,11400, 188, 0,   340000, 260000, 'active',  0, ''),
@@ -195,7 +195,7 @@ def init_db():
             INSERT INTO ad_campaigns
               (org_id,platform,external_campaign_id,name,objective,audience,
                spend,budget_daily,revenue,impressions,clicks,conversions,leads,reach,video_views,status,paused_by_ai,ai_note)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ''', (org_id, *c))
         campaign_ids.append(db.execute("SELECT last_insert_rowid()").fetchone()[0])
 
@@ -228,8 +228,10 @@ def migrate_db():
     """Adiciona tabelas novas sem recriar o banco."""
     db = get_db()
     existing = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+    db.close()
 
     if 'whatsapp_campaigns' not in existing:
+        db = get_db()
         db.executescript('''
             CREATE TABLE whatsapp_campaigns (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -317,13 +319,13 @@ def migrate_db():
         for w in wa_camps:
             db.execute('''INSERT INTO whatsapp_campaigns
                 (org_id,name,segment,message,status,sent,delivered,read_count,replied,converted,revenue,scheduled_at,sent_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', w)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''', w)
 
         # Seed Email campaigns
         em_camps = [
             (org_id, 'Newsletter Junho — Dicas de Verão', 'Dicas de Verão + Oferta Especial Primeplas',
              'loyal', 'sent', 1240, 1180, 486, 142, 38, 12, 7220.00, None, datetime_ago(-5)),
-            (org_id, 'Carrinho Abandonado — Recuperação', 'Você esqueceu seu Cooler 🧆',
+            (org_id, 'Carrinho Abandonado — Recuperação', 'Você esqueceu seu Cooler 🧊',
              'at_risk', 'sent', 89, 84, 62, 41, 18, 3, 3420.00, None, datetime_ago(-2)),
             (org_id, 'Onboarding Novos Clientes', 'Bem-vindo à família Primeplas! 🎉',
              'new', 'sent', 156, 148, 131, 67, 22, 1, 4180.00, None, datetime_ago(-10)),
@@ -333,7 +335,7 @@ def migrate_db():
         for e in em_camps:
             db.execute('''INSERT INTO email_campaigns
                 (org_id,name,subject,segment,status,sent,delivered,opened,clicked,converted,unsubscribed,revenue,scheduled_at,sent_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', e)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', e)
 
         # Seed Stock
         skus = [
@@ -350,7 +352,7 @@ def migrate_db():
             days = int(avail / daily) if daily > 0 else 999
             db.execute('''INSERT INTO stock_items
                 (org_id,sku,name,marketplace,stock_qty,reserved_qty,min_stock,cost_price,sale_price,avg_daily_sales,days_remaining,status)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
                 (s[0], s[1], s[2], s[3], qty, reserved, min_s, cost, price, daily, days, status))
 
         # Seed API integrations
