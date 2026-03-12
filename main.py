@@ -365,8 +365,8 @@ def traffic():
     db = get_db()
     org_id = session.get('org_id', 1)
     
-    # All campaigns
-    campaigns_raw = db.execute('SELECT * FROM ad_campaigns WHERE org_id = ?', (org_id,)).fetchall()
+    # Only Meta and Google campaigns (TikTok stays in Marketplaces)
+    campaigns_raw = db.execute("SELECT * FROM ad_campaigns WHERE org_id = ? AND platform IN ('meta', 'google')", (org_id,)).fetchall()
     
     # Calculate metrics for each campaign
     campaigns = []
