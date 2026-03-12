@@ -16,14 +16,14 @@
     <h2 class="section-title">Conectar {{ catalog_item.name }} via API Key</h2>
   </div>
   <form method="POST" action="/integrations/save-keys/{{ api_key_platform }}" style="padding:0 20px 20px;">
-    {% for field in catalog_item.get('api_fields', []) %}
+    {% for field in catalog_item.get('required_fields', []) %}
     <div style="margin-bottom:14px;">
       <label class="form-label">{{ field.label }}</label>
       <input
         class="form-input"
-        type="{{ 'password' if field.secret else 'text' }}"
-        name="{{ field.name }}"
-        placeholder="{{ field.placeholder }}"
+        type="{{ field.get('type', 'text') }}"
+        name="{{ field.key }}"
+        placeholder="{{ field.get('placeholder', '') }}"
         required
       />
     </div>
