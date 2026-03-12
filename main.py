@@ -355,5 +355,132 @@ def resume_campaign(campaign_id):
     db.commit()
     return jsonify({'status': 'ok'})
 
+
+# -- AI Suggestions endpoint for Marketplaces --
+
+@app.route('/marketplaces/ai-suggestions', methods=['POST'])
+@login_required
+def marketplace_ai_suggestions():
+    """Gera sugestoes inteligentes baseadas nos dados do marketplace."""
+    try:
+        from marketplace_intel import (COMPETITORS, MY_PRODUCTS, MP_ADS_DATA,
+                                        RETURNS_DATA, ACCOUNT_HEALTH,
+                                        analyze_competitive_position,
+                                        analyze_mp_ads, get_keyword_opportunities)
+
+        data = request.get_json() or {}
+        mp = data.get('marketplace', 'mercado_livre')
+
+        actions = []
+
+        # 1. Analise competitiva
+        comp = analyze_competitive_position(mp)
+        for opp in comp.get('opportunities', []):
+            actions.append({
+                'category': 'Concorrencia',
+                'title': opp.get('title', ''),
+                'description': opp.get('text', ''),
+                'impact': opp.get('impact', 'Medio'),
+                'time_to_implement': opp.get('urgency', 'Esta semana'),
+                'expected_result': 'Aproveite esta oportunidade para ganhar market share'
+            })
+        for rec in comp.get('recommendations', []):
+            actions.append({
+                'category': 'Preco',
+                'title': rec.get('title', ''),
+                'description': rec.get('text', ''),
+                'impact': 'Alto' if rec.get('priority') == 'alta' else 'Medio',
+                'time_to_implement': 'Esta semana',
+                'expected_result': 'Melhoria na competitividade de preco'
+            })
+
+        # 2. Analise de anuncios
+        ads = analyze_mp_ads(mp)
+        for ad in ads:
+            if ad.get('action') == 'scale':
+                actions.append({
+                    'category': 'Anuncios',
+                    'title': 'Escalar: ' + ad['name'],
+                    'description': 'ROAS ' + str(ad['roas']) + 'x com ACoS ' + str(ad['acos']) + '%. Aumente o budget em 20-30% para maximizar retorno.',
+                    'impact': 'Alto',
+                    'time_to_implement': 'Imediato',
+                    'expected_result': 'Aumento de receita proporcional ao budget adicional'
+                })
+            elif ad.get('action') == 'pause':
+                actions.append({
+                    'category': 'Anuncios',
+                    'title': 'Pausar: ' + ad['name'],
+                    'description': 'ACoS de ' + str(ad['acos']) + '% esta muito alto. ROAS de apenas ' + str(ad['roas']) + 'x. Pause e redirecione o budget.',
+                    'impact': 'Alto',
+                    'time_to_implement': 'Imediato',
+                    'expected_result': 'Economia de R$' + str(int(ad['spend'])) + ' em gastos ineficientes'
+                })
+            elif ad.get('action') == 'optimize':
+                actions.append({
+                    'category': 'Anuncios',
+                    'title': 'Otimizar: ' + ad['name'],
+                    'description': 'CTR de ' + str(ad['ctr']) + '% e CPC de R$' + str(ad['cpc']) + '. Teste novos criativos e palavras-chave para melhorar conversao.',
+                    'impact': 'Medio',
+                    'time_to_implement': 'Esta semana',
+                    'expected_result': 'Reducao de 15-20% no ACoS'
+                })
+
+        # 3. Keywords
+        keywords = get_keyword_opportunities(mp)
+        high_opp = [k for k in keywords if k.get('opportunity') in ('muito alto', 'alto')]
+        if high_opp:
+            kw_names = ', '.join(k['kw'] for k in high_opp[:3])
+            actions.append({
+                'category': 'Palavras-chave',
+                'title': str(len(high_opp)) + ' palavras-chave com alta oportunidade',
+                'description': 'Foque em: ' + kw_names + '. Volume alto e concorrencia baixa/media.',
+                'impact': 'Alto',
+                'time_to_implement': 'Esta semana',
+                'expected_result': 'Aumento de 20-40% no trafego organico e pago'
+            })
+
+        # 4. Saude da conta
+        health = ACCOUNT_HEALTH.get(mp, {})
+        for alert in health.get('alerts', []):
+            actions.append({
+                'category': 'Saude da Conta',
+                'title': 'Alerta de saude da conta',
+                'description': alert,
+                'impact': 'Alto',
+                'time_to_implement': 'Imediato',
+                'expected_result': 'Prevencao de suspensao ou perda de badge'
+            })
+
+        # 5. Devolucoes
+        returns = RETURNS_DATA.get(mp, {})
+        if returns.get('return_rate', 0) > 5:
+            top_reason = returns.get('reasons', [{}])[0]
+            actions.append({
+                'category': 'Devolucoes',
+                'title': 'Taxa de devolucao alta: ' + str(returns['return_rate']) + '%',
+                'description': 'Principal motivo: ' + top_reason.get('reason', 'N/A') + ' (' + str(top_reason.get('pct', 0)) + '%). Revise descricao e fotos do produto.',
+                'impact': 'Alto',
+                'time_to_implement': 'Esta semana',
+                'expected_result': 'Economia de R$' + str(int(returns.get('refunded_revenue', 0))) + ' em reembolsos'
+            })
+
+        # 6. Estoque baixo
+        my = MY_PRODUCTS.get(mp, {})
+        if my.get('stock_20l', 0) <= 10:
+            actions.append({
+                'category': 'Estoque',
+                'title': 'Estoque critico: Cooler 20L (' + str(my.get('stock_20l', 0)) + ' un)',
+                'description': 'Estoque abaixo de 10 unidades. Risco de ruptura e perda de ranking.',
+                'impact': 'Alto',
+                'time_to_implement': 'Imediato',
+                'expected_result': 'Evitar ruptura de estoque e perda de posicionamento'
+            })
+
+        return jsonify({'actions': actions})
+
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)
