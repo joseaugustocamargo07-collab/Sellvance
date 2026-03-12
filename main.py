@@ -27,6 +27,7 @@ def health():
     return jsonify({'status': 'healthy', 'app': 'Sellvance CRM'}), 200
 
 @app.route('/')
+@app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
