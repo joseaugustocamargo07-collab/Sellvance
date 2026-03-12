@@ -12,7 +12,7 @@
 <!-- MARKETPLACE SWITCHER -->
 <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
   {% for m in all_mp %}
-  <a href="/marketplaces?mp={{ m.id }}&tab={{ tab }}"
+  <a href="/marketplaces?mp={{ m.id }}&tab={{ tab }}{% if date_start %}&date_start={{ date_start }}{% endif %}{% if date_end %}&date_end={{ date_end }}{% endif %}"
      style="display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;font-weight:700;font-size:13px;text-decoration:none;transition:all .15s;
        {% if mp == m.id %}background:{{ m.color }}22;border:2px solid {{ m.color }};color:{{ m.color }}
        {% else %}background:var(--card);border:2px solid var(--border);color:var(--text2){% endif %}">
@@ -25,10 +25,57 @@
   </button>
 </div>
 
+<!-- FILTRO DE DATAS + EXPORTAR -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:6px">
+      <label style="font-size:12px;color:var(--text2);font-weight:600">De:</label>
+      <input type="date" id="mp_date_start" value="{{ date_start or '' }}"
+             style="background:var(--card,#16161e);color:var(--text1,#fff);border:1px solid var(--border,rgba(255,255,255,.15));border-radius:8px;padding:7px 12px;font-size:13px;outline:none">
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <label style="font-size:12px;color:var(--text2);font-weight:600">Ate:</label>
+      <input type="date" id="mp_date_end" value="{{ date_end or '' }}"
+             style="background:var(--card,#16161e);color:var(--text1,#fff);border:1px solid var(--border,rgba(255,255,255,.15));border-radius:8px;padding:7px 12px;font-size:13px;outline:none">
+    </div>
+    <button onclick="applyMpDateFilter()"
+            style="background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      Filtrar
+    </button>
+    {% if date_start or date_end %}
+    <a href="/marketplaces?mp={{ mp }}&tab={{ tab }}" style="color:var(--text2);font-size:12px;text-decoration:underline;cursor:pointer">Limpar filtro</a>
+    {% endif %}
+    <div style="display:flex;gap:4px">
+      <button onclick="setMpPreset(7)" style="background:var(--card2,#1e1e2e);color:var(--text2);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600">7d</button>
+      <button onclick="setMpPreset(15)" style="background:var(--card2,#1e1e2e);color:var(--text2);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600">15d</button>
+      <button onclick="setMpPreset(30)" style="background:var(--card2,#1e1e2e);color:var(--text2);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600">30d</button>
+      <button onclick="setMpPreset(90)" style="background:var(--card2,#1e1e2e);color:var(--text2);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600">90d</button>
+    </div>
+  </div>
+
+  <!-- Export Dropdown -->
+  <div class="export-dropdown" style="position:relative;display:inline-block">
+    <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'"
+            style="background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Exportar
+    </button>
+    <div style="display:none;position:absolute;right:0;top:110%%;background:var(--card,#16161e);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:10px;min-width:180px;z-index:100;box-shadow:0 8px 30px rgba(0,0,0,.5);overflow:hidden">
+      <a onclick="return mpExport('xlsx')" href="#" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#4ade80;text-decoration:none;font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span style="font-size:16px">📊</span> Excel (.xlsx)</a>
+      <a onclick="return mpExport('pdf')" href="#" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#f87171;text-decoration:none;font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span style="font-size:16px">📄</span> PDF</a>
+      <a onclick="return mpExport('csv')" href="#" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#60a5fa;text-decoration:none;font-size:13px;font-weight:600">
+        <span style="font-size:16px">📋</span> CSV</a>
+    </div>
+  </div>
+</div>
+
 <!-- TABS -->
 <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
   {% for t, label in [('overview','📊 Visão Geral'),('competitors','🔍 Concorrentes'),('ads','🎯 Anúncios'),('returns','↩️ Devoluções'),('keywords','🔑 Palavras-chave')] %}
-  <a href="/marketplaces?mp={{ mp }}&tab={{ t }}"
+  <a href="/marketplaces?mp={{ mp }}&tab={{ t }}{% if date_start %}&date_start={{ date_start }}{% endif %}{% if date_end %}&date_end={{ date_end }}{% endif %}"
      style="padding:9px 16px;font-size:13px;font-weight:600;border-radius:8px 8px 0 0;text-decoration:none;
        {% if tab == t %}background:var(--card);color:var(--accent);border:1px solid var(--border);border-bottom:1px solid var(--card)
        {% else %}color:var(--text2){% endif %}">
@@ -511,6 +558,32 @@ function toggleMpAd(name, action) {
   }).then(function(r) { return r.json(); }).then(function(d) {
     showToast(d.msg, action === 'pause' ? 'warn' : 'success');
   });
+}
+
+function applyMpDateFilter() {
+  var ds = document.getElementById('mp_date_start').value;
+  var de = document.getElementById('mp_date_end').value;
+  var url = '/marketplaces?mp={{ mp }}&tab={{ tab }}';
+  if(ds) url += '&date_start=' + ds;
+  if(de) url += '&date_end=' + de;
+  window.location.href = url;
+}
+function setMpPreset(days) {
+  var end = new Date();
+  var start = new Date();
+  start.setDate(end.getDate() - days);
+  document.getElementById('mp_date_start').value = start.toISOString().split('T')[0];
+  document.getElementById('mp_date_end').value = end.toISOString().split('T')[0];
+  applyMpDateFilter();
+}
+function mpExport(fmt) {
+  var ds = document.getElementById('mp_date_start').value;
+  var de = document.getElementById('mp_date_end').value;
+  var url = '/reports/marketplaces?format=' + fmt + '&mp={{ mp }}';
+  if(ds) url += '&date_start=' + ds;
+  if(de) url += '&date_end=' + de;
+  window.location.href = url;
+  return false;
 }
 
 function showToast(msg, type) {
