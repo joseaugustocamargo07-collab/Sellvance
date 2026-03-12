@@ -390,10 +390,10 @@ def traffic():
     sql = "SELECT * FROM ad_campaigns WHERE org_id = ? AND platform IN ('meta', 'google')"
     params = [org_id]
     if date_start:
-        sql += " AND date(created_at) >= date(?)"
+        sql += " AND date >= ?"
         params.append(date_start)
     if date_end:
-        sql += " AND date(created_at) <= date(?)"
+        sql += " AND date <= ?"
         params.append(date_end)
     campaigns_raw = db.execute(sql, params).fetchall()
     
