@@ -151,6 +151,8 @@ def _marketplaces_inner():
                                    analyze_mp_ads, get_keyword_opportunities)
     mp  = request.args.get('mp', 'mercado_livre')
     tab = request.args.get('tab', 'overview')
+    date_start = request.args.get('date_start', '')
+    date_end = request.args.get('date_end', '')
     all_mp = [
         {'id': 'mercado_livre', 'name': 'Mercado Livre', 'icon': '🛒', 'color': '#ffe600'},
         {'id': 'amazon',        'name': 'Amazon',        'icon': '📦', 'color': '#ff9900'},
@@ -169,20 +171,24 @@ def _marketplaces_inner():
     stock_items = db.execute('SELECT * FROM stock_items WHERE org_id = ? AND marketplace = ?',
                              (org_id, mp)).fetchall()
 
-    # Aggregate marketplace totals from orders
+    # Aggregate marketplace totals from orders (with date filter)
     mp_totals = {}
     for m_id in ['mercado_livre', 'amazon', 'tiktok_shop']:
-        row = db.execute(
-            'SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders '
-            'FROM orders WHERE org_id = ? AND marketplace = ?',
-            (org_id, m_id)
-        ).fetchone()
+        mp_sql = 'SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders FROM orders WHERE org_id = ? AND marketplace = ?'
+        mp_params = [org_id, m_id]
+        if date_start:
+            mp_sql += " AND date(ordered_at) >= date(?)"
+            mp_params.append(date_start)
+        if date_end:
+            mp_sql += " AND date(ordered_at) <= date(?)"
+            mp_params.append(date_end)
+        row = db.execute(mp_sql, mp_params).fetchone()
         mp_totals[m_id] = {'revenue': row['revenue'], 'orders': row['orders']}
 
     return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
-                           mp_totals=mp_totals)
+                           mp_totals=mp_totals, date_start=date_start, date_end=date_end)
 
 @app.route('/integrations')
 @login_required
@@ -626,6 +632,18 @@ def report_crm():
     date_start = request.args.get('date_start', '')
     date_end = request.args.get('date_end', '')
     buf, filename, mimetype = generate_crm_report(org_id, fmt, date_start=date_start, date_end=date_end)
+    return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
+
+@app.route('/reports/marketplaces')
+@login_required
+def report_marketplaces():
+    from reports import generate_marketplaces_report
+    fmt = request.args.get('format', 'xlsx')
+    org_id = session.get('org_id', 1)
+    mp = request.args.get('mp', 'mercado_livre')
+    date_start = request.args.get('date_start', '')
+    date_end = request.args.get('date_end', '')
+    buf, filename, mimetype = generate_marketplaces_report(org_id, mp, fmt, date_start=date_start, date_end=date_end)
     return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
 
 if __name__ == '__main__':
