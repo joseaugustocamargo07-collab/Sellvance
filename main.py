@@ -168,9 +168,20 @@ def _marketplaces_inner():
     stock_items = db.execute('SELECT * FROM stock_items WHERE org_id = ? AND marketplace = ?',
                              (org_id, mp)).fetchall()
 
+    # Aggregate marketplace totals from orders
+    mp_totals = {}
+    for m_id in ['mercado_livre', 'amazon', 'tiktok_shop']:
+        row = db.execute(
+            'SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders '
+            'FROM orders WHERE org_id = ? AND marketplace = ?',
+            (org_id, m_id)
+        ).fetchone()
+        mp_totals[m_id] = {'revenue': row['revenue'], 'orders': row['orders']}
+
     return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
-                           ads=ads, returns=returns, keywords=keywords, stock_items=stock_items)
+                           ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
+                           mp_totals=mp_totals)
 
 @app.route('/integrations')
 @login_required
@@ -185,8 +196,7 @@ def _integrations_inner():
     from integrations import INTEGRATIONS_CATALOG
     from oauth_manager import get_all_integrations, is_app_configured
     org_id    = session.get('org_id', 1)
-    connected = get_all_integrations(org_id)
-    connected_map = {i['platform']: dict(i) for i in connected}
+    connected_map = get_all_integrations(org_id)  # returns dict keyed by platform
     platforms = []
     for key, info in INTEGRATIONS_CATALOG.items():
         conn = connected_map.get(key, {})
