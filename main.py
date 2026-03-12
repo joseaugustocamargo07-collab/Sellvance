@@ -403,8 +403,11 @@ def traffic():
     conv_rate = round(total_conversions / max(total_clicks, 1) * 100, 2)
     profit = total_revenue - total_spend
     
-    # AI analysis
-    analysis = analyze_all(campaigns_raw)
+    # AI analysis (returns tuple: results, insights, global_roas)
+    try:
+        ai_results, ai_insights, ai_global_roas = analyze_all(campaigns_raw)
+    except Exception:
+        ai_results, ai_insights, ai_global_roas = [], [], 0
     
     # By platform
     platforms = {}
