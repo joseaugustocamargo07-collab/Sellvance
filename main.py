@@ -234,7 +234,19 @@ def connect_integration(platform):
         org_id = session.get('org_id', 1)
         url    = build_auth_url(platform, org_id, request.host)
         return redirect(url)
-    return render_template('integrations_hub.html', platforms=[], api_key_platform=platform, catalog_item=cat)
+    # Re-fetch all platforms so the grid doesn't disappear
+    from oauth_manager import get_all_integrations, is_app_configured
+    org_id = session.get('org_id', 1)
+    connected_map = get_all_integrations(org_id)
+    all_platforms = []
+    for k, info in INTEGRATIONS_CATALOG.items():
+        conn = connected_map.get(k, {})
+        all_platforms.append({**info, 'key': k,
+                              'connected': conn.get('status') == 'connected',
+                              'configured': is_app_configured(k),
+                              'account_name': conn.get('account_name', ''),
+                              'last_sync': conn.get('last_sync', '')})
+    return render_template('integrations_hub.html', platforms=all_platforms, api_key_platform=platform, catalog_item=cat)
 
 @app.route('/integrations/callback/<platform>')
 def oauth_callback(platform):
