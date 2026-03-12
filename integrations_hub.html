@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Integrações – Sellvance{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="page-header-left">
+    <h1 class="page-title">Integrações</h1>
+    <p class="page-subtitle">Conecte suas plataformas de anúncios, marketplaces e ferramentas</p>
+  </div>
+</div>
+
+{% if api_key_platform %}
+<!-- API Key form modal area -->
+<div class="section-card" style="max-width:520px; margin-bottom:24px;">
+  <div class="section-header">
+    <h2 class="section-title">Conectar {{ catalog_item.name }} via API Key</h2>
+  </div>
+  <form method="POST" action="/integrations/save-keys/{{ api_key_platform }}" style="padding:0 20px 20px;">
+    {% for field in catalog_item.get('api_fields', []) %}
+    <div style="margin-bottom:14px;">
+      <label class="form-label">{{ field.label }}</label>
+      <input
+        class="form-input"
+        type="{{ 'password' if field.secret else 'text' }}"
+        name="{{ field.name }}"
+        placeholder="{{ field.placeholder }}"
+        required
+      />
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary" style="width:100%;margin-top:6px;">Salvar e Conectar</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="integrations-grid">
+  {% for p in platforms %}
+  <div class="integration-card {% if p.connected %}is-connected{% endif %}">
+    <div class="int-card-top">
+      <div class="int-icon" style="background:{{ p.get('color','#6c63ff') }}1a; border-color:{{ p.get('color','#6c63ff') }}33;">
+        <span style="font-size:22px;">{{ p.get('icon','🔗') }}</span>
+      </div>
+      <div class="int-status-badge {% if p.connected %}badge-connected{% else %}badge-disconnected{% endif %}">
+        {% if p.connected %}● Conectado{% else %}○ Desconectado{% endif %}
+      </div>
+    </div>
+
+    <div class="int-info">
+      <h3 class="int-name">{{ p.name }}</h3>
+      <p class="int-desc">{{ p.get('description','') }}</p>
+      {% if p.connected and p.account_name %}
+      <p class="int-account">
+        <svg width="12" height="12" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
+        </svg>
+        {{ p.account_name }}
+      </p>
+      {% endif %}
+      {% if p.connected and p.last_sync %}
+      <p class="int-sync">Última sync: {{ p.last_sync }}</p>
+      {% endif %}
+    </div>
+
+    <div class="int-actions">
+      {% if p.connected %}
+      <form method="POST" action="/integrations/disconnect/{{ p.key }}" style="display:inline;">
+        <button type="submit" class="btn btn-ghost btn-sm btn-danger">Desconectar</button>
+      </form>
+      {% else %}
+      <a href="/integrations/connect/{{ p.key }}" class="btn btn-primary btn-sm">
+        {% if not p.configured %}
+        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        Configurar
+        {% else %}
+        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+        </svg>
+        Conectar
+        {% endif %}
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div style="grid-column:1/-1; text-align:center; padding:60px 24px; color:var(--text-muted);">
+    <div style="font-size:40px;margin-bottom:12px;">🔌</div>
+    <p style="font-size:15px;">Nenhuma integração disponível.</p>
+  </div>
+  {% endfor %}
+</div>
+
+<style>
+/* ── Integrations grid ── */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+.page-header-left {}
+.page-title  { font-size:22px; font-weight:700; letter-spacing:-.4px; color:var(--text-primary); margin-bottom:4px; }
+.page-subtitle { font-size:13.5px; color:var(--text-muted); }
+
+.integrations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.integration-card {
+  background: var(--surface-2, #111116);
+  border: 1px solid var(--border-color, rgba(255,255,255,.07));
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+.integration-card:hover {
+  border-color: rgba(108,99,255,.25);
+  box-shadow: 0 4px 20px rgba(0,0,0,.35);
+}
+
+.integration-card.is-connected {
+  border-color: rgba(34,197,94,.18);
+  background: linear-gradient(135deg,
+    rgba(34,197,94,.04) 0%,
+    var(--surface-2, #111116) 60%);
+}
+
+.int-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.int-icon {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  border: 1px solid;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.int-status-badge {
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 4px 10px;
+  letter-spacing: .3px;
+}
+
+.badge-connected {
+  background: rgba(34,197,94,.12);
+  color: #4ade80;
+  border: 1px solid rgba(34,197,94,.2);
+}
+
+.badge-disconnected {
+  background: rgba(255,255,255,.05);
+  color: var(--text-muted, #6b6b80);
+  border: 1px solid rgba(255,255,255,.08);
+}
+
+.int-info { flex: 1; }
+
+.int-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary, #e8e8f0);
+  margin-bottom: 5px;
+}
+
+.int-desc {
+  font-size: 13px;
+  color: var(--text-muted, #6b6b80);
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.int-account {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #4ade80;
+  margin-bottom: 3px;
+}
+
+.int-sync {
+  font-size: 11.5px;
+  color: var(--text-muted, #6b6b80);
+}
+
+.int-actions {
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color, rgba(255,255,255,.07));
+}
+
+/* Shared button base (in case base.html doesn't define these) */
+.btn          { display:inline-flex; align-items:center; gap:6px; font-weight:600;
+                border-radius:8px; cursor:pointer; text-decoration:none;
+                transition: opacity .18s, transform .18s; border:none; }
+.btn:hover    { opacity:.88; transform:translateY(-1px); }
+.btn:active   { transform:translateY(0); }
+.btn-sm       { font-size:13px; padding:7px 14px; }
+.btn-primary  { background:linear-gradient(135deg,#6c63ff,#857cff); color:#fff;
+                box-shadow:0 3px 12px rgba(108,99,255,.3); }
+.btn-ghost    { background:rgba(255,255,255,.05); color:var(--text-muted,#6b6b80);
+                border:1px solid rgba(255,255,255,.08); }
+.btn-danger:hover { background:rgba(239,68,68,.15); color:#f87171;
+                    border-color:rgba(239,68,68,.25); opacity:1; }
+
+.form-label { display:block; font-size:13px; font-weight:500;
+              color:var(--text-muted,#6b6b80); margin-bottom:6px; }
+.form-input { width:100%; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+              border-radius:8px; padding:10px 13px; font-size:14px;
+              color:var(--text-primary,#e8e8f0); outline:none;
+              transition:border-color .2s, box-shadow .2s; }
+.form-input:focus { border-color:#6c63ff; box-shadow:0 0 0 3px rgba(108,99,255,.18); }
+
+.section-card   { background:var(--surface-2,#111116); border:1px solid rgba(255,255,255,.07);
+                  border-radius:14px; }
+.section-header { padding:16px 20px; border-bottom:1px solid rgba(255,255,255,.07); }
+.section-title  { font-size:16px; font-weight:600; color:var(--text-primary,#e8e8f0); }
+</style>
+{% endblock %}
