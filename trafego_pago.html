@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Trafego Pago{% endblock %}
+{% block topbar_title %}🎯 Dashboard de Trafego Pago{% endblock %}
+
+{% block content %}
+{% set plat_icons = {'meta':'📘','google':'🔴','tiktok':'🎵'} %}
+{% set plat_names = {'meta':'Meta Ads','google':'Google Ads','tiktok':'TikTok Ads'} %}
+
+<!-- KPIs GERAIS -->
+<div style="margin-bottom:20px">
+  <div style="font-size:20px;font-weight:900">Visao Geral de Trafego Pago</div>
+  <div style="font-size:13px;color:var(--text2);margin-top:2px">{{ kpis.total_campaigns }} campanhas | {{ kpis.active_campaigns }} ativas</div>
+</div>
+
+<div class="grid g4" style="margin-bottom:20px">
+  <div class="card" style="border-top:3px solid var(--green)">
+    <div class="card-title">💰 Receita Total</div>
+    <div class="kpi-val" style="color:var(--green)">R$ {{ "{:,.0f}".format(kpis.total_revenue) }}</div>
+    <div style="font-size:12px;color:var(--text2)">Receita gerada por ads</div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--blue)">
+    <div class="card-title">📈 ROAS Geral</div>
+    <div class="kpi-val" style="color:var(--blue)">{{ kpis.roas }}x</div>
+    <div style="font-size:12px;color:var(--text2)">Retorno sobre investimento</div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--yellow)">
+    <div class="card-title">💸 Investimento</div>
+    <div class="kpi-val" style="color:var(--yellow)">R$ {{ "{:,.0f}".format(kpis.total_spend) }}</div>
+    <div style="font-size:12px;color:var(--text2)">Total gasto em ads</div>
+  </div>
+  <div class="card" style="border-top:3px solid {% if kpis.profit >= 0 %}var(--green){% else %}var(--red){% endif %}">
+    <div class="card-title">📊 Lucro</div>
+    <div class="kpi-val" style="color:{% if kpis.profit >= 0 %}var(--green){% else %}var(--red){% endif %}">R$ {{ "{:,.0f}".format(kpis.profit) }}</div>
+    <div style="font-size:12px;color:var(--text2)">Receita - Investimento</div>
+  </div>
+</div>
+
+<!-- METRICAS SECUNDARIAS -->
+<div class="grid g4" style="margin-bottom:20px">
+  <div class="card">
+    <div class="card-title">CTR</div>
+    <div class="kpi-val">{{ kpis.ctr }}%</div>
+    <div style="font-size:12px;color:var(--text2)">Taxa de cliques</div>
+  </div>
+  <div class="card">
+    <div class="card-title">CPC Medio</div>
+    <div class="kpi-val">R$ {{ "{:.2f}".format(kpis.cpc) }}</div>
+    <div style="font-size:12px;color:var(--text2)">Custo por clique</div>
+  </div>
+  <div class="card">
+    <div class="card-title">CPA</div>
+    <div class="kpi-val">R$ {{ "{:.2f}".format(kpis.cpa) }}</div>
+    <div style="font-size:12px;color:var(--text2)">Custo por aquisicao</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Conversao</div>
+    <div class="kpi-val">{{ kpis.conv_rate }}%</div>
+    <div style="font-size:12px;color:var(--text2)">Taxa de conversao</div>
+  </div>
+</div>
+
+<!-- PERFORMANCE POR PLATAFORMA -->
+<div class="card" style="margin-bottom:20px">
+  <div class="card-title" style="margin-bottom:12px">📊 Performance por Plataforma</div>
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">
+        <th style="padding:10px;text-align:left">Plataforma</th>
+        <th style="padding:10px;text-align:right">Campanhas</th>
+        <th style="padding:10px;text-align:right">Investimento</th>
+        <th style="padding:10px;text-align:right">Receita</th>
+        <th style="padding:10px;text-align:right">ROAS</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for pname, pdata in platforms.items() %}
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:10px">{{ plat_icons.get(pname, '📢') }} {{ plat_names.get(pname, pname) }}</td>
+        <td style="padding:10px;text-align:right">{{ pdata.campaigns }}</td>
+        <td style="padding:10px;text-align:right">R$ {{ "{:,.0f}".format(pdata.spend) }}</td>
+        <td style="padding:10px;text-align:right;color:var(--green)">R$ {{ "{:,.0f}".format(pdata.revenue) }}</td>
+        <td style="padding:10px;text-align:right">
+          <span style="padding:3px 8px;border-radius:20px;font-size:12px;font-weight:700;background:{% if pdata.roas >= 4 %}rgba(16,185,129,0.15);color:var(--green){% elif pdata.roas >= 2 %}rgba(245,158,11,0.15);color:var(--yellow){% else %}rgba(239,68,68,0.15);color:var(--red){% endif %}">{{ pdata.roas }}x</span>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- ANALISE DA IA -->
+{% if analysis %}
+<div class="card" style="margin-bottom:20px;border-left:3px solid var(--accent)">
+  <div class="card-title">🤖 Analise da IA</div>
+  <div style="margin-top:10px;font-size:14px;line-height:1.6;color:var(--text2)">
+    {% if analysis is string %}
+      {{ analysis }}
+    {% elif analysis is mapping %}
+      {% for key, val in analysis.items() %}
+        <div style="margin-bottom:8px"><strong style="color:var(--text)">{{ key }}:</strong> {{ val }}</div>
+      {% endfor %}
+    {% else %}
+      {{ analysis }}
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- TABELA DE CAMPANHAS -->
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+  <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+    <div style="font-weight:700">📋 Todas as Campanhas</div>
+    <div style="font-size:12px;color:var(--text2)">{{ campaigns|length }} campanhas</div>
+  </div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">
+          <th style="padding:10px 16px;text-align:left">Campanha</th>
+          <th style="padding:10px;text-align:center">Plataforma</th>
+          <th style="padding:10px;text-align:center">Score</th>
+          <th style="padding:10px;text-align:right">Gasto</th>
+          <th style="padding:10px;text-align:right">Receita</th>
+          <th style="padding:10px;text-align:center">ROAS</th>
+          <th style="padding:10px;text-align:center">CTR</th>
+          <th style="padding:10px;text-align:center">Conv.</th>
+          <th style="padding:10px;text-align:center">Acao IA</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in campaigns %}
+        <tr style="border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='rgba(108,99,255,0.05)'" onmouseout="this.style.background=''">
+          <td style="padding:10px 16px;font-weight:600">{{ c.name }}</td>
+          <td style="padding:10px;text-align:center">
+            <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--card2)">{{ plat_icons.get(c.platform, '') }} {{ plat_names.get(c.platform, c.platform) }}</span>
+          </td>
+          <td style="padding:10px;text-align:center">
+            <span style="font-weight:800;color:{% if c.score >= 75 %}var(--green){% elif c.score >= 50 %}var(--yellow){% else %}var(--red){% endif %}">{{ c.score }}</span>
+          </td>
+          <td style="padding:10px;text-align:right">R$ {{ "{:,.0f}".format(c.spend) }}</td>
+          <td style="padding:10px;text-align:right;color:var(--green)">R$ {{ "{:,.0f}".format(c.revenue) }}</td>
+          <td style="padding:10px;text-align:center">
+            <span style="padding:3px 8px;border-radius:20px;font-size:12px;font-weight:700;background:{% if c.roas >= 4 %}rgba(16,185,129,0.15);color:var(--green){% elif c.roas >= 2 %}rgba(245,158,11,0.15);color:var(--yellow){% else %}rgba(239,68,68,0.15);color:var(--red){% endif %}">{{ c.roas }}x</span>
+          </td>
+          <td style="padding:10px;text-align:center">{{ c.ctr }}%</td>
+          <td style="padding:10px;text-align:center">{{ c.conv_rate }}%</td>
+          <td style="padding:10px;text-align:center">
+            {% if c.action == 'scale' %}
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(16,185,129,0.15);color:var(--green)">🚀 Escalar</span>
+            {% elif c.action == 'optimize' %}
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(245,158,11,0.15);color:var(--yellow)">⚠️ Otimizar</span>
+            {% else %}
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(239,68,68,0.15);color:var(--red)">⏸ Pausar</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
