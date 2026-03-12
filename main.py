@@ -4,10 +4,9 @@ from auth import login_required, verify_password, hash_password
 from traffic_ai import analyze_all, calc_metrics, score_campaign
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='.')
 app.secret_key = os.environ.get('SECRET_KEY', 'sellvance-secret-2026-change-in-prod')
 
-# Inicializa banco lazy (na primeira requisição) para não atrasar o startup
 _db_ready = False
 
 @app.before_request
@@ -15,75 +14,72 @@ def ensure_db_ready():
     global _db_ready
     if not _db_ready:
         _db_ready = True
-        from database import init_db, migrate_db
-        init_db()
-        migrate_db()
+        try:
+            from database import init_db, migrate_db
+            init_db()
+            migrate_db()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
 
-# ===== ROTA CRÍTICA PARA RAILWAY HEALTHCHECK =====
 @app.route('/health')
 def health():
-    """Healthcheck para Railway"""
-    try:
-        db = get_db()
-        # Testa conexão simples
-        result = db.execute("SELECT 1").fetchone()
-        return jsonify({
-            'status': 'healthy',
-            'database': 'connected',
-            'timestamp': __import__('datetime').datetime.now().isoformat(),
-            'app': 'Sellvance CRM'
-        })
-    except Exception as e:
-        return jsonify({
-            'status': 'unhealthy',
-            'error': str(e),
-            'timestamp': __import__('datetime').datetime.now().isoformat()
-        }), 500
+    return jsonify({'status': 'healthy', 'app': 'Sellvance CRM'}), 200
 
-# ===== ROTAS PRINCIPAIS =====
 @app.route('/')
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-
     db = get_db()
+    org_id = session.get('org_id', 1)
 
-    # Métricas do dashboard
-    campaigns = db.execute('SELECT COUNT(*) as count FROM campaigns').fetchone()
-    customers = db.execute('SELECT COUNT(*) as count FROM customers').fetchone()
-    revenue = db.execute('SELECT COALESCE(SUM(revenue), 0) as total FROM campaigns').fetchone()
+    # KPIs from orders
+    kpis_raw = db.execute('''
+        SELECT COALESCE(SUM(revenue), 0) as total_revenue,
+               COUNT(*) as total_orders,
+               COUNT(DISTINCT contact_id) as unique_customers
+        FROM orders WHERE org_id = ?
+    ''', (org_id,)).fetchone()
+    kpis = dict(kpis_raw)
 
-    # Campanhas recentes
-    recent_campaigns = db.execute('''
-        SELECT id, name, platform, budget, revenue,
-               ROUND((revenue * 100.0 / budget), 1) as roi
-        FROM campaigns
-        ORDER BY created_at DESC
-        LIMIT 5
-    ''').fetchall()
+    # ROAS from ad_campaigns
+    ads = db.execute('''
+        SELECT COALESCE(SUM(spend), 0) as total_spend,
+               COALESCE(SUM(revenue), 0) as total_revenue
+        FROM ad_campaigns WHERE org_id = ?
+    ''', (org_id,)).fetchone()
+    total_spend = ads['total_spend'] or 1
+    roas = round(ads['total_revenue'] / total_spend, 2) if total_spend > 0 else 0
 
-    return render_template('dashboard.html',
-                         campaigns=campaigns['count'],
-                         customers=customers['count'],
-                         revenue=revenue['total'],
-                         recent_campaigns=recent_campaigns)
+    # CAC
+    new_customers = db.execute(
+        'SELECT COUNT(*) as cnt FROM contacts WHERE org_id = ?', (org_id,)
+    ).fetchone()['cnt'] or 1
+    cac = round(total_spend / max(new_customers, 1), 2)
+
+    # Channel performance
+    channel_perf = db.execute('''
+        SELECT channel, COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders
+        FROM orders WHERE org_id = ?
+        GROUP BY channel ORDER BY revenue DESC
+    ''', (org_id,)).fetchall()
+
+    return render_template('dashboard.html', kpis=kpis, roas=roas, cac=cac, channel_perf=channel_perf)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-
-        db = get_db()
-        user = db.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
-
-        if user and verify_password(user['password_hash'], password):
-            session['user_id'] = user['id']
+        email    = request.form.get('email', '')
+        password = request.form.get('password', '')
+        db       = get_db()
+        user     = db.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+        if user and verify_password(password, user['password_hash']):
+            session['user_id']   = user['id']
             session['user_name'] = user['name']
+            session['org_id']    = user['org_id']
+            session['org_name']  = user['org_name']
             return redirect(url_for('dashboard'))
-        else:
-            return render_template('login.html', error='Email ou senha inválidos')
-
+        return render_template('login.html', error='Email ou senha inválidos')
     return render_template('login.html')
 
 @app.route('/logout')
@@ -91,351 +87,241 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
-# ===== CRM COM ANÁLISE RFM =====
 @app.route('/crm')
 @login_required
 def crm():
-    db = get_db()
+    db     = get_db()
+    org_id = session.get('org_id', 1)
+    contacts        = db.execute('SELECT * FROM contacts WHERE org_id = ? ORDER BY ltv DESC', (org_id,)).fetchall()
+    total_contacts  = len(contacts)
+    total_ltv       = sum(c['ltv'] for c in contacts)
+    repeat_buyers   = sum(1 for c in contacts if c['total_orders'] > 1)
+    recompra_rate   = round(repeat_buyers / max(total_contacts, 1) * 100, 1)
+    rfm = {}
+    for c in contacts:
+        seg      = c['rfm_segment']
+        rfm[seg] = rfm.get(seg, 0) + 1
+    return render_template('crm.html', contacts=contacts, total_contacts=total_contacts,
+                           total_ltv=total_ltv, recompra_rate=recompra_rate, rfm=rfm)
 
-    # Busca com filtros opcionais
-    search = request.args.get('search', '')
-    segment = request.args.get('segment', '')
-
-    query = '''
-        SELECT c.*,
-               CASE
-                   WHEN r_score = 5 AND f_score = 5 AND m_score >= 4 THEN 'Champions'
-                   WHEN r_score = 5 AND f_score >= 2 AND f_score <= 4 AND m_score >= 3 THEN 'Loyal Customers'
-                   WHEN r_score >= 4 AND f_score < 2 THEN 'Potential Loyalists'
-                   WHEN r_score >= 3 AND f_score >= 3 AND m_score >= 3 THEN 'New Customers'
-                   WHEN r_score >= 2 AND r_score <= 3 AND f_score <= 2 THEN 'Promising'
-                   WHEN r_score >= 2 AND r_score <= 3 AND f_score >= 3 AND m_score <= 2 THEN 'Need Attention'
-                   WHEN r_score >= 2 AND r_score <= 3 AND f_score >= 3 AND m_score >= 3 THEN 'About to Sleep'
-                   WHEN r_score <= 2 AND f_score >= 4 THEN 'At Risk'
-                   WHEN r_score = 1 AND f_score = 1 THEN 'Lost'
-                   ELSE 'Cannot Lose Them'
-               END as segment
-        FROM customers c
-        WHERE 1=1
-    '''
-
-    params = []
-    if search:
-        query += ' AND (name LIKE ? OR email LIKE ?)'
-        params.extend([f'%{search}%', f'%{search}%'])
-
-    if segment:
-        # Adiciona filtro por segmento (seria necessário subconsulta mais complexa)
-        pass
-
-    query += ' ORDER BY total_value DESC LIMIT 100'
-
-    customers = db.execute(query, params).fetchall()
-
-    # Estatísticas por segmento
-    segment_stats = db.execute('''
-        SELECT
-            CASE
-                WHEN r_score = 5 AND f_score = 5 AND m_score >= 4 THEN 'Champions'
-                WHEN r_score = 5 AND f_score >= 2 AND f_score <= 4 AND m_score >= 3 THEN 'Loyal Customers'
-                WHEN r_score >= 4 AND f_score < 2 THEN 'Potential Loyalists'
-                WHEN r_score >= 3 AND f_score >= 3 AND m_score >= 3 THEN 'New Customers'
-                WHEN r_score >= 2 AND r_score <= 3 AND f_score <= 2 THEN 'Promising'
-                WHEN r_score >= 2 AND r_score <= 3 AND f_score >= 3 AND m_score <= 2 THEN 'Need Attention'
-                WHEN r_score >= 2 AND r_score <= 3 AND f_score >= 3 AND m_score >= 3 THEN 'About to Sleep'
-                WHEN r_score <= 2 AND f_score >= 4 THEN 'At Risk'
-                WHEN r_score = 1 AND f_score = 1 THEN 'Lost'
-                ELSE 'Cannot Lose Them'
-            END as segment,
-            COUNT(*) as count,
-            SUM(total_value) as total_revenue
-        FROM customers
-        GROUP BY segment
-        ORDER BY total_revenue DESC
-    ''').fetchall()
-
-    return render_template('crm.html',
-                         customers=customers,
-                         segment_stats=segment_stats,
-                         search=search,
-                         current_segment=segment)
-
-@app.route('/customer/<int:customer_id>')
-@login_required
-def customer_detail(customer_id):
-    db = get_db()
-
-    customer = db.execute('SELECT * FROM customers WHERE id = ?', (customer_id,)).fetchone()
-    if not customer:
-        return "Cliente não encontrado", 404
-
-    # Histórico de compras (simulado)
-    purchases = db.execute('''
-        SELECT * FROM customer_purchases
-        WHERE customer_id = ?
-        ORDER BY purchase_date DESC
-    ''', (customer_id,)).fetchall()
-
-    # Campanhas que impactaram este cliente
-    campaigns = db.execute('''
-        SELECT DISTINCT c.* FROM campaigns c
-        JOIN campaign_customers cc ON c.id = cc.campaign_id
-        WHERE cc.customer_id = ?
-        ORDER BY c.created_at DESC
-    ''', (customer_id,)).fetchall()
-
-    return render_template('customer_detail.html',
-                         customer=customer,
-                         purchases=purchases,
-                         campaigns=campaigns)
-
-# ===== TRÁFEGO PAGO COM IA =====
-@app.route('/traffic')
-@login_required
-def traffic():
-    db = get_db()
-
-    # Lista campanhas com métricas
-    campaigns = db.execute('''
-        SELECT *,
-               ROUND((revenue * 100.0 / budget), 1) as roi,
-               ROUND((revenue - budget), 2) as profit,
-               ROUND((clicks * 100.0 / impressions), 2) as ctr,
-               ROUND((conversions * 100.0 / clicks), 2) as conversion_rate
-        FROM campaigns
-        ORDER BY created_at DESC
-    ''').fetchall()
-
-    # Análise com IA
-    analysis = analyze_all(campaigns)
-
-    return render_template('traffic.html',
-                         campaigns=campaigns,
-                         analysis=analysis)
-
-@app.route('/traffic/campaign/<int:campaign_id>')
-@login_required
-def campaign_detail(campaign_id):
-    db = get_db()
-
-    campaign = db.execute('SELECT * FROM campaigns WHERE id = ?', (campaign_id,)).fetchone()
-    if not campaign:
-        return "Campanha não encontrada", 404
-
-    # Métricas calculadas
-    metrics = calc_metrics(campaign)
-
-    # Score da campanha
-    score = score_campaign(campaign)
-
-    # Dados diários (simulado)
-    daily_data = db.execute('''
-        SELECT date, impressions, clicks, conversions, cost, revenue
-        FROM campaign_daily_data
-        WHERE campaign_id = ?
-        ORDER BY date
-    ''', (campaign_id,)).fetchall()
-
-    return render_template('campaign_detail.html',
-                         campaign=campaign,
-                         metrics=metrics,
-                         score=score,
-                         daily_data=daily_data)
-
-@app.route('/traffic/create', methods=['GET', 'POST'])
-@login_required
-def create_campaign():
-    if request.method == 'POST':
-        db = get_db()
-
-        db.execute('''
-            INSERT INTO campaigns (name, platform, budget, target_audience, ad_creative, user_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
-            request.form['name'],
-            request.form['platform'],
-            float(request.form['budget']),
-            request.form['target_audience'],
-            request.form['ad_creative'],
-            session['user_id']
-        ))
-
-        db.commit()
-        return redirect(url_for('traffic'))
-
-    return render_template('create_campaign.html')
-
-# ===== RANKING IA =====
 @app.route('/ranking')
 @login_required
 def ranking():
-    db = get_db()
+    db             = get_db()
+    org_id         = session.get('org_id', 1)
+    campaigns_raw  = db.execute('SELECT * FROM ad_campaigns WHERE org_id = ?', (org_id,)).fetchall()
+    campaigns      = []
+    revenue_wasted = 0
+    for c in campaigns_raw:
+        c_dict = dict(c)
+        m = calc_metrics(c_dict)
+        s = score_campaign(c_dict, m)
+        if s['score'] >= 75:
+            action = 'scale'
+        elif s['score'] >= 50:
+            action = 'optimize'
+        else:
+            action = 'pause'
+            revenue_wasted += c_dict.get('spend', 0)
+        campaigns.append({**c_dict, **m, **s, 'action': action})
+    campaigns.sort(key=lambda x: x['score'], reverse=True)
+    return render_template('ranking.html', campaigns=campaigns, revenue_wasted=revenue_wasted)
 
-    # Ranking de produtos por performance
-    products = db.execute('''
-        SELECT p.*,
-               COALESCE(SUM(cp.revenue), 0) as total_revenue,
-               COALESCE(SUM(cp.conversions), 0) as total_conversions,
-               COALESCE(AVG(cp.conversion_rate), 0) as avg_conversion_rate,
-               CASE
-                   WHEN AVG(cp.conversion_rate) >= 5 THEN 'Excelente'
-                   WHEN AVG(cp.conversion_rate) >= 2 THEN 'Bom'
-                   WHEN AVG(cp.conversion_rate) >= 1 THEN 'Regular'
-                   ELSE 'Ruim'
-               END as performance_level
-        FROM products p
-        LEFT JOIN campaign_products cp ON p.id = cp.product_id
-        GROUP BY p.id
-        ORDER BY total_revenue DESC
-    ''').fetchall()
-
-    # Ranking de palavras-chave
-    keywords = db.execute('''
-        SELECT keyword,
-               COUNT(*) as campaigns_count,
-               AVG(ctr) as avg_ctr,
-               AVG(conversion_rate) as avg_conversion_rate,
-               SUM(revenue) as total_revenue
-        FROM campaign_keywords ck
-        JOIN campaigns c ON ck.campaign_id = c.id
-        GROUP BY keyword
-        HAVING campaigns_count >= 2
-        ORDER BY total_revenue DESC
-        LIMIT 20
-    ''').fetchall()
-
-    return render_template('ranking.html',
-                         products=products,
-                         keywords=keywords)
-
-# ===== MARKETPLACES =====
 @app.route('/marketplaces')
 @login_required
 def marketplaces():
-    return render_template('marketplaces.html')
+    from marketplace_intel import (COMPETITORS, MY_PRODUCTS, MP_ADS_DATA, RETURNS_DATA,
+                                   ACCOUNT_HEALTH, analyze_competitive_position,
+                                   analyze_mp_ads, get_keyword_opportunities)
+    mp  = request.args.get('mp', 'mercado_livre')
+    tab = request.args.get('tab', 'overview')
+    all_mp = [
+        {'id': 'mercado_livre', 'name': 'Mercado Livre', 'icon': '🛒', 'color': '#ffe600'},
+        {'id': 'amazon',        'name': 'Amazon',        'icon': '📦', 'color': '#ff9900'},
+        {'id': 'tiktok_shop',   'name': 'TikTok Shop',   'icon': '🎵', 'color': '#ff0050'},
+    ]
+    health      = ACCOUNT_HEALTH.get(mp, {'score': 0, 'metrics': {}, 'alerts': []})
+    competitors = COMPETITORS.get(mp, [])
+    my_product  = MY_PRODUCTS.get(mp, {})
+    analysis    = analyze_competitive_position(mp)
+    ads         = analyze_mp_ads(mp)
+    returns     = RETURNS_DATA.get(mp, {})
+    keywords    = get_keyword_opportunities(mp)
 
-@app.route('/marketplaces/<platform>')
-@login_required
-def marketplace_detail(platform):
-    db = get_db()
+    db          = get_db()
+    org_id      = session.get('org_id', 1)
+    stock_items = db.execute('SELECT * FROM stock_items WHERE org_id = ? AND marketplace = ?',
+                             (org_id, mp)).fetchall()
 
-    # Configurações específicas da plataforma
-    platform_config = db.execute(
-        'SELECT * FROM marketplace_configs WHERE platform = ? AND user_id = ?',
-        (platform, session['user_id'])
-    ).fetchone()
+    return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health,
+                           competitors=competitors, my_product=my_product, analysis=analysis,
+                           ads=ads, returns=returns, keywords=keywords, stock_items=stock_items)
 
-    # Produtos desta plataforma
-    products = db.execute('''
-        SELECT * FROM marketplace_products
-        WHERE platform = ? AND user_id = ?
-        ORDER BY created_at DESC
-    ''', (platform, session['user_id'])).fetchall()
-
-    return render_template('marketplace_detail.html',
-                         platform=platform,
-                         config=platform_config,
-                         products=products)
-
-@app.route('/marketplaces/<platform>/sync', methods=['POST'])
-@login_required
-def sync_marketplace(platform):
-    # Simula sincronização com API da plataforma
-    # Na implementação real, aqui faria chamadas para APIs específicas
-
-    return jsonify({
-        'status': 'success',
-        'message': f'Sincronização com {platform} iniciada',
-        'products_updated': 15,
-        'orders_imported': 8
-    })
-
-# ===== HUB DE INTEGRAÇÕES =====
 @app.route('/integrations')
 @login_required
 def integrations():
-    db = get_db()
+    from integrations import INTEGRATIONS_CATALOG
+    from oauth_manager import get_all_integrations, is_app_configured
+    org_id    = session.get('org_id', 1)
+    connected = get_all_integrations(org_id)
+    connected_map = {i['platform']: dict(i) for i in connected}
+    platforms = []
+    for key, info in INTEGRATIONS_CATALOG.items():
+        conn = connected_map.get(key, {})
+        platforms.append({**info, 'key': key,
+                          'connected':    conn.get('status') == 'connected',
+                          'configured':   is_app_configured(key),
+                          'account_name': conn.get('account_name', ''),
+                          'last_sync':    conn.get('last_sync', '')})
+    return render_template('integrations_hub.html', platforms=platforms)
 
-    # Status das integrações do usuário
-    integrations = db.execute('''
-        SELECT platform, status, last_sync, access_token IS NOT NULL as connected
-        FROM user_integrations
-        WHERE user_id = ?
-    ''', (session['user_id'],)).fetchall()
-
-    # Plataformas disponíveis
-    available_platforms = [
-        'mercadolivre', 'amazon', 'magalu', 'shopee', 'americanas',
-        'casasbahia', 'pontofrio', 'extra', 'submarino', 'tiktokshop',
-        'facebook', 'google', 'bing'
-    ]
-
-    return render_template('integrations.html',
-                         integrations=integrations,
-                         available_platforms=available_platforms)
-
-@app.route('/integrations/<platform>/connect')
+@app.route('/integrations/connect/<platform>')
 @login_required
 def connect_integration(platform):
-    # OAuth flow para conectar plataforma
-    oauth_url = f"https://oauth.{platform}.com/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=YOUR_REDIRECT&scope=read_products,manage_orders"
-    return redirect(oauth_url)
+    from oauth_manager import build_auth_url, is_app_configured, OAUTH_APPS
+    from integrations import INTEGRATIONS_CATALOG
+    cat = INTEGRATIONS_CATALOG.get(platform, {})
+    if cat.get('auth_type') == 'oauth2':
+        if not is_app_configured(platform):
+            app_info = OAUTH_APPS.get(platform, {})
+            env_vars = []
+            if platform == 'mercado_livre':
+                env_vars = ['ML_APP_ID', 'ML_APP_SECRET']
+            elif platform == 'meta_ads':
+                env_vars = ['META_APP_ID', 'META_APP_SECRET']
+            elif platform == 'google_ads':
+                env_vars = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']
+            elif platform == 'tiktok_ads':
+                env_vars = ['TIKTOK_APP_ID', 'TIKTOK_APP_SECRET']
+            elif platform == 'tiktok_shop':
+                env_vars = ['TIKTOK_SHOP_APP_KEY', 'TIKTOK_SHOP_APP_SECRET']
+            return render_template('oauth_not_configured.html',
+                                   platform_name=cat.get('name', platform),
+                                   env_vars=env_vars)
+        org_id = session.get('org_id', 1)
+        url    = build_auth_url(platform, org_id, request.host)
+        return redirect(url)
+    return render_template('integrations_hub.html', platforms=[], api_key_platform=platform, catalog_item=cat)
 
-@app.route('/oauth/<platform>/callback')
+@app.route('/integrations/callback/<platform>')
 def oauth_callback(platform):
-    code = request.args.get('code')
-    if code:
-        # Trocar code por access_token
-        # Salvar no banco
+    from oauth_manager import exchange_code_for_token, save_integration
+    from oauth_manager import fetch_ml_account_info, fetch_meta_account_info, fetch_google_account_info
+    code  = request.args.get('code')
+    state = request.args.get('state', '')
+    error = request.args.get('error')
+    if error:
+        return render_template('settings.html', success=False, msg=f'Erro: {error}')
+    if not code:
+        return render_template('settings.html', success=False, msg='Código de autorização não recebido')
+    try:
+        org_id = int(state) if state.isdigit() else session.get('org_id', 1)
+    except Exception:
+        org_id = session.get('org_id', 1)
+    try:
+        token_data   = exchange_code_for_token(platform, code, request.host)
+        access_token = token_data.get('access_token', '')
+        account_info = {}
+        if platform == 'mercado_livre' and access_token:
+            account_info = fetch_ml_account_info(access_token)
+        elif platform == 'meta_ads' and access_token:
+            account_info = fetch_meta_account_info(access_token)
+        elif platform == 'google_ads' and access_token:
+            account_info = fetch_google_account_info(access_token)
+        save_integration(org_id, platform, token_data, account_info)
+        account_name = account_info.get('nickname') or account_info.get('name') or platform
+        return render_template('settings.html', success=True,
+                               msg=f'Conectado com sucesso a {platform}!',
+                               account_name=account_name)
+    except Exception as e:
+        return render_template('settings.html', success=False, msg=f'Erro ao conectar: {str(e)}')
 
-        db = get_db()
-        db.execute('''
-            INSERT OR REPLACE INTO user_integrations
-            (user_id, platform, access_token, status)
-            VALUES (?, ?, ?, 'connected')
-        ''', (session['user_id'], platform, f'token_{code[:10]}'))
-        db.commit()
+@app.route('/integrations/save-keys/<platform>', methods=['POST'])
+@login_required
+def save_api_keys(platform):
+    from oauth_manager import save_api_key_integration
+    org_id = session.get('org_id', 1)
+    fields = {k: v for k, v in request.form.items() if v.strip()}
+    try:
+        save_api_key_integration(org_id, platform, fields)
+        return render_template('settings.html', success=True,
+                               msg=f'{platform} conectado via API Keys!',
+                               account_name=fields.get('seller_id', platform))
+    except Exception as e:
+        return render_template('settings.html', success=False, msg=f'Erro: {str(e)}')
 
+@app.route('/integrations/disconnect/<platform>', methods=['POST'])
+@login_required
+def disconnect_integration(platform):
+    from oauth_manager import disconnect_integration as do_disconnect
+    org_id = session.get('org_id', 1)
+    do_disconnect(org_id, platform)
     return redirect(url_for('integrations'))
 
-# ===== API ENDPOINTS =====
-@app.route('/api/campaigns')
+@app.route('/settings', methods=['GET', 'POST'])
 @login_required
-def api_campaigns():
-    db = get_db()
-    campaigns = db.execute('SELECT * FROM campaigns WHERE user_id = ?', (session['user_id'],)).fetchall()
+def settings():
+    msg = None
+    if request.method == 'POST':
+        db       = get_db()
+        name     = request.form.get('name', '')
+        password = request.form.get('password', '')
+        if name:
+            db.execute('UPDATE users SET name = ? WHERE id = ?', (name, session['user_id']))
+            session['user_name'] = name
+        if password and len(password) >= 6:
+            db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                       (hash_password(password), session['user_id']))
+        db.commit()
+        msg = 'Alterações salvas com sucesso!'
+    return render_template('integrations.html', msg=msg)
 
-    return jsonify([dict(campaign) for campaign in campaigns])
+# ── API endpoints for dashboard charts ──────────────────────────────────────
 
-@app.route('/api/customers/segment/<segment>')
+@app.route('/api/revenue-chart')
 @login_required
-def api_customers_by_segment(segment):
-    db = get_db()
+def api_revenue_chart():
+    db     = get_db()
+    org_id = session.get('org_id', 1)
+    rows   = db.execute('''
+        SELECT date(ordered_at) as day, SUM(revenue) as rev
+        FROM orders WHERE org_id = ?
+        GROUP BY day ORDER BY day DESC LIMIT 30
+    ''', (org_id,)).fetchall()
+    rows = list(reversed(rows))
+    return jsonify({'labels': [r['day'] for r in rows], 'values': [r['rev'] for r in rows]})
 
-    # Query complexa para filtrar por segmento RFM
-    customers = db.execute('''
-        SELECT * FROM customers
-        WHERE user_id = ?
-        -- Adicionar lógica de segmentação baseada em RFM
-        LIMIT 50
-    ''', (session['user_id'],)).fetchall()
-
-    return jsonify([dict(customer) for customer in customers])
-
-@app.route('/api/analytics/overview')
+@app.route('/api/channel-chart')
 @login_required
-def api_analytics_overview():
-    db = get_db()
+def api_channel_chart():
+    db     = get_db()
+    org_id = session.get('org_id', 1)
+    rows   = db.execute('''
+        SELECT channel, SUM(revenue) as rev
+        FROM orders WHERE org_id = ?
+        GROUP BY channel ORDER BY rev DESC
+    ''', (org_id,)).fetchall()
+    return jsonify({'labels': [r['channel'] for r in rows], 'values': [r['rev'] for r in rows]})
 
-    # Métricas gerais
-    overview = {
-        'total_campaigns': db.execute('SELECT COUNT(*) as count FROM campaigns WHERE user_id = ?', (session['user_id'],)).fetchone()['count'],
-        'total_customers': db.execute('SELECT COUNT(*) as count FROM customers WHERE user_id = ?', (session['user_id'],)).fetchone()['count'],
-        'total_revenue': db.execute('SELECT COALESCE(SUM(revenue), 0) as total FROM campaigns WHERE user_id = ?', (session['user_id'],)).fetchone()['total'],
-        'avg_roi': db.execute('SELECT AVG(revenue * 100.0 / budget) as avg_roi FROM campaigns WHERE user_id = ? AND budget > 0', (session['user_id'],)).fetchone()['avg_roi'] or 0
-    }
+@app.route('/ranking/pause/<int:campaign_id>', methods=['POST'])
+@login_required
+def pause_campaign(campaign_id):
+    db     = get_db()
+    org_id = session.get('org_id', 1)
+    db.execute('UPDATE ad_campaigns SET status = ?, paused_by_ai = 1, ai_note = ? WHERE id = ? AND org_id = ?',
+               ('paused', 'Pausada pela IA — score abaixo do mínimo', campaign_id, org_id))
+    db.commit()
+    return jsonify({'status': 'ok'})
 
-    return jsonify(overview)
+@app.route('/ranking/resume/<int:campaign_id>', methods=['POST'])
+@login_required
+def resume_campaign(campaign_id):
+    db     = get_db()
+    org_id = session.get('org_id', 1)
+    db.execute('UPDATE ad_campaigns SET status = ?, paused_by_ai = 0, ai_note = ? WHERE id = ? AND org_id = ?',
+               ('active', '', campaign_id, org_id))
+    db.commit()
+    return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
     app.run(debug=True)
