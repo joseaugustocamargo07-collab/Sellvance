@@ -228,6 +228,10 @@ def connect_integration(platform):
                 env_vars = ['TIKTOK_APP_ID', 'TIKTOK_APP_SECRET']
             elif platform == 'tiktok_shop':
                 env_vars = ['TIKTOK_SHOP_APP_KEY', 'TIKTOK_SHOP_APP_SECRET']
+            elif platform == 'google_analytics':
+                env_vars = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET']
+            elif platform == 'bling':
+                env_vars = ['BLING_CLIENT_ID', 'BLING_CLIENT_SECRET']
             return render_template('oauth_not_configured.html',
                                    platform_name=cat.get('name', platform),
                                    env_vars=env_vars)
