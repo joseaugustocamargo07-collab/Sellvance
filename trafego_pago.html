@@ -3,6 +3,26 @@
 {% block topbar_title %}🎯 Dashboard de Trafego Pago{% endblock %}
 
 {% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+  <div></div>
+
+<div class="export-dropdown" style="position:relative;display:inline-block;margin-left:auto">
+  <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'"
+          style="background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+    Exportar
+  </button>
+  <div style="display:none;position:absolute;right:0;top:110%%;background:var(--card,#16161e);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:10px;min-width:180px;z-index:100;box-shadow:0 8px 30px rgba(0,0,0,.5);overflow:hidden">
+    <a href="/reports/traffic?format=xlsx" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#4ade80;text-decoration:none;font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.06)">
+      <span style="font-size:16px">📊</span> Excel (.xlsx)</a>
+    <a href="/reports/traffic?format=pdf" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#f87171;text-decoration:none;font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.06)">
+      <span style="font-size:16px">📄</span> PDF</a>
+    <a href="/reports/traffic?format=csv" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#60a5fa;text-decoration:none;font-size:13px;font-weight:600">
+      <span style="font-size:16px">📋</span> CSV</a>
+  </div>
+</div>
+
+</div>
 {% set plat_icons = {'meta':'📘','google':'🔴','tiktok':'🎵'} %}
 {% set plat_names = {'meta':'Meta Ads','google':'Google Ads'} %}
 
