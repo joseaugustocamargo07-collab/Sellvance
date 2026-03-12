@@ -66,10 +66,10 @@ def generate_dashboard_report(org_id, fmt='xlsx', date_start='', date_end=''):
     ads_sql = ''
     ads_params = [org_id]
     if date_start:
-        ads_sql += " AND date(created_at) >= date(?)"
+        ads_sql += " AND date >= ?"
         ads_params.append(date_start)
     if date_end:
-        ads_sql += " AND date(created_at) <= date(?)"
+        ads_sql += " AND date <= ?"
         ads_params.append(date_end)
     spend = db.execute(f'SELECT COALESCE(SUM(spend),0) as v FROM ad_campaigns WHERE org_id=?{ads_sql}', ads_params).fetchone()['v']
     roas = round(rev / max(spend, 1), 2)
@@ -248,10 +248,10 @@ def generate_traffic_report(org_id, fmt='xlsx', date_start='', date_end=''):
     sql = "SELECT * FROM ad_campaigns WHERE org_id=? AND platform IN ('meta','google')"
     params = [org_id]
     if date_start:
-        sql += " AND date(created_at) >= date(?)"
+        sql += " AND date >= ?"
         params.append(date_start)
     if date_end:
-        sql += " AND date(created_at) <= date(?)"
+        sql += " AND date <= ?"
         params.append(date_end)
 
     campaigns_raw = db.execute(sql, params).fetchall()
