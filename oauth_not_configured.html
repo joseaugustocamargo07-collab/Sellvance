@@ -1,353 +1,48 @@
 {% extends "base.html" %}
-{% block title %}Integrações{% endblock %}
-{% block topbar_title %}🔗 Hub de Integrações{% endblock %}
+{% block title %}Configurar {{ platform_name }}{% endblock %}
 
 {% block content %}
+<div style="max-width:560px;margin:40px auto">
+  <a href="/integrations" style="color:var(--accent);font-size:13px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;margin-bottom:20px">
+    &larr; Voltar para Integra&ccedil;&otilde;es
+  </a>
 
-<!-- HEADER -->
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
-  <div>
-    <div style="font-size:20px;font-weight:900">Conecte todas as suas plataformas</div>
-    <div style="font-size:13px;color:var(--text2);margin-top:4px">
-      <span style="color:var(--green);font-weight:700">{{ connected_count }}</span> de
-      <span style="font-weight:700">{{ total_count }}</span> plataformas conectadas
-    </div>
-  </div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 16px;font-size:13px;color:var(--text2)">
-      🔒 Conexões seguras via OAuth 2.0 e criptografia AES-256
-    </div>
-  </div>
-</div>
+  <div class="card" style="padding:32px;text-align:center">
+    <div style="font-size:48px;margin-bottom:16px">&#x1F512;</div>
+    <h2 style="font-size:20px;font-weight:800;margin-bottom:8px">{{ platform_name }}</h2>
+    <p style="color:var(--text2);font-size:14px;margin-bottom:24px">
+      Para conectar via OAuth, &eacute; necess&aacute;rio configurar as credenciais da aplica&ccedil;&atilde;o.
+    </p>
 
-<!-- PROGRESS BAR -->
-<div class="card" style="margin-bottom:24px;padding:16px 20px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-    <div style="font-size:13px;font-weight:700">Progresso de integração</div>
-    <div style="font-size:13px;color:var(--text2)">{{ connected_count }}/{{ total_count }} plataformas</div>
-  </div>
-  <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
-    <div style="height:100%;width:{{ (connected_count / total_count * 100)|int }}%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:4px;transition:width .5s"></div>
-  </div>
-  <div style="display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--text2)">
-    <span>✅ Conectadas: <strong style="color:var(--green)">{{ connected_count }}</strong></span>
-    <span>⏳ Pendentes: <strong style="color:var(--yellow)">{{ total_count - connected_count }}</strong></span>
-    <span style="margin-left:auto;color:var(--text3)">Cada integração desbloqueia novos dados no dashboard</span>
-  </div>
-</div>
-
-<!-- CATEGORIAS -->
-{% for cat_key, cat in by_category.items() %}
-<div style="margin-bottom:28px">
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-    <span style="font-size:18px">{{ cat.icon }}</span>
-    <div style="font-size:15px;font-weight:800">{{ cat.label }}</div>
-    <div style="height:1px;flex:1;background:var(--border)"></div>
-    <div style="font-size:12px;color:var(--text2)">
-      {{ cat.integrations | selectattr('status','equalto','connected') | list | length }}/{{ cat.integrations|length }} conectadas
-    </div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px">
-    {% for integ in cat.integrations %}
-    <div class="integ-card" id="card-{{ integ.key }}"
-         style="background:var(--card);border:1px solid {% if integ.status=='connected' %}rgba(16,185,129,.4){% else %}var(--border){% endif %};border-radius:14px;padding:18px;cursor:pointer;transition:all .15s"
-         onclick="openIntegModal('{{ integ.key }}')">
-
-      <!-- Header -->
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <div style="width:44px;height:44px;border-radius:10px;background:{{ integ.color }}22;border:1px solid {{ integ.color }}44;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">
-          {{ integ.icon }}
+    {% if env_vars %}
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:20px;text-align:left;margin-bottom:20px">
+      <div style="font-weight:700;font-size:14px;color:#fbbf24;margin-bottom:12px">&#x26A0;&#xFE0F; Vari&aacute;veis de ambiente necess&aacute;rias:</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        {% for var in env_vars %}
+        <div style="display:flex;align-items:center;gap:8px">
+          <code style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:4px 10px;font-size:13px;color:#fbbf24;font-weight:600">{{ var }}</code>
+          <span style="font-size:12px;color:var(--text3)">&#x2190; Configurar no Railway</span>
         </div>
-        <div style="flex:1">
-          <div style="font-weight:800;font-size:14px">{{ integ.name }}</div>
-          <div style="font-size:11px;color:var(--text3)">{{ integ.auth_type | upper }} · {{ integ.difficulty }} · {{ integ.setup_time }}</div>
-        </div>
-        <!-- Status badge -->
-        {% if integ.status == 'connected' %}
-        <div style="display:flex;align-items:center;gap:5px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:20px;padding:4px 10px">
-          <div style="width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite"></div>
-          <span style="font-size:11px;font-weight:700;color:var(--green)">Conectado</span>
-        </div>
-        {% else %}
-        <div style="background:var(--card2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:11px;color:var(--text3)">
-          Desconectado
-        </div>
-        {% endif %}
-      </div>
-
-      <!-- Description -->
-      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:12px">{{ integ.description }}</div>
-
-      <!-- Features pills -->
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px">
-        {% for feat in integ.features[:3] %}
-        <span style="background:{{ integ.color }}15;color:{{ integ.color }};border:1px solid {{ integ.color }}33;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600">{{ feat }}</span>
         {% endfor %}
-        {% if integ.features|length > 3 %}
-        <span style="background:var(--card2);color:var(--text3);border:1px solid var(--border);padding:2px 8px;border-radius:8px;font-size:10px">+{{ integ.features|length - 3 }}</span>
-        {% endif %}
-      </div>
-
-      <!-- Action button -->
-      {% if integ.status == 'connected' %}
-      <div style="display:flex;gap:6px">
-        <button onclick="event.stopPropagation();testInteg('{{ integ.key }}')"
-                style="flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.3)">
-          🔍 Testar conexão
-        </button>
-        <button onclick="event.stopPropagation();disconnectInteg('{{ integ.key }}','{{ integ.name }}')"
-                style="padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer;background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.2)">
-          ✕
-        </button>
-      </div>
-      {% else %}
-      <button onclick="event.stopPropagation();openIntegModal('{{ integ.key }}')"
-              style="width:100%;padding:9px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:{{ integ.color }};color:{{ integ.text_color }};border:none">
-        {% if integ.auth_type == 'oauth2' %}🔐 Conectar com {{ integ.name.split(' ')[0] }}{% else %}🔑 Configurar API{% endif %}
-      </button>
-      {% endif %}
-    </div>
-    {% endfor %}
-  </div>
-</div>
-{% endfor %}
-
-
-<!-- MODAL DE CONEXÃO -->
-<div id="modal-integ" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center;padding:20px">
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:18px;width:640px;max-height:88vh;overflow-y:auto">
-
-    <!-- Modal header -->
-    <div id="modal-header" style="padding:24px 24px 0">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
-        <div id="modal-icon" style="width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:26px"></div>
-        <div>
-          <div id="modal-title" style="font-size:18px;font-weight:900"></div>
-          <div id="modal-subtitle" style="font-size:12px;color:var(--text2);margin-top:2px"></div>
-        </div>
-        <button onclick="closeModal()" style="margin-left:auto;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:7px 13px;color:var(--text2);cursor:pointer;font-size:13px">✕</button>
       </div>
     </div>
+    {% endif %}
 
-    <div id="modal-body" style="padding:24px"></div>
+    <div style="background:rgba(108,99,255,.06);border:1px solid rgba(108,99,255,.2);border-radius:12px;padding:20px;text-align:left;margin-bottom:20px">
+      <div style="font-weight:700;font-size:14px;color:var(--accent);margin-bottom:12px">&#x1F4CB; Como configurar:</div>
+      <ol style="padding-left:20px;font-size:13px;color:var(--text2);line-height:2">
+        <li>Acesse o painel de desenvolvedor da plataforma</li>
+        <li>Crie um aplicativo/projeto e obtenha as credenciais</li>
+        <li>No Railway, v&aacute; em <strong>Variables</strong> e adicione as vari&aacute;veis acima</li>
+        <li>Aguarde o redeploy e tente conectar novamente</li>
+      </ol>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:center">
+      <a href="/integrations" class="btn btn-primary" style="padding:10px 24px;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff">
+        &#x2190; Voltar
+      </a>
+    </div>
   </div>
 </div>
-
-<!-- TOAST -->
-<div id="toast" style="display:none;position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;max-width:360px"></div>
-
-<style>
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-.integ-card:hover { border-color: var(--accent) !important; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(108,99,255,.15); }
-</style>
-
-<script>
-var CATALOG = {{ catalog | tojson }};
-
-function openIntegModal(key) {
-  var integ = CATALOG[key];
-  if (!integ) return;
-
-  var modal = document.getElementById('modal-integ');
-  var header = document.getElementById('modal-header');
-  var iconEl = document.getElementById('modal-icon');
-  var titleEl = document.getElementById('modal-title');
-  var subtitleEl = document.getElementById('modal-subtitle');
-  var body = document.getElementById('modal-body');
-
-  iconEl.style.background = integ.color + '22';
-  iconEl.style.border = '1px solid ' + integ.color + '44';
-  iconEl.textContent = integ.icon;
-  titleEl.textContent = integ.name;
-  subtitleEl.textContent = integ.difficulty + ' · ' + integ.setup_time + ' · ' + (integ.auth_type === 'oauth2' ? 'OAuth 2.0' : 'API Key');
-
-  // Build modal body
-  var html = '';
-
-  // Features list
-  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px">';
-  integ.features.forEach(function(f) {
-    html += '<span style="background:' + integ.color + '15;color:' + integ.color + ';border:1px solid ' + integ.color + '33;padding:3px 10px;border-radius:8px;font-size:11px;font-weight:600">' + f + '</span>';
-  });
-  html += '</div>';
-
-  // Steps
-  html += '<div style="margin-bottom:20px">';
-  html += '<div style="font-size:13px;font-weight:700;margin-bottom:12px">📋 Como conectar:</div>';
-  html += '<div style="display:flex;flex-direction:column;gap:8px">';
-  integ.steps.forEach(function(s, i) {
-    html += '<div style="display:flex;gap:12px;align-items:flex-start">';
-    html += '<div style="width:24px;height:24px;border-radius:50%;background:' + integ.color + '22;border:1.5px solid ' + integ.color + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:' + integ.color + ';flex-shrink:0">' + (i+1) + '</div>';
-    html += '<div><div style="font-size:12px;font-weight:700">' + s.title + '</div><div style="font-size:11px;color:var(--text2);margin-top:1px">' + s.desc + '</div></div>';
-    html += '</div>';
-  });
-  html += '</div></div>';
-
-  // Docs link
-  if (integ.docs_url) {
-    html += '<div style="margin-bottom:18px"><a href="' + integ.docs_url + '" target="_blank" style="font-size:12px;color:var(--accent)">📚 Documentação oficial →</a></div>';
-  }
-
-  // Form or OAuth button
-  if (integ.status === 'connected') {
-    html += '<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:16px;margin-bottom:16px;text-align:center">';
-    html += '<div style="font-size:28px;margin-bottom:8px">✅</div>';
-    html += '<div style="font-size:14px;font-weight:700;color:var(--green)">Conectado com sucesso!</div>';
-    html += '<div style="font-size:12px;color:var(--text2);margin-top:4px">Sincronização automática ativa</div>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:8px">';
-    html += '<button onclick="testInteg(\'' + key + '\')" style="flex:1;padding:10px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.3)">🔍 Testar conexão</button>';
-    html += '<button onclick="disconnectInteg(\'' + key + '\',\'' + integ.name + '\')" style="padding:10px 16px;border-radius:9px;font-size:13px;cursor:pointer;background:rgba(239,68,68,.08);color:#fca5a5;border:1px solid rgba(239,68,68,.2)">Desconectar</button>';
-    html += '</div>';
-  } else if (integ.auth_type === 'oauth2') {
-    html += '<button onclick="connectOAuth(\'' + key + '\')" style="width:100%;padding:13px;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;background:' + integ.color + ';color:' + integ.text_color + ';border:none">';
-    html += '🔐 Conectar com ' + integ.name + '</button>';
-  } else {
-    // API Key form
-    html += '<div id="form-' + key + '">';
-    var allFields = (integ.required_fields || []).concat(integ.optional_fields || []);
-    allFields.forEach(function(f) {
-      var isRequired = (integ.required_fields || []).some(function(r){ return r.key === f.key; });
-      html += '<div style="margin-bottom:12px">';
-      html += '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:5px;color:var(--text2)">' + f.label + (isRequired ? ' <span style="color:#fca5a5">*</span>' : ' <span style="color:var(--text3)">(opcional)</span>') + '</label>';
-      html += '<input id="field-' + key + '-' + f.key + '" type="' + (f.type || 'text') + '" placeholder="' + f.placeholder + '" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:13px;box-sizing:border-box">';
-      html += '</div>';
-    });
-    html += '<button onclick="connectAPIKey(\'' + key + '\')" style="width:100%;padding:12px;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer;background:' + integ.color + ';color:' + integ.text_color + ';border:none;margin-top:4px">';
-    html += '🔑 Conectar ' + integ.name + '</button>';
-    html += '</div>';
-  }
-
-  body.innerHTML = html;
-  modal.style.display = 'flex';
-}
-
-function closeModal() {
-  document.getElementById('modal-integ').style.display = 'none';
-}
-
-async function connectOAuth(key) {
-  var integ = CATALOG[key];
-  showToast('🔐 Iniciando conexão com ' + integ.name + '...', 'info');
-  try {
-    var r = await fetch('/integrations/connect/' + key, {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({type:'oauth'})
-    });
-    var d = await r.json();
-    if (d.ok && d.type === 'oauth_redirect' && d.redirect) {
-      // Redireciona o cliente para a plataforma (OAuth real)
-      showToast('🔐 Redirecionando para ' + integ.name + '...', 'info');
-      setTimeout(() => { window.location.href = d.redirect; }, 800);
-    } else if (d.ok && d.type === 'oauth_not_configured') {
-      // App ainda não configurado — mostra página de instruções
-      window.location.href = '/integrations/oauth/start/' + key;
-    } else if (d.ok) {
-      CATALOG[key].status = 'connected';
-      closeModal();
-      showToast('✅ ' + d.msg, 'success');
-      setTimeout(() => location.reload(), 1500);
-    } else {
-      showToast('❌ ' + (d.error || 'Erro ao conectar'), 'error');
-    }
-  } catch(e) {
-    showToast('❌ Erro de conexão', 'error');
-  }
-}
-
-async function connectAPIKey(key) {
-  var integ = CATALOG[key];
-  var data = {};
-  var allFields = (integ.required_fields || []).concat(integ.optional_fields || []);
-  allFields.forEach(function(f) {
-    var el = document.getElementById('field-' + key + '-' + f.key);
-    if (el) data[f.key] = el.value.trim();
-  });
-
-  // Validate required
-  var missing = (integ.required_fields || []).filter(function(f){ return !data[f.key]; });
-  if (missing.length > 0) {
-    showToast('⚠️ Preencha: ' + missing.map(function(f){ return f.label; }).join(', '), 'warn');
-    return;
-  }
-
-  showToast('🔑 Validando credenciais...', 'info');
-  try {
-    var r = await fetch('/integrations/connect/' + key, {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
-    });
-    var d = await r.json();
-    if (d.ok) {
-      CATALOG[key].status = 'connected';
-      closeModal();
-      showToast('✅ ' + d.msg, 'success');
-      setTimeout(() => location.reload(), 1500);
-    } else {
-      showToast('❌ ' + (d.error || 'Credenciais inválidas'), 'error');
-    }
-  } catch(e) {
-    showToast('❌ Erro ao conectar', 'error');
-  }
-}
-
-async function disconnectInteg(key, name) {
-  if (!confirm('Desconectar ' + name + '? Os dados já importados serão mantidos.')) return;
-  var r = await fetch('/integrations/disconnect/' + key, {method:'POST'});
-  var d = await r.json();
-  if (d.ok) {
-    CATALOG[key].status = 'disconnected';
-    updateCard(key);
-    closeModal();
-    showToast('🔌 ' + name + ' desconectado.', 'warn');
-    updateProgress();
-  }
-}
-
-async function testInteg(key) {
-  var integ = CATALOG[key];
-  showToast('🔍 Testando conexão com ' + integ.name + '...', 'info');
-  var r = await fetch('/integrations/test/' + key, {method:'POST'});
-  var d = await r.json();
-  if (d.ok) {
-    showToast('✅ ' + d.msg + ' (' + d.latency + ')', 'success');
-  } else {
-    showToast('❌ Falha no teste: ' + (d.error || 'Erro desconhecido'), 'error');
-  }
-}
-
-function updateCard(key) {
-  var card = document.getElementById('card-' + key);
-  if (!card) return;
-  var isConnected = CATALOG[key].status === 'connected';
-  card.style.borderColor = isConnected ? 'rgba(16,185,129,.4)' : 'var(--border)';
-  // Reload the button area
-  location.reload();
-}
-
-function updateProgress() {
-  var connected = Object.values(CATALOG).filter(function(i){ return i.status === 'connected'; }).length;
-  var total = Object.keys(CATALOG).length;
-  var pct = Math.round(connected / total * 100);
-  // Will reload on next action
-}
-
-function showToast(msg, type) {
-  var t = document.getElementById('toast');
-  var styles = {
-    success: 'background:#052e16;border:1px solid #10b981;color:#6ee7b7',
-    warn:    'background:#1c1003;border:1px solid #f59e0b;color:#fcd34d',
-    error:   'background:#1a0000;border:1px solid #ef4444;color:#fca5a5',
-    info:    'background:#0a0a1a;border:1px solid #6c63ff;color:#a5b4fc',
-  };
-  t.setAttribute('style', (styles[type]||styles.info) + ';display:block;position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;max-width:360px');
-  t.textContent = msg;
-  clearTimeout(t._timer);
-  t._timer = setTimeout(function(){ t.style.display='none'; }, type === 'error' ? 5000 : 3000);
-}
-
-// Close modal on backdrop click
-document.getElementById('modal-integ').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
-});
-</script>
 {% endblock %}
