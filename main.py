@@ -436,7 +436,7 @@ def traffic():
     
     return render_template('trafego_pago.html', 
                          campaigns=campaigns, kpis=kpis, 
-                         platforms=platforms, analysis=analysis)
+                         platforms=platforms, insights=ai_insights, ai_global_roas=ai_global_roas)
 
 # -- AI Suggestions endpoint for Marketplaces --
 
