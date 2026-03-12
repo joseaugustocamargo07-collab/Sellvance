@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_file
 from database import get_db
 from auth import login_required, verify_password, hash_password
 from traffic_ai import analyze_all, calc_metrics, score_campaign
@@ -580,6 +580,35 @@ def marketplace_ai_suggestions():
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+# ══ ROTAS DE RELATORIOS EXPORTAVEIS ═══════════════════════════════
+@app.route('/reports/dashboard')
+@login_required
+def report_dashboard():
+    from reports import generate_dashboard_report
+    fmt = request.args.get('format', 'xlsx')
+    org_id = session.get('org_id', 1)
+    buf, filename, mimetype = generate_dashboard_report(org_id, fmt)
+    return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
+
+@app.route('/reports/traffic')
+@login_required
+def report_traffic():
+    from reports import generate_traffic_report
+    fmt = request.args.get('format', 'xlsx')
+    org_id = session.get('org_id', 1)
+    buf, filename, mimetype = generate_traffic_report(org_id, fmt)
+    return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
+
+@app.route('/reports/crm')
+@login_required
+def report_crm():
+    from reports import generate_crm_report
+    fmt = request.args.get('format', 'xlsx')
+    org_id = session.get('org_id', 1)
+    buf, filename, mimetype = generate_crm_report(org_id, fmt)
+    return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
 
 if __name__ == '__main__':
     app.run(debug=True)
