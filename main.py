@@ -382,8 +382,20 @@ def traffic():
     db = get_db()
     org_id = session.get('org_id', 1)
     
+    # Date filters
+    date_start = request.args.get('date_start', '')
+    date_end = request.args.get('date_end', '')
+
     # Only Meta and Google campaigns (TikTok stays in Marketplaces)
-    campaigns_raw = db.execute("SELECT * FROM ad_campaigns WHERE org_id = ? AND platform IN ('meta', 'google')", (org_id,)).fetchall()
+    sql = "SELECT * FROM ad_campaigns WHERE org_id = ? AND platform IN ('meta', 'google')"
+    params = [org_id]
+    if date_start:
+        sql += " AND date(created_at) >= date(?)"
+        params.append(date_start)
+    if date_end:
+        sql += " AND date(created_at) <= date(?)"
+        params.append(date_end)
+    campaigns_raw = db.execute(sql, params).fetchall()
     
     # Calculate metrics for each campaign
     campaigns = []
@@ -589,7 +601,9 @@ def report_dashboard():
     from reports import generate_dashboard_report
     fmt = request.args.get('format', 'xlsx')
     org_id = session.get('org_id', 1)
-    buf, filename, mimetype = generate_dashboard_report(org_id, fmt)
+    date_start = request.args.get('date_start', '')
+    date_end = request.args.get('date_end', '')
+    buf, filename, mimetype = generate_dashboard_report(org_id, fmt, date_start=date_start, date_end=date_end)
     return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
 
 @app.route('/reports/traffic')
@@ -598,7 +612,9 @@ def report_traffic():
     from reports import generate_traffic_report
     fmt = request.args.get('format', 'xlsx')
     org_id = session.get('org_id', 1)
-    buf, filename, mimetype = generate_traffic_report(org_id, fmt)
+    date_start = request.args.get('date_start', '')
+    date_end = request.args.get('date_end', '')
+    buf, filename, mimetype = generate_traffic_report(org_id, fmt, date_start=date_start, date_end=date_end)
     return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
 
 @app.route('/reports/crm')
@@ -607,7 +623,9 @@ def report_crm():
     from reports import generate_crm_report
     fmt = request.args.get('format', 'xlsx')
     org_id = session.get('org_id', 1)
-    buf, filename, mimetype = generate_crm_report(org_id, fmt)
+    date_start = request.args.get('date_start', '')
+    date_end = request.args.get('date_end', '')
+    buf, filename, mimetype = generate_crm_report(org_id, fmt, date_start=date_start, date_end=date_end)
     return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
 
 if __name__ == '__main__':
