@@ -356,6 +356,85 @@ def resume_campaign(campaign_id):
     return jsonify({'status': 'ok'})
 
 
+
+# -- Trafego Pago dashboard --
+
+@app.route('/traffic')
+@login_required
+def traffic():
+    db = get_db()
+    org_id = session.get('org_id', 1)
+    
+    # All campaigns
+    campaigns_raw = db.execute('SELECT * FROM ad_campaigns WHERE org_id = ?', (org_id,)).fetchall()
+    
+    # Calculate metrics for each campaign
+    campaigns = []
+    total_spend = 0
+    total_revenue = 0
+    total_clicks = 0
+    total_impressions = 0
+    total_conversions = 0
+    
+    for c in campaigns_raw:
+        c_dict = dict(c)
+        m = calc_metrics(c_dict)
+        s = score_campaign(c_dict, m)
+        if s['score'] >= 75:
+            action = 'scale'
+        elif s['score'] >= 50:
+            action = 'optimize'
+        else:
+            action = 'pause'
+        campaigns.append({**c_dict, **m, **s, 'action': action})
+        total_spend += c_dict.get('spend', 0)
+        total_revenue += c_dict.get('revenue', 0)
+        total_clicks += c_dict.get('clicks', 0)
+        total_impressions += c_dict.get('impressions', 0)
+        total_conversions += c_dict.get('conversions', 0)
+    
+    campaigns.sort(key=lambda x: x['score'], reverse=True)
+    
+    # Overall KPIs
+    roas = round(total_revenue / max(total_spend, 1), 2)
+    ctr = round(total_clicks / max(total_impressions, 1) * 100, 2)
+    cpc = round(total_spend / max(total_clicks, 1), 2)
+    cpa = round(total_spend / max(total_conversions, 1), 2)
+    conv_rate = round(total_conversions / max(total_clicks, 1) * 100, 2)
+    profit = total_revenue - total_spend
+    
+    # AI analysis
+    analysis = analyze_all(campaigns_raw)
+    
+    # By platform
+    platforms = {}
+    for c in campaigns:
+        p = c.get('platform', 'Outro')
+        if p not in platforms:
+            platforms[p] = {'spend': 0, 'revenue': 0, 'campaigns': 0}
+        platforms[p]['spend'] += c.get('spend', 0)
+        platforms[p]['revenue'] += c.get('revenue', 0)
+        platforms[p]['campaigns'] += 1
+    for p in platforms:
+        platforms[p]['roas'] = round(platforms[p]['revenue'] / max(platforms[p]['spend'], 1), 2)
+    
+    kpis = {
+        'total_spend': total_spend,
+        'total_revenue': total_revenue,
+        'roas': roas,
+        'ctr': ctr,
+        'cpc': cpc,
+        'cpa': cpa,
+        'conv_rate': conv_rate,
+        'profit': profit,
+        'total_campaigns': len(campaigns),
+        'active_campaigns': sum(1 for c in campaigns if c.get('status') == 'active'),
+    }
+    
+    return render_template('trafego_pago.html', 
+                         campaigns=campaigns, kpis=kpis, 
+                         platforms=platforms, analysis=analysis)
+
 # -- AI Suggestions endpoint for Marketplaces --
 
 @app.route('/marketplaces/ai-suggestions', methods=['POST'])
