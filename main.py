@@ -138,6 +138,13 @@ def ranking():
 @app.route('/marketplaces')
 @login_required
 def marketplaces():
+    try:
+        return _marketplaces_inner()
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+def _marketplaces_inner():
     from marketplace_intel import (COMPETITORS, MY_PRODUCTS, MP_ADS_DATA, RETURNS_DATA,
                                    ACCOUNT_HEALTH, analyze_competitive_position,
                                    analyze_mp_ads, get_keyword_opportunities)
@@ -168,6 +175,13 @@ def marketplaces():
 @app.route('/integrations')
 @login_required
 def integrations():
+    try:
+        return _integrations_inner()
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+def _integrations_inner():
     from integrations import INTEGRATIONS_CATALOG
     from oauth_manager import get_all_integrations, is_app_configured
     org_id    = session.get('org_id', 1)
