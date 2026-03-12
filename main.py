@@ -101,8 +101,16 @@ def crm():
     for c in contacts:
         seg      = c['rfm_segment']
         rfm[seg] = rfm.get(seg, 0) + 1
-    return render_template('crm.html', contacts=contacts, total_contacts=total_contacts,
-                           total_ltv=total_ltv, recompra_rate=recompra_rate, rfm=rfm)
+    search      = request.args.get('search', '')
+    page        = request.args.get('page', 1, type=int)
+    per_page    = 50
+    total_pages = max(1, (total_contacts + per_page - 1) // per_page)
+    page        = max(1, min(page, total_pages))
+    start       = (page - 1) * per_page
+    paged       = contacts[start:start + per_page]
+    return render_template('crm.html', contacts=paged, total_contacts=total_contacts,
+                           total_ltv=total_ltv, recompra_rate=recompra_rate, rfm=rfm,
+                           search=search, cur_page=page, total_pages=total_pages)
 
 @app.route('/ranking')
 @login_required
@@ -154,7 +162,7 @@ def marketplaces():
                              (org_id, mp)).fetchall()
 
     return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health,
-                           competitors=competitors, my_product=my_product, analysis=analysis,
+                           competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items)
 
 @app.route('/integrations')
