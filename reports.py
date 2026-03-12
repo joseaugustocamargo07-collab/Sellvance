@@ -604,3 +604,277 @@ def _crm_pdf(contacts, segments, total, total_ltv, period=''):
     doc.build(elements)
     buf.seek(0)
     return buf, 'sellvance_crm_contatos.pdf', 'application/pdf'
+
+
+
+# ══════════════════════════════════════════════════════════════════
+# MARKETPLACES REPORT
+# ══════════════════════════════════════════════════════════════════
+def generate_marketplaces_report(org_id, mp='mercado_livre', fmt='xlsx', date_start='', date_end=''):
+    db = get_db()
+    from marketplace_intel import (COMPETITORS, MY_PRODUCTS, MP_ADS_DATA, RETURNS_DATA,
+                                   ACCOUNT_HEALTH, analyze_competitive_position,
+                                   analyze_mp_ads, get_keyword_opportunities)
+
+    mp_names = {'mercado_livre': 'Mercado Livre', 'amazon': 'Amazon', 'tiktok_shop': 'TikTok Shop'}
+    mp_label = mp_names.get(mp, mp)
+
+    # Orders data with date filter
+    order_sql = 'SELECT COALESCE(SUM(revenue),0) as rev, COUNT(*) as qty FROM orders WHERE org_id=? AND marketplace=?'
+    params = [org_id, mp]
+    if date_start:
+        order_sql += " AND date(ordered_at) >= date(?)"
+        params.append(date_start)
+    if date_end:
+        order_sql += " AND date(ordered_at) <= date(?)"
+        params.append(date_end)
+    totals = db.execute(order_sql, params).fetchone()
+
+    # Daily orders with date filter
+    daily_sql = 'SELECT date(ordered_at) as day, SUM(revenue) as rev, COUNT(*) as qty FROM orders WHERE org_id=? AND marketplace=?'
+    daily_params = [org_id, mp]
+    if date_start:
+        daily_sql += " AND date(ordered_at) >= date(?)"
+        daily_params.append(date_start)
+    if date_end:
+        daily_sql += " AND date(ordered_at) <= date(?)"
+        daily_params.append(date_end)
+    daily_sql += ' GROUP BY day ORDER BY day'
+    daily = db.execute(daily_sql, daily_params).fetchall()
+
+    # Static data from marketplace_intel
+    health = ACCOUNT_HEALTH.get(mp, {'score': 0, 'metrics': {}})
+    competitors = COMPETITORS.get(mp, [])
+    my = MY_PRODUCTS.get(mp, {})
+    ads = analyze_mp_ads(mp)
+    returns = RETURNS_DATA.get(mp, {})
+    keywords = get_keyword_opportunities(mp)
+    analysis = analyze_competitive_position(mp)
+
+    period = _date_label(date_start, date_end)
+
+    if fmt == 'csv':
+        return _mp_csv(mp_label, totals, daily, health, competitors, my, ads, returns, keywords, period)
+    elif fmt == 'pdf':
+        return _mp_pdf(mp_label, totals, daily, health, competitors, my, ads, returns, keywords, analysis, period)
+    else:
+        return _mp_xlsx(mp_label, totals, daily, health, competitors, my, ads, returns, keywords, analysis, period)
+
+
+def _mp_xlsx(mp_label, totals, daily, health, competitors, my, ads, returns, keywords, analysis, period=''):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    wb = Workbook()
+
+    # Sheet 1: Resumo
+    ws = wb.active
+    ws.title = 'Resumo'
+    row = 1
+    ws.cell(row=row, column=1, value=f'Sellvance - Marketplaces - {mp_label}').font = Font(bold=True, size=14, color='6C63FF')
+    row += 1
+    if period:
+        ws.cell(row=row, column=1, value=period).font = Font(italic=True, color='888888')
+        row += 1
+    row += 1
+    _excel_style_header(ws, ['Metrica', 'Valor'], row=row)
+    row += 1
+    kpis = [
+        ('Receita Total', f"R$ {totals['rev']:,.2f}"),
+        ('Total de Pedidos', totals['qty']),
+        ('Ticket Medio', f"R$ {(totals['rev'] / max(totals['qty'],1)):,.2f}"),
+        ('Score Saude da Conta', f"{health.get('score', 0)}/100"),
+        ('Taxa de Devolucao', f"{returns.get('return_rate', 0)}%"),
+        ('Receita Perdida (devol.)', f"R$ {returns.get('refunded_revenue', 0):,.2f}"),
+    ]
+    for k, v in kpis:
+        ws.cell(row=row, column=1, value=k)
+        ws.cell(row=row, column=2, value=v).font = Font(bold=True)
+        row += 1
+    _auto_width(ws)
+
+    # Sheet 2: Receita Diaria
+    ws2 = wb.create_sheet('Receita Diaria')
+    _excel_style_header(ws2, ['Data', 'Receita', 'Pedidos'])
+    for i, d in enumerate(daily, 2):
+        ws2.cell(row=i, column=1, value=d['day'])
+        ws2.cell(row=i, column=2, value=f"R$ {d['rev']:,.2f}")
+        ws2.cell(row=i, column=3, value=d['qty'])
+    _auto_width(ws2)
+
+    # Sheet 3: Concorrentes
+    ws3 = wb.create_sheet('Concorrentes')
+    _excel_style_header(ws3, ['Concorrente', 'Avaliacao', 'Reviews', 'Preco 32L', 'Preco 20L', 'Estoque', 'Badge', 'Frete'])
+    for i, c in enumerate(competitors, 2):
+        ws3.cell(row=i, column=1, value=c.get('name',''))
+        ws3.cell(row=i, column=2, value=c.get('rating', 0))
+        ws3.cell(row=i, column=3, value=c.get('reviews', 0))
+        ws3.cell(row=i, column=4, value=f"R$ {c.get('price_32l', 0)}")
+        ws3.cell(row=i, column=5, value=f"R$ {c.get('price_20l', 0)}")
+        ws3.cell(row=i, column=6, value=c.get('stock', ''))
+        ws3.cell(row=i, column=7, value=c.get('badge', ''))
+        ws3.cell(row=i, column=8, value=c.get('shipping', ''))
+    _auto_width(ws3)
+
+    # Sheet 4: Anuncios
+    ws4 = wb.create_sheet('Anuncios')
+    _excel_style_header(ws4, ['Anuncio', 'Tipo', 'ACoS%', 'ROAS', 'CTR%', 'CPC', 'Conversoes', 'Gasto', 'Receita', 'Acao'])
+    for i, ad in enumerate(ads, 2):
+        ws4.cell(row=i, column=1, value=ad.get('name',''))
+        ws4.cell(row=i, column=2, value=ad.get('type',''))
+        ws4.cell(row=i, column=3, value=ad.get('acos', 0))
+        ws4.cell(row=i, column=4, value=f"{ad.get('roas',0)}x")
+        ws4.cell(row=i, column=5, value=f"{ad.get('ctr',0)}%")
+        ws4.cell(row=i, column=6, value=f"R$ {ad.get('cpc',0):.2f}")
+        ws4.cell(row=i, column=7, value=ad.get('conversions', 0))
+        ws4.cell(row=i, column=8, value=f"R$ {ad.get('spend',0):,.2f}")
+        ws4.cell(row=i, column=9, value=f"R$ {ad.get('revenue',0):,.2f}")
+        ws4.cell(row=i, column=10, value=ad.get('action_label', ''))
+    _auto_width(ws4)
+
+    # Sheet 5: Palavras-chave
+    ws5 = wb.create_sheet('Palavras-chave')
+    _excel_style_header(ws5, ['Palavra-chave', 'Volume/mes', 'Concorrencia', 'Sua Posicao', 'CPC Est.', 'Oportunidade'])
+    for i, kw in enumerate(keywords, 2):
+        ws5.cell(row=i, column=1, value=kw.get('kw',''))
+        ws5.cell(row=i, column=2, value=kw.get('volume', 0))
+        ws5.cell(row=i, column=3, value=kw.get('competition', ''))
+        ws5.cell(row=i, column=4, value=f"#{kw['your_pos']}" if kw.get('your_pos') else 'Nao rankeando')
+        ws5.cell(row=i, column=5, value=f"R$ {kw.get('cpc_est', 0)}")
+        ws5.cell(row=i, column=6, value=kw.get('opportunity', ''))
+    _auto_width(ws5)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf, f'sellvance_marketplaces_{mp_label.lower().replace(" ","_")}.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+
+def _mp_csv(mp_label, totals, daily, health, competitors, my, ads, returns, keywords, period=''):
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([f'Sellvance - Marketplaces - {mp_label}'])
+    if period:
+        w.writerow([period])
+    w.writerow([])
+
+    w.writerow(['=== RESUMO ==='])
+    w.writerow(['Receita Total', f"{totals['rev']:.2f}"])
+    w.writerow(['Total Pedidos', totals['qty']])
+    w.writerow(['Score Saude', health.get('score', 0)])
+    w.writerow(['Taxa Devolucao', f"{returns.get('return_rate', 0)}%"])
+    w.writerow([])
+
+    w.writerow(['=== RECEITA DIARIA ==='])
+    w.writerow(['Data', 'Receita', 'Pedidos'])
+    for d in daily:
+        w.writerow([d['day'], f"{d['rev']:.2f}", d['qty']])
+    w.writerow([])
+
+    w.writerow(['=== CONCORRENTES ==='])
+    w.writerow(['Nome', 'Avaliacao', 'Reviews', 'Preco 32L', 'Preco 20L', 'Estoque', 'Badge', 'Frete'])
+    for c in competitors:
+        w.writerow([c.get('name',''), c.get('rating',0), c.get('reviews',0),
+                     c.get('price_32l',0), c.get('price_20l',0), c.get('stock',''),
+                     c.get('badge',''), c.get('shipping','')])
+    w.writerow([])
+
+    w.writerow(['=== ANUNCIOS ==='])
+    w.writerow(['Anuncio', 'Tipo', 'ACoS%', 'ROAS', 'CTR%', 'CPC', 'Conversoes', 'Gasto', 'Receita', 'Acao'])
+    for ad in ads:
+        w.writerow([ad.get('name',''), ad.get('type',''), ad.get('acos',0),
+                     f"{ad.get('roas',0)}x", f"{ad.get('ctr',0)}%", f"{ad.get('cpc',0):.2f}",
+                     ad.get('conversions',0), f"{ad.get('spend',0):.2f}", f"{ad.get('revenue',0):.2f}",
+                     ad.get('action_label','')])
+    w.writerow([])
+
+    w.writerow(['=== PALAVRAS-CHAVE ==='])
+    w.writerow(['Palavra-chave', 'Volume', 'Concorrencia', 'Posicao', 'CPC Est.', 'Oportunidade'])
+    for kw in keywords:
+        w.writerow([kw.get('kw',''), kw.get('volume',0), kw.get('competition',''),
+                     f"#{kw['your_pos']}" if kw.get('your_pos') else '-',
+                     kw.get('cpc_est',0), kw.get('opportunity','')])
+
+    out = io.BytesIO(buf.getvalue().encode('utf-8-sig'))
+    out.seek(0)
+    return out, f'sellvance_marketplaces_{mp_label.lower().replace(" ","_")}.csv', 'text/csv'
+
+
+def _mp_pdf(mp_label, totals, daily, health, competitors, my, ads, returns, keywords, analysis, period=''):
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=30, bottomMargin=30)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('T', parent=styles['Title'], fontSize=18, textColor=colors.HexColor('#6C63FF'))
+    subtitle = ParagraphStyle('Sub', parent=styles['Normal'], fontSize=11, textColor=colors.gray)
+
+    elements = []
+    elements.append(Paragraph(f'Sellvance - Marketplaces - {mp_label}', title_style))
+    elements.append(Paragraph(f'Gerado em {datetime.datetime.now().strftime("%d/%m/%Y %H:%M")}', subtitle))
+    if period:
+        elements.append(Paragraph(period, subtitle))
+    elements.append(Spacer(1, 15))
+
+    # KPIs
+    elements.append(Paragraph('Resumo', styles['Heading2']))
+    kpi_data = [
+        ['Metrica', 'Valor'],
+        ['Receita Total', f"R$ {totals['rev']:,.2f}"],
+        ['Total Pedidos', str(totals['qty'])],
+        ['Ticket Medio', f"R$ {(totals['rev']/max(totals['qty'],1)):,.2f}"],
+        ['Score Saude', f"{health.get('score',0)}/100"],
+        ['Taxa Devolucao', f"{returns.get('return_rate',0)}%"],
+    ]
+    t = Table(kpi_data, colWidths=[200, 200])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#6C63FF')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+    ]))
+    elements.append(t)
+    elements.append(Spacer(1, 15))
+
+    # Concorrentes
+    elements.append(Paragraph('Concorrentes', styles['Heading2']))
+    comp_data = [['Nome', 'Aval.', 'Reviews', 'P. 32L', 'P. 20L', 'Estoque', 'Badge']]
+    for c in competitors:
+        comp_data.append([c.get('name','')[:20], str(c.get('rating',0)), str(c.get('reviews',0)),
+                          f"R${c.get('price_32l',0)}", f"R${c.get('price_20l',0)}",
+                          c.get('stock',''), c.get('badge','')[:15]])
+    t2 = Table(comp_data, colWidths=[120, 40, 55, 60, 60, 55, 80])
+    t2.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#6C63FF')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 8),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#F5F5FF')]),
+    ]))
+    elements.append(t2)
+    elements.append(Spacer(1, 15))
+
+    # Anuncios
+    elements.append(Paragraph('Anuncios do Marketplace', styles['Heading2']))
+    ads_data = [['Anuncio', 'ACoS', 'ROAS', 'CTR', 'Conv.', 'Gasto', 'Receita', 'Acao']]
+    for ad in ads:
+        ads_data.append([ad.get('name','')[:25], f"{ad.get('acos',0)}%", f"{ad.get('roas',0)}x",
+                         f"{ad.get('ctr',0)}%", str(ad.get('conversions',0)),
+                         f"R${ad.get('spend',0):,.0f}", f"R${ad.get('revenue',0):,.0f}",
+                         ad.get('action_label','')])
+    t3 = Table(ads_data, colWidths=[150, 45, 45, 40, 40, 65, 65, 80])
+    t3.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#6C63FF')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 8),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+    ]))
+    elements.append(t3)
+
+    doc.build(elements)
+    buf.seek(0)
+    return buf, f'sellvance_marketplaces_{mp_label.lower().replace(" ","_")}.pdf', 'application/pdf'
