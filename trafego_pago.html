@@ -3,26 +3,89 @@
 {% block topbar_title %}🎯 Dashboard de Trafego Pago{% endblock %}
 
 {% block content %}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-  <div></div>
+<!-- BARRA DE FILTRO POR DATA + EXPORTAR -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
 
-<div class="export-dropdown" style="position:relative;display:inline-block;margin-left:auto">
-  <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'"
-          style="background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
-    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-    Exportar
-  </button>
-  <div style="display:none;position:absolute;right:0;top:110%%;background:var(--card,#16161e);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:10px;min-width:180px;z-index:100;box-shadow:0 8px 30px rgba(0,0,0,.5);overflow:hidden">
-    <a href="/reports/traffic?format=xlsx" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#4ade80;text-decoration:none;font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.06)">
-      <span style="font-size:16px">📊</span> Excel (.xlsx)</a>
-    <a href="/reports/traffic?format=pdf" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#f87171;text-decoration:none;font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.06)">
-      <span style="font-size:16px">📄</span> PDF</a>
-    <a href="/reports/traffic?format=csv" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#60a5fa;text-decoration:none;font-size:13px;font-weight:600">
-      <span style="font-size:16px">📋</span> CSV</a>
+  <!-- Date Filter -->
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:6px">
+      <label style="font-size:12px;color:var(--text2);font-weight:600">De:</label>
+      <input type="date" id="date_start" value="{{ date_start or '' }}"
+             style="background:var(--card,#16161e);color:var(--text1,#fff);border:1px solid var(--border,rgba(255,255,255,.15));border-radius:8px;padding:7px 12px;font-size:13px;outline:none">
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <label style="font-size:12px;color:var(--text2);font-weight:600">Ate:</label>
+      <input type="date" id="date_end" value="{{ date_end or '' }}"
+             style="background:var(--card,#16161e);color:var(--text1,#fff);border:1px solid var(--border,rgba(255,255,255,.15));border-radius:8px;padding:7px 12px;font-size:13px;outline:none">
+    </div>
+    <button onclick="applyDateFilter()"
+            style="background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      Filtrar
+    </button>
+    {% if date_start or date_end %}
+    <a href="/traffic" style="color:var(--text2);font-size:12px;text-decoration:underline;cursor:pointer">Limpar filtro</a>
+    {% endif %}
+    <!-- Quick presets -->
+    <div style="display:flex;gap:4px">
+      <button onclick="setPreset(7)" style="background:var(--card2,#1e1e2e);color:var(--text2);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600">7d</button>
+      <button onclick="setPreset(15)" style="background:var(--card2,#1e1e2e);color:var(--text2);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600">15d</button>
+      <button onclick="setPreset(30)" style="background:var(--card2,#1e1e2e);color:var(--text2);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600">30d</button>
+      <button onclick="setPreset(90)" style="background:var(--card2,#1e1e2e);color:var(--text2);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600">90d</button>
+    </div>
   </div>
-</div>
+
+  <!-- Export Dropdown -->
+  <div class="export-dropdown" style="position:relative;display:inline-block">
+    <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'"
+            style="background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Exportar
+    </button>
+    <div style="display:none;position:absolute;right:0;top:110%%;background:var(--card,#16161e);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:10px;min-width:180px;z-index:100;box-shadow:0 8px 30px rgba(0,0,0,.5);overflow:hidden">
+      <a id="exp_xlsx" href="/reports/traffic?format=xlsx" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#4ade80;text-decoration:none;font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span style="font-size:16px">📊</span> Excel (.xlsx)</a>
+      <a id="exp_pdf" href="/reports/traffic?format=pdf" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#f87171;text-decoration:none;font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.06)">
+        <span style="font-size:16px">📄</span> PDF</a>
+      <a id="exp_csv" href="/reports/traffic?format=csv" style="display:flex;align-items:center;gap:8px;padding:10px 16px;color:#60a5fa;text-decoration:none;font-size:13px;font-weight:600">
+        <span style="font-size:16px">📋</span> CSV</a>
+    </div>
+  </div>
 
 </div>
+
+<script>
+function applyDateFilter() {
+  var ds = document.getElementById('date_start').value;
+  var de = document.getElementById('date_end').value;
+  var url = '/traffic?';
+  if(ds) url += 'date_start=' + ds + '&';
+  if(de) url += 'date_end=' + de;
+  window.location.href = url;
+}
+function setPreset(days) {
+  var end = new Date();
+  var start = new Date();
+  start.setDate(end.getDate() - days);
+  document.getElementById('date_start').value = start.toISOString().split('T')[0];
+  document.getElementById('date_end').value = end.toISOString().split('T')[0];
+  applyDateFilter();
+}
+// Update export links with current date filter
+(function(){
+  var ds = document.getElementById('date_start').value;
+  var de = document.getElementById('date_end').value;
+  ['xlsx','pdf','csv'].forEach(function(fmt){
+    var el = document.getElementById('exp_' + fmt);
+    if(el){
+      var url = '/reports/traffic?format=' + fmt;
+      if(ds) url += '&date_start=' + ds;
+      if(de) url += '&date_end=' + de;
+      el.href = url;
+    }
+  });
+})();
+</script>
 {% set plat_icons = {'meta':'📘','google':'🔴','tiktok':'🎵'} %}
 {% set plat_names = {'meta':'Meta Ads','google':'Google Ads'} %}
 
