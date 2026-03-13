@@ -257,7 +257,8 @@ def save_integration(org_id, platform, token_data, account_info=None):
     })
 
     account_id   = (account_info or {}).get('id', token_data.get('user_id', ''))
-    account_name = (account_info or {}).get('name', token_data.get('nickname', ''))
+    # Prioriza custom_label definido pelo usuario na tela pre-OAuth
+    account_name = (account_info or {}).get('custom_label') or (account_info or {}).get('nickname') or (account_info or {}).get('name') or token_data.get('nickname', '')
 
     existing = db.execute(
         'SELECT id FROM api_integrations WHERE org_id=? AND platform=?',
