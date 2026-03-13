@@ -217,12 +217,11 @@ def _integrations_inner():
 @app.route('/integrations/connect/<platform>')
 @login_required
 def connect_integration(platform):
-    from oauth_manager import build_auth_url, is_app_configured, OAUTH_APPS
+    from oauth_manager import is_app_configured, OAUTH_APPS
     from integrations import INTEGRATIONS_CATALOG
     cat = INTEGRATIONS_CATALOG.get(platform, {})
     if cat.get('auth_type') == 'oauth2':
         if not is_app_configured(platform):
-            app_info = OAUTH_APPS.get(platform, {})
             env_vars = []
             if platform == 'mercado_livre':
                 env_vars = ['ML_APP_ID', 'ML_APP_SECRET']
@@ -241,11 +240,16 @@ def connect_integration(platform):
             return render_template('oauth_not_configured.html',
                                    platform_name=cat.get('name', platform),
                                    env_vars=env_vars)
-        org_id = session.get('org_id', 1)
-        url    = build_auth_url(platform, org_id, request.host)
-        return redirect(url)
+        # Mostra tela intermediaria para escolher/nomear a conta
+        return render_template('oauth_pre_connect.html',
+                               platform_key=platform,
+                               platform_name=cat.get('name', platform),
+                               icon=cat.get('icon', '🔗'),
+                               color=cat.get('color', '#6c63ff'),
+                               text_color=cat.get('text_color', '#fff'),
+                               steps=cat.get('steps', []))
     # Re-fetch all platforms so the grid doesn't disappear
-    from oauth_manager import get_all_integrations, is_app_configured
+    from oauth_manager import get_all_integrations, is_app_configured as isc
     org_id = session.get('org_id', 1)
     connected_map = get_all_integrations(org_id)
     all_platforms = []
@@ -253,10 +257,31 @@ def connect_integration(platform):
         conn = connected_map.get(k, {})
         all_platforms.append({**info, 'key': k,
                               'connected': conn.get('status') == 'connected',
-                              'configured': is_app_configured(k),
+                              'configured': isc(k),
                               'account_name': conn.get('account_name', ''),
                               'last_sync': conn.get('last_sync', '')})
     return render_template('integrations_hub.html', platforms=all_platforms, api_key_platform=platform, catalog_item=cat)
+
+
+@app.route('/integrations/connect/<platform>/start', methods=['POST'])
+@login_required
+def connect_integration_start(platform):
+    from oauth_manager import build_auth_url, is_app_configured, revoke_ml_grant
+    from integrations import INTEGRATIONS_CATALOG
+    cat = INTEGRATIONS_CATALOG.get(platform, {})
+    if cat.get('auth_type') != 'oauth2' or not is_app_configured(platform):
+        return redirect(url_for('integrations'))
+    account_label = request.form.get('account_label', '').strip()
+    if account_label:
+        session['pending_account_label'] = account_label
+        session['pending_account_platform'] = platform
+    org_id = session.get('org_id', 1)
+    # Revoga grant existente para forcar o ML a pedir login novamente
+    if platform == 'mercado_livre':
+        revoke_ml_grant(org_id)
+    url = build_auth_url(platform, org_id, request.host)
+    return redirect(url)
+
 
 @app.route('/integrations/callback/<platform>')
 def oauth_callback(platform):
@@ -285,8 +310,13 @@ def oauth_callback(platform):
             account_info = fetch_meta_account_info(access_token)
         elif platform == 'google_ads' and access_token:
             account_info = fetch_google_account_info(access_token)
+        # Usa o label definido pelo usuario na tela pre-OAuth, se disponivel
+        pending_label = session.pop('pending_account_label', '')
+        pending_platform = session.pop('pending_account_platform', '')
+        if pending_label and pending_platform == platform:
+            account_info['custom_label'] = pending_label
         save_integration(org_id, platform, token_data, account_info)
-        account_name = account_info.get('nickname') or account_info.get('name') or platform
+        account_name = pending_label or account_info.get('nickname') or account_info.get('name') or platform
         return render_template('settings.html', success=True,
                                msg=f'Conectado com sucesso a {platform}!',
                                account_name=account_name)
