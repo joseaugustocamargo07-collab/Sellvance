@@ -355,17 +355,17 @@ def migrate_db():
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
                 (s[0], s[1], s[2], s[3], qty, reserved, min_s, cost, price, daily, days, status))
 
-        # Seed API integrations
+        # Seed API integrations (INSERT OR IGNORE to preserve real OAuth-connected integrations)
         integrations = [
             (org_id, 'meta_ads', 'disconnected', None, None),
             (org_id, 'google_ads', 'disconnected', None, None),
             (org_id, 'tiktok_ads', 'disconnected', None, None),
-            (org_id, 'mercado_livre', 'connected', 'ML-123456', 'Primeplas Coolers'),
-            (org_id, 'amazon', 'connected', 'AMZ-789012', 'Primeplas BR'),
-            (org_id, 'tiktok_shop', 'connected', 'TTS-345678', 'PrimeplasShop'),
+            (org_id, 'mercado_livre', 'disconnected', None, None),
+            (org_id, 'amazon', 'disconnected', None, None),
+            (org_id, 'tiktok_shop', 'disconnected', None, None),
         ]
         for i in integrations:
-            db.execute('INSERT INTO api_integrations (org_id,platform,status,account_id,account_name) VALUES (?,?,?,?,?)', i)
+            db.execute('INSERT OR IGNORE INTO api_integrations (org_id,platform,status,account_id,account_name) VALUES (?,?,?,?,?)', i)
 
         db.commit()
         print('✅ Migração concluída!')
