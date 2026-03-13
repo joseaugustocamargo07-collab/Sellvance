@@ -274,7 +274,9 @@ def oauth_callback(platform):
     except Exception:
         org_id = session.get('org_id', 1)
     try:
-        token_data   = exchange_code_for_token(platform, code, request.host)
+        token_data, token_error = exchange_code_for_token(platform, code, request.host)
+        if token_error or not token_data:
+            return render_template('settings.html', success=False, msg=f'Erro ao obter token: {token_error}')
         access_token = token_data.get('access_token', '')
         account_info = {}
         if platform == 'mercado_livre' and access_token:
