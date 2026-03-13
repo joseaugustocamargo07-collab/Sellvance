@@ -369,6 +369,91 @@ def migrate_db():
 
         db.commit()
         print('✅ Migração concluída!')
+
+    # ── Sync engine tables ────────────────────────────────────
+    if 'mp_products' not in existing:
+        db2 = get_db()
+        db2.executescript("""
+            CREATE TABLE IF NOT EXISTS mp_products (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id        INTEGER NOT NULL,
+                platform      TEXT NOT NULL,
+                external_id   TEXT NOT NULL,
+                title         TEXT,
+                price         REAL DEFAULT 0,
+                stock_qty     INTEGER DEFAULT 0,
+                rating        REAL DEFAULT 0,
+                reviews       INTEGER DEFAULT 0,
+                sold_qty      INTEGER DEFAULT 0,
+                thumbnail_url TEXT,
+                listing_type  TEXT,
+                category      TEXT,
+                status        TEXT DEFAULT 'active',
+                last_synced   TEXT DEFAULT (datetime('now')),
+                UNIQUE(org_id, platform, external_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS mp_account_health (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id        INTEGER NOT NULL,
+                platform      TEXT NOT NULL,
+                score         INTEGER DEFAULT 0,
+                level         TEXT,
+                metrics_json  TEXT DEFAULT '{}',
+                alerts_json   TEXT DEFAULT '[]',
+                last_synced   TEXT DEFAULT (datetime('now')),
+                UNIQUE(org_id, platform)
+            );
+
+            CREATE TABLE IF NOT EXISTS mp_returns (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id              INTEGER NOT NULL,
+                platform            TEXT NOT NULL,
+                total_orders        INTEGER DEFAULT 0,
+                total_returns       INTEGER DEFAULT 0,
+                return_rate         REAL DEFAULT 0,
+                reasons_json        TEXT DEFAULT '[]',
+                avg_resolution_days REAL DEFAULT 0,
+                refunded_revenue    REAL DEFAULT 0,
+                trend               TEXT DEFAULT 'stable',
+                last_synced         TEXT DEFAULT (datetime('now')),
+                UNIQUE(org_id, platform)
+            );
+
+            CREATE TABLE IF NOT EXISTS mp_ads (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id        INTEGER NOT NULL,
+                platform      TEXT NOT NULL,
+                external_id   TEXT NOT NULL,
+                name          TEXT,
+                type          TEXT DEFAULT 'product_ads',
+                spend         REAL DEFAULT 0,
+                revenue       REAL DEFAULT 0,
+                clicks        INTEGER DEFAULT 0,
+                impressions   INTEGER DEFAULT 0,
+                conversions   INTEGER DEFAULT 0,
+                acos          REAL DEFAULT 0,
+                status        TEXT DEFAULT 'active',
+                last_synced   TEXT DEFAULT (datetime('now')),
+                UNIQUE(org_id, platform, external_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS sync_log (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id          INTEGER NOT NULL,
+                platform        TEXT NOT NULL,
+                sync_type       TEXT NOT NULL,
+                status          TEXT DEFAULT 'running',
+                records_synced  INTEGER DEFAULT 0,
+                error_message   TEXT,
+                started_at      TEXT DEFAULT (datetime('now')),
+                finished_at     TEXT
+            );
+        """)
+        db2.commit()
+        db2.close()
+        print('\u2705 Tabelas de sync criadas!')
+
     else:
         print('✅ Banco já migrado.')
     db.close()
