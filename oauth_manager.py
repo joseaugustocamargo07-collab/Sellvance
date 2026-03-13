@@ -367,6 +367,35 @@ def is_app_configured(platform):
     return 'SEU_' not in app['client_id']
 
 
+
+
+def revoke_ml_grant(org_id):
+    """Revoga o grant OAuth existente do ML para forcar nova autorizacao."""
+    integration = get_integration(org_id, 'mercado_livre')
+    if not integration:
+        return
+    config = integration.get('config', {})
+    access_token = config.get('access_token', '')
+    if not access_token:
+        return
+    try:
+        app = OAUTH_APPS.get('mercado_livre', {})
+        payload = urllib.parse.urlencode({
+            'client_id': app['client_id'],
+            'client_secret': app['client_secret'],
+            'grant_type': 'revoke',
+            'token': access_token,
+        }).encode()
+        req = urllib.request.Request(
+            'https://api.mercadolibre.com/oauth/token',
+            data=payload,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            method='POST'
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except Exception:
+        pass  # Best effort — even if revoke fails, user can still re-auth
+
 # ── HELPERS DE FETCH POR PLATAFORMA ──────────────────────────────────────────
 
 def fetch_ml_account_info(access_token):
