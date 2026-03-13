@@ -30,19 +30,31 @@ def get_valid_token(org_id, platform):
     from oauth_manager import get_integration, refresh_access_token, OAUTH_APPS
 
     integration = get_integration(org_id, platform)
-    if not integration or integration.get('status') != 'connected':
+    if not integration:
+        print(f"[sync] get_valid_token: no integration found for org={org_id} platform={platform}")
+        return None
+    
+    status = integration.get('status', '')
+    print(f"[sync] get_valid_token: integration found, status='{status}', account='{integration.get('account_name','')}'")
+    
+    if status != 'connected':
+        print(f"[sync] get_valid_token: status is not 'connected', returning None")
         return None
 
     config = integration.get('config', {})
     access_token = config.get('access_token', '')
     refresh_token = config.get('refresh_token', '')
+    
+    print(f"[sync] get_valid_token: access_token={'YES (len=' + str(len(access_token)) + ')' if access_token else 'EMPTY'}, refresh_token={'YES' if refresh_token else 'EMPTY'}")
 
     if not access_token:
+        print(f"[sync] get_valid_token: no access_token, trying refresh...")
+        if refresh_token:
+            new_token = force_refresh_token(org_id, platform)
+            if new_token:
+                return new_token
         return None
 
-    # Check if token might be expired (simple heuristic)
-    # ML tokens last 6 hours, Meta ~60 days, Google 1 hour
-    # We always try the current token first; if API returns 401, caller should retry after refresh
     return access_token
 
 
