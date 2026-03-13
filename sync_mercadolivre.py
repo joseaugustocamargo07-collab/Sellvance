@@ -26,26 +26,38 @@ def _get_user_id(org_id):
 
 def sync_all(org_id):
     """Run all ML sync operations. Returns total records synced."""
+    print(f"[ml_sync] Starting sync for org_id={org_id}")
     token = get_valid_token(org_id, 'mercado_livre')
     if not token:
+        print(f"[ml_sync] No valid token for org_id={org_id}")
         return 0
+    print(f"[ml_sync] Got token: {token[:10]}...")
 
     total = 0
 
     # First get user info (also syncs account health)
     user_id = _sync_user_info(org_id, token)
     if not user_id:
+        print(f"[ml_sync] Could not get user_id for org_id={org_id}")
         return 0
+    print(f"[ml_sync] Got user_id={user_id}")
     total += 1
 
     # Sync orders
-    total += _sync_orders(org_id, token, user_id)
+    orders_count = _sync_orders(org_id, token, user_id)
+    print(f"[ml_sync] Synced {orders_count} orders")
+    total += orders_count
 
     # Sync products (listings)
-    total += _sync_products(org_id, token, user_id)
+    products_count = _sync_products(org_id, token, user_id)
+    print(f"[ml_sync] Synced {products_count} products")
+    total += products_count
 
     # Compute returns from orders
-    total += _sync_returns(org_id)
+    returns_count = _sync_returns(org_id)
+    print(f"[ml_sync] Synced returns: {returns_count}")
+    total += returns_count
+    print(f"[ml_sync] Total records synced: {total}")
 
     return total
 
