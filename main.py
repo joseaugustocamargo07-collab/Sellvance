@@ -1,3 +1,4 @@
+# Sellvance App — main server
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_file
 from database import get_db
 from auth import login_required, verify_password, hash_password
