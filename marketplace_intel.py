@@ -276,3 +276,134 @@ def get_keyword_opportunities(marketplace):
         ],
     }
     return kws.get(marketplace, [])
+
+
+# ═══════════════════════════════════════════════════════════════
+# DB-FIRST FUNCTIONS (real API data with demo fallback)
+# ═══════════════════════════════════════════════════════════════
+
+def get_my_products_live(org_id, marketplace):
+    """Returns product data from DB if available, else demo data."""
+    try:
+        from database import get_db
+        db = get_db()
+        products = db.execute(
+            "SELECT * FROM mp_products WHERE org_id=? AND platform=? AND status='active' ORDER BY sold_qty DESC",
+            (org_id, marketplace)
+        ).fetchall()
+        db.close()
+
+        if products and len(products) > 0:
+            # Transform to the format templates expect
+            total_stock = sum(p['stock_qty'] or 0 for p in products)
+            total_sold = sum(p['sold_qty'] or 0 for p in products)
+            avg_price = sum(p['price'] or 0 for p in products) / len(products) if products else 0
+            avg_rating = sum(p['rating'] or 0 for p in products) / len(products) if products else 0
+            total_reviews = sum(p['reviews'] or 0 for p in products)
+
+            return {
+                'price_32l': products[0]['price'] if len(products) > 0 else 0,
+                'price_20l': products[1]['price'] if len(products) > 1 else 0,
+                'rating': round(avg_rating, 1) if avg_rating > 0 else 4.5,
+                'reviews': total_reviews,
+                'stock_32l': products[0]['stock_qty'] if len(products) > 0 else 0,
+                'stock_20l': products[1]['stock_qty'] if len(products) > 1 else 0,
+                'badge': None,
+                'fulfillment': False,
+                '_live': True,
+                '_products': [dict(p) for p in products],
+                '_total_stock': total_stock,
+                '_total_sold': total_sold,
+            }
+    except Exception as e:
+        print(f"[marketplace_intel] DB error for products: {e}")
+
+    return MY_PRODUCTS.get(marketplace, {})
+
+
+def get_account_health_live(org_id, marketplace):
+    """Returns account health from DB if available, else demo data."""
+    try:
+        from database import get_db
+        import json as _json
+        db = get_db()
+        row = db.execute(
+            "SELECT * FROM mp_account_health WHERE org_id=? AND platform=?",
+            (org_id, marketplace)
+        ).fetchone()
+        db.close()
+
+        if row:
+            return {
+                'score': row['score'],
+                'level': row['level'],
+                'metrics': _json.loads(row['metrics_json'] or '{}'),
+                'alerts': _json.loads(row['alerts_json'] or '[]'),
+                '_live': True,
+            }
+    except Exception as e:
+        print(f"[marketplace_intel] DB error for health: {e}")
+
+    return ACCOUNT_HEALTH.get(marketplace, {'score': 0, 'metrics': {}, 'alerts': []})
+
+
+def get_returns_live(org_id, marketplace):
+    """Returns return data from DB if available, else demo data."""
+    try:
+        from database import get_db
+        import json as _json
+        db = get_db()
+        row = db.execute(
+            "SELECT * FROM mp_returns WHERE org_id=? AND platform=?",
+            (org_id, marketplace)
+        ).fetchone()
+        db.close()
+
+        if row:
+            return {
+                'total_orders': row['total_orders'],
+                'total_returns': row['total_returns'],
+                'return_rate': row['return_rate'],
+                'reasons': _json.loads(row['reasons_json'] or '[]'),
+                'avg_resolution_days': row['avg_resolution_days'],
+                'refunded_revenue': row['refunded_revenue'],
+                'trend': row['trend'],
+                '_live': True,
+            }
+    except Exception as e:
+        print(f"[marketplace_intel] DB error for returns: {e}")
+
+    return RETURNS_DATA.get(marketplace, {})
+
+
+def get_mp_totals_live(org_id):
+    """Returns revenue/orders totals per marketplace from real orders."""
+    try:
+        from database import get_db
+        db = get_db()
+        mp_totals = {}
+        for mp_id in ['mercado_livre', 'amazon', 'tiktok_shop']:
+            row = db.execute(
+                "SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders FROM orders WHERE org_id=? AND marketplace=?",
+                (org_id, mp_id)
+            ).fetchone()
+            mp_totals[mp_id] = {'revenue': row['revenue'], 'orders': row['orders']}
+        db.close()
+        return mp_totals
+    except Exception:
+        return {}
+
+
+def is_platform_synced(org_id, marketplace):
+    """Check if we have real synced data for this platform."""
+    try:
+        from database import get_db
+        db = get_db()
+        row = db.execute(
+            "SELECT COUNT(*) as cnt FROM sync_log WHERE org_id=? AND platform=? AND status='success'",
+            (org_id, marketplace)
+        ).fetchone()
+        db.close()
+        return row['cnt'] > 0
+    except Exception:
+        return False
