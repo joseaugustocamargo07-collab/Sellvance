@@ -148,7 +148,11 @@ def marketplaces():
 def _marketplaces_inner():
     from marketplace_intel import (COMPETITORS, MY_PRODUCTS, MP_ADS_DATA, RETURNS_DATA,
                                    ACCOUNT_HEALTH, analyze_competitive_position,
-                                   analyze_mp_ads, get_keyword_opportunities)
+                                   analyze_mp_ads, get_keyword_opportunities,
+                                   get_my_products_live, get_account_health_live,
+                                   get_returns_live, get_mp_totals_live, is_platform_synced)
+    from oauth_manager import get_integration
+    from sync_base import run_sync_if_needed, get_last_sync_info
     mp  = request.args.get('mp', 'mercado_livre')
     tab = request.args.get('tab', 'overview')
     date_start = request.args.get('date_start', '')
@@ -158,12 +162,24 @@ def _marketplaces_inner():
         {'id': 'amazon',        'name': 'Amazon',        'icon': '📦', 'color': '#ff9900'},
         {'id': 'tiktok_shop',   'name': 'TikTok Shop',   'icon': '🎵', 'color': '#ff0050'},
     ]
-    health      = ACCOUNT_HEALTH.get(mp, {'score': 0, 'metrics': {}, 'alerts': []})
+    # Check if platform is connected and trigger sync if needed
+    org_id = session.get('org_id', 1)
+    integration = get_integration(org_id, mp)
+    is_connected = integration and integration.get('status') == 'connected'
+    sync_info = None
+
+    if is_connected and mp == 'mercado_livre':
+        from sync_mercadolivre import sync_all as ml_sync
+        run_sync_if_needed(org_id, mp, ml_sync, max_age=60)
+        sync_info = get_last_sync_info(org_id, mp)
+
+    # Use live data if synced, otherwise demo
+    health      = get_account_health_live(org_id, mp) if is_connected else ACCOUNT_HEALTH.get(mp, {'score': 0, 'metrics': {}, 'alerts': []})
     competitors = COMPETITORS.get(mp, [])
-    my_product  = MY_PRODUCTS.get(mp, {})
+    my_product  = get_my_products_live(org_id, mp) if is_connected else MY_PRODUCTS.get(mp, {})
     analysis    = analyze_competitive_position(mp)
     ads         = analyze_mp_ads(mp)
-    returns     = RETURNS_DATA.get(mp, {})
+    returns     = get_returns_live(org_id, mp) if is_connected else RETURNS_DATA.get(mp, {})
     keywords    = get_keyword_opportunities(mp)
 
     db          = get_db()
@@ -185,7 +201,8 @@ def _marketplaces_inner():
         row = db.execute(mp_sql, mp_params).fetchone()
         mp_totals[m_id] = {'revenue': row['revenue'], 'orders': row['orders']}
 
-    return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health,
+    is_live = is_connected and is_platform_synced(org_id, mp)
+    return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
                            mp_totals=mp_totals, date_start=date_start, date_end=date_end)
@@ -630,6 +647,42 @@ def marketplace_ai_suggestions():
     except Exception as e:
         import traceback
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+
+# ── API Sync endpoint ─────────────────────────────────────────────────────────
+
+@app.route('/api/sync/<platform>', methods=['POST'])
+@login_required
+def api_sync(platform):
+    org_id = session.get('org_id', 1)
+    try:
+        if platform == 'mercado_livre':
+            from sync_mercadolivre import sync_all
+            records = sync_all(org_id)
+        elif platform == 'meta_ads':
+            from sync_meta_ads import sync_all
+            records = sync_all(org_id)
+        else:
+            return jsonify({'status': 'error', 'msg': f'Sync not implemented for {platform}'}), 400
+
+        from sync_base import get_last_sync_info
+        info = get_last_sync_info(org_id, platform)
+        return jsonify({'status': 'ok', 'records': records, 'last_sync': info})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'msg': str(e)}), 500
+
+
+@app.route('/api/sync-status/<platform>')
+@login_required
+def api_sync_status(platform):
+    org_id = session.get('org_id', 1)
+    from sync_base import get_last_sync_info, is_stale
+    info = get_last_sync_info(org_id, platform)
+    stale = is_stale(org_id, platform)
+    return jsonify({'last_sync': info, 'is_stale': stale})
 
 
 # ══ ROTAS DE RELATORIOS EXPORTAVEIS ═══════════════════════════════
