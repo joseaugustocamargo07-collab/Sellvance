@@ -20,7 +20,7 @@ OAUTH_APPS = {
         'name':          'Mercado Livre',
         'client_id':     os.environ.get('ML_APP_ID',       'SEU_APP_ID_AQUI'),
         'client_secret': os.environ.get('ML_APP_SECRET',   'SEU_SECRET_AQUI'),
-        'auth_url':      'https://auth.mercadolibre.com.br/authorization',
+        'auth_url':      'https://auth.mercadolibre.com/authorization',
         'token_url':     'https://api.mercadolibre.com/oauth/token',
         'redirect_path': '/integrations/callback/mercado_livre',
         'scopes':        'read_orders write_orders read_items write_items read_questions write_questions manage_campaigns',
