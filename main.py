@@ -695,8 +695,8 @@ def sync_diagnostic():
     from oauth_manager import get_integration
     org_id = session.get('org_id', 1)
     result = {'org_id': org_id, 'platforms': {}}
-    
-    for platform in ['mercado_livre', 'meta_ads', 'google_ads', 'tiktok_shop']:
+
+    for platform in ['mercado_livre', 'meta_ads', 'google_ads', 'tiktok_shop', 'amazon', 'tiktok_ads']:
         info = {'connected': False}
         try:
             integration = get_integration(org_id, platform)
@@ -704,38 +704,50 @@ def sync_diagnostic():
                 info['connected'] = integration.get('status') == 'connected'
                 info['status'] = integration.get('status', 'unknown')
                 info['account_name'] = integration.get('account_name', '')
+                info['account_id'] = integration.get('account_id', '')
                 config = integration.get('config', {})
                 info['has_access_token'] = bool(config.get('access_token'))
                 info['has_refresh_token'] = bool(config.get('refresh_token'))
                 info['token_len'] = len(config.get('access_token', ''))
                 info['user_id'] = config.get('user_id', '')
+            else:
+                info['status'] = 'no_row'
         except Exception as e:
             info['error'] = str(e)
         result['platforms'][platform] = info
-    
+
+    # Check ALL api_integrations rows to debug
+    try:
+        db = get_db()
+        all_rows = db.execute('SELECT id, org_id, platform, status, account_id, account_name FROM api_integrations ORDER BY id').fetchall()
+        result['all_integrations'] = [dict(r) for r in all_rows]
+        db.close()
+    except Exception as e:
+        result['all_integrations_error'] = str(e)
+
     # Check sync_log
     try:
         db = get_db()
-        rows = db.execute('SELECT * FROM sync_log WHERE org_id=? ORDER BY created_at DESC LIMIT 20', (org_id,)).fetchall()
+        rows = db.execute('SELECT * FROM sync_log ORDER BY finished_at DESC LIMIT 10').fetchall()
         result['sync_log'] = [dict(r) for r in rows]
         db.close()
     except Exception as e:
         result['sync_log_error'] = str(e)
-    
+
     # Check table counts
     try:
         db = get_db()
-        for table in ['mp_products', 'mp_account_health', 'mp_returns', 'mp_ads', 'orders']:
+        for table in ['mp_products', 'mp_account_health', 'mp_returns', 'mp_ads', 'orders', 'contacts', 'organizations', 'users']:
             try:
-                count = db.execute(f'SELECT COUNT(*) as c FROM {table} WHERE org_id=?', (org_id,)).fetchone()['c']
+                count = db.execute(f'SELECT COUNT(*) as c FROM {table}').fetchone()['c']
                 result[f'count_{table}'] = count
             except Exception as e:
                 result[f'count_{table}'] = f'ERROR: {e}'
         db.close()
     except Exception as e:
         result['table_count_error'] = str(e)
-    
-    # Try a manual sync test
+
+    # Try manual sync
     if request.args.get('try_sync') == '1':
         try:
             from sync_mercadolivre import sync_all as ml_sync
@@ -746,8 +758,10 @@ def sync_diagnostic():
             import traceback
             result['manual_sync_error'] = str(e)
             result['manual_sync_trace'] = traceback.format_exc()
-    
+
     return jsonify(result)
+
+
 
 
 @app.route('/reports/dashboard')
