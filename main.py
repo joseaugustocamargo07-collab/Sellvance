@@ -220,26 +220,42 @@ def _marketplaces_inner():
             analysis = analyze_competitive_position(mp)
             my_product['_live'] = True
 
-        # Real ads from mp_ads or ad_campaigns table
+        # Real ads from synced data (template expects a LIST of ad dicts)
+        ads = []  # Default: empty list = no ads
         ads_data = get_ads_live(org_id, mp)
-        if ads_data and ads_data.get('_live'):
-            ads = ads_data
-        else:
-            # Check ad_campaigns table for synced campaign data
+        if ads_data and ads_data.get('_live') and ads_data.get('ads'):
+            # Convert mp_ads rows to template format
+            for a in ads_data['ads']:
+                spend = a.get('spend', 0) or 0
+                rev = a.get('revenue', 0) or 0
+                ads.append({
+                    'name': a.get('title', a.get('name', 'Anúncio')),
+                    'type': a.get('listing_type_id', 'promoted'),
+                    'spend': spend,
+                    'revenue': rev,
+                    'acos': round(spend / rev * 100, 1) if rev > 0 else 0,
+                    'roas': round(rev / spend, 1) if spend > 0 else 0,
+                    'ctr': round(a.get('ctr', 0) or 0, 2),
+                    'conversions': a.get('conversions', 0) or 0,
+                    'action_label': 'Monitorar',
+                })
+        if not ads:
+            # Check ad_campaigns table
             real_campaigns = get_ads_from_campaigns(org_id, mp)
-            if real_campaigns:
-                total_spend = sum(c.get('spend', 0) or 0 for c in real_campaigns)
-                total_rev = sum(c.get('revenue', 0) or 0 for c in real_campaigns)
-                ads = {
-                    'campaigns': real_campaigns,
-                    'total_spend': total_spend,
-                    'total_revenue': total_rev,
-                    'roas': round(total_rev / total_spend, 1) if total_spend > 0 else 0,
-                    '_live': True,
-                }
-            else:
-                # No real ads data - pass empty (template will show message)
-                ads = {'campaigns': [], 'total_spend': 0, 'total_revenue': 0, 'roas': 0, '_live': True, '_empty': True}
+            for c in real_campaigns:
+                spend = c.get('spend', 0) or 0
+                rev = c.get('revenue', 0) or 0
+                ads.append({
+                    'name': c.get('name', 'Campanha'),
+                    'type': c.get('objective', 'campaign'),
+                    'spend': spend,
+                    'revenue': rev,
+                    'acos': round(spend / rev * 100, 1) if rev > 0 else 0,
+                    'roas': round(rev / spend, 1) if spend > 0 else 0,
+                    'ctr': round(c.get('clicks', 0) / max(c.get('impressions', 1), 1) * 100, 2),
+                    'conversions': c.get('conversions', 0) or 0,
+                    'action_label': 'Monitorar',
+                })
 
         is_live = True
     else:
