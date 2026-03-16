@@ -13,8 +13,11 @@ def get_db():
     return conn
 
 def init_db():
+    print(f"[init_db] Checking DB_PATH={DB_PATH}, exists={os.path.exists(DB_PATH)}")
     if os.path.exists(DB_PATH):
+        print(f"[init_db] DB already exists, size={os.path.getsize(DB_PATH)} bytes. Skipping init.")
         return  # já inicializado
+    print(f"[init_db] DB does not exist. Creating fresh database...")
 
     db = get_db()
 
@@ -229,6 +232,7 @@ def migrate_db():
     db = get_db()
     existing = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
     db.close()
+    print(f"[migrate_db] Existing tables: {existing}")
 
     if 'whatsapp_campaigns' not in existing:
         db = get_db()
