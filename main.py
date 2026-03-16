@@ -188,8 +188,37 @@ def _marketplaces_inner():
         my_product  = get_my_products_live(org_id, mp)
         returns     = get_returns_live(org_id, mp)
         competitors = []  # No competitor data from API yet
-        analysis    = {'position': 'Dados reais sincronizados', 'insights': []}
-        keywords    = []
+        keywords    = get_keyword_opportunities(mp)
+
+        # Build comp_analysis from real product data to match template fields
+        real_products = get_real_products_list(org_id, mp)
+        if real_products:
+            prices = [p['price'] for p in real_products if p.get('price') and p['price'] > 0]
+            max_p = max(prices) if prices else 0
+            min_p = min(prices) if prices else 0
+            avg_p = round(sum(prices) / len(prices), 2) if prices else 0
+            my_p = my_product.get('price_32l', avg_p)
+            if avg_p > 0:
+                if my_p > avg_p * 1.1:
+                    pos = 'acima'
+                elif my_p < avg_p * 0.9:
+                    pos = 'abaixo'
+                else:
+                    pos = 'na_media'
+            else:
+                pos = 'na_media'
+            analysis = {
+                'max_price_32l': max_p * 1.15,
+                'min_price_32l': min_p * 0.85,
+                'avg_price_32l': avg_p,
+                'price_position': pos,
+                'opportunities': [],
+            }
+            my_product['_products'] = real_products
+            my_product['_live'] = True
+        else:
+            analysis = analyze_competitive_position(mp)
+            my_product['_live'] = True
 
         # Real ads from mp_ads or ad_campaigns
         ads_data = get_ads_live(org_id, mp)
@@ -197,11 +226,6 @@ def _marketplaces_inner():
             ads = ads_data
         else:
             ads = analyze_mp_ads(mp)
-
-        # Real products list for template
-        real_products = get_real_products_list(org_id, mp)
-        my_product['_products'] = real_products if real_products else my_product.get('_products', [])
-        my_product['_live'] = True
 
         is_live = True
     else:
