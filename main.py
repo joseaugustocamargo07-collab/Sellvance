@@ -159,7 +159,7 @@ def _marketplaces_inner():
                                    analyze_mp_ads, get_keyword_opportunities,
                                    get_my_products_live, get_account_health_live,
                                    get_returns_live, get_mp_totals_live, is_platform_synced,
-                                   get_ads_live, get_real_orders_totals, get_real_products_list)
+                                   get_ads_live, get_real_orders_totals, get_real_products_list, get_ads_from_campaigns)
     from oauth_manager import get_integration
     from sync_base import run_sync_if_needed, get_last_sync_info
     mp  = request.args.get('mp', 'mercado_livre')
@@ -220,12 +220,26 @@ def _marketplaces_inner():
             analysis = analyze_competitive_position(mp)
             my_product['_live'] = True
 
-        # Real ads from mp_ads or ad_campaigns
+        # Real ads from mp_ads or ad_campaigns table
         ads_data = get_ads_live(org_id, mp)
         if ads_data and ads_data.get('_live'):
             ads = ads_data
         else:
-            ads = analyze_mp_ads(mp)
+            # Check ad_campaigns table for synced campaign data
+            real_campaigns = get_ads_from_campaigns(org_id, mp)
+            if real_campaigns:
+                total_spend = sum(c.get('spend', 0) or 0 for c in real_campaigns)
+                total_rev = sum(c.get('revenue', 0) or 0 for c in real_campaigns)
+                ads = {
+                    'campaigns': real_campaigns,
+                    'total_spend': total_spend,
+                    'total_revenue': total_rev,
+                    'roas': round(total_rev / total_spend, 1) if total_spend > 0 else 0,
+                    '_live': True,
+                }
+            else:
+                # No real ads data - pass empty (template will show message)
+                ads = {'campaigns': [], 'total_spend': 0, 'total_revenue': 0, 'roas': 0, '_live': True, '_empty': True}
 
         is_live = True
     else:
