@@ -158,7 +158,8 @@ def _marketplaces_inner():
                                    ACCOUNT_HEALTH, analyze_competitive_position,
                                    analyze_mp_ads, get_keyword_opportunities,
                                    get_my_products_live, get_account_health_live,
-                                   get_returns_live, get_mp_totals_live, is_platform_synced)
+                                   get_returns_live, get_mp_totals_live, is_platform_synced,
+                                   get_ads_live, get_real_orders_totals, get_real_products_list)
     from oauth_manager import get_integration
     from sync_base import run_sync_if_needed, get_last_sync_info
     mp  = request.args.get('mp', 'mercado_livre')
@@ -166,9 +167,9 @@ def _marketplaces_inner():
     date_start = request.args.get('date_start', '')
     date_end = request.args.get('date_end', '')
     all_mp = [
-        {'id': 'mercado_livre', 'name': 'Mercado Livre', 'icon': '🛒', 'color': '#ffe600'},
-        {'id': 'amazon',        'name': 'Amazon',        'icon': '📦', 'color': '#ff9900'},
-        {'id': 'tiktok_shop',   'name': 'TikTok Shop',   'icon': '🎵', 'color': '#ff0050'},
+        {'id': 'mercado_livre', 'name': 'Mercado Livre', 'icon': '\U0001f6d2', 'color': '#ffe600'},
+        {'id': 'amazon',        'name': 'Amazon',        'icon': '\U0001f4e6', 'color': '#ff9900'},
+        {'id': 'tiktok_shop',   'name': 'TikTok Shop',   'icon': '\U0001f3b5', 'color': '#ff0050'},
     ]
     # Check if platform is connected and trigger sync if needed
     org_id = session.get('org_id', 1)
@@ -181,39 +182,74 @@ def _marketplaces_inner():
         run_sync_if_needed(org_id, mp, ml_sync, max_age=60)
         sync_info = get_last_sync_info(org_id, mp)
 
-    # Use live data if synced, otherwise demo
-    health      = get_account_health_live(org_id, mp) if is_connected else ACCOUNT_HEALTH.get(mp, {'score': 0, 'metrics': {}, 'alerts': []})
-    competitors = COMPETITORS.get(mp, [])
-    my_product  = get_my_products_live(org_id, mp) if is_connected else MY_PRODUCTS.get(mp, {})
-    analysis    = analyze_competitive_position(mp)
-    ads         = analyze_mp_ads(mp)
-    returns     = get_returns_live(org_id, mp) if is_connected else RETURNS_DATA.get(mp, {})
-    keywords    = get_keyword_opportunities(mp)
+    if is_connected and is_platform_synced(org_id, mp):
+        # ── REAL DATA MODE ──────────────────────────────────
+        health      = get_account_health_live(org_id, mp)
+        my_product  = get_my_products_live(org_id, mp)
+        returns     = get_returns_live(org_id, mp)
+        competitors = []  # No competitor data from API yet
+        analysis    = {'position': 'Dados reais sincronizados', 'insights': []}
+        keywords    = []
+
+        # Real ads from mp_ads or ad_campaigns
+        ads_data = get_ads_live(org_id, mp)
+        if ads_data and ads_data.get('_live'):
+            ads = ads_data
+        else:
+            ads = analyze_mp_ads(mp)
+
+        # Real products list for template
+        real_products = get_real_products_list(org_id, mp)
+        my_product['_products'] = real_products if real_products else my_product.get('_products', [])
+        my_product['_live'] = True
+
+        is_live = True
+    else:
+        # ── DEMO DATA MODE ──────────────────────────────────
+        health      = ACCOUNT_HEALTH.get(mp, {'score': 0, 'metrics': {}, 'alerts': []})
+        my_product  = MY_PRODUCTS.get(mp, {})
+        competitors = COMPETITORS.get(mp, [])
+        analysis    = analyze_competitive_position(mp)
+        ads         = analyze_mp_ads(mp)
+        returns     = RETURNS_DATA.get(mp, {})
+        keywords    = get_keyword_opportunities(mp)
+        is_live     = False
 
     db          = get_db()
-    org_id      = session.get('org_id', 1)
     stock_items = db.execute('SELECT * FROM stock_items WHERE org_id = ? AND marketplace = ?',
                              (org_id, mp)).fetchall()
 
     # Aggregate marketplace totals from orders (with date filter)
     mp_totals = {}
     for m_id in ['mercado_livre', 'amazon', 'tiktok_shop']:
-        mp_sql = 'SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders FROM orders WHERE org_id = ? AND marketplace = ?'
-        mp_params = [org_id, m_id]
-        if date_start:
-            mp_sql += " AND date(ordered_at) >= date(?)"
-            mp_params.append(date_start)
-        if date_end:
-            mp_sql += " AND date(ordered_at) <= date(?)"
-            mp_params.append(date_end)
-        row = db.execute(mp_sql, mp_params).fetchone()
-        mp_totals[m_id] = {'revenue': row['revenue'], 'orders': row['orders']}
+        # Check if this marketplace is connected - if so, only count real orders
+        m_integration = get_integration(org_id, m_id)
+        m_connected = m_integration and m_integration.get('status') == 'connected'
 
-    is_live = is_connected and is_platform_synced(org_id, mp)
+        if m_connected and is_platform_synced(org_id, m_id):
+            # Only real orders (with external_id from sync)
+            mp_totals[m_id] = get_real_orders_totals(org_id, m_id, date_start, date_end)
+        else:
+            # Demo mode - use all orders
+            mp_sql = 'SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders FROM orders WHERE org_id = ? AND marketplace = ?'
+            mp_params = [org_id, m_id]
+            if date_start:
+                mp_sql += " AND date(ordered_at) >= date(?)"
+                mp_params.append(date_start)
+            if date_end:
+                mp_sql += " AND date(ordered_at) <= date(?)"
+                mp_params.append(date_end)
+            row = db.execute(mp_sql, mp_params).fetchone()
+            mp_totals[m_id] = {'revenue': row['revenue'], 'orders': row['orders']}
+    db.close()
+
     return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
                            mp_totals=mp_totals, date_start=date_start, date_end=date_end)
+
+
+
 
 @app.route('/integrations')
 @login_required
