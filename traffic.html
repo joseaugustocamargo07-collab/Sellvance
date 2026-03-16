@@ -178,12 +178,12 @@
   <div class="card">
     <div class="card-title">↩️ Taxa de Devolução</div>
     <div class="kpi-val" style="color:{% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}">{{ returns.return_rate }}%</div>
-    <div class="kpi-bar">{% if not ads.get('_empty', false) %}
-<div class="kpi-bar-fill" style="width:{{ returns.return_rate * 10 }}%;background:{% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}"></div></div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:{{ returns.return_rate * 10 }}%;background:{% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}"></div></div>
   </div>
 </div>
 
 <!-- Top Anúncios do MP -->
+{% if ads %}
 <div class="card">
   <div class="sec-title">🎯 Top Anúncios — {{ mp_name }}</div>
   <table class="tbl">
@@ -204,6 +204,13 @@
     </tbody>
   </table>
 </div>
+{% else %}
+<div class="card" style="padding:30px;text-align:center;color:var(--text2)">
+<div style="font-size:24px;margin-bottom:8px">📊</div>
+<div style="font-size:16px;font-weight:600">Sem dados de anúncios promovidos</div>
+<div style="font-size:13px;margin-top:4px">Quando você criar anúncios no Mercado Livre, eles aparecerão aqui</div>
+</div>
+{% endif %}
 
 <!-- ══════════════════════════════════════════════════════════════ -->
 {% elif tab == 'competitors' %}
@@ -298,6 +305,7 @@
 <!-- ══════════════════════════════════════════════════════════════ -->
 {% elif tab == 'ads' %}
 
+{% if ads %}
 <div style="margin-bottom:16px">
   <div class="sec-title">🎯 Gestão de Anúncios — {{ mp_name }}</div>
   <div style="font-size:12px;color:var(--text2)">ACoS = Advertising Cost of Sale (quanto % da receita vai para anúncios — menor é melhor)</div>
@@ -318,7 +326,15 @@
   </div>
   <div class="card">
     <div class="card-title">📊 ACoS Médio</div>
-    <div class="kpi-val" style="color:{% if avg_acos <= 20 %}var(--green){% elif avg_acos <= 30 %}var(--yellow){% else %}var(--red){% endif %}">{{ avg_acos }}%</div>
+    <div class="kpi-val" style="color:{% if avg_acos <= 20 %}var(--green){% else %}
+<div class="card" style="padding:40px;text-align:center;color:var(--text2)">
+<div style="font-size:32px;margin-bottom:12px">📊</div>
+<div style="font-size:18px;font-weight:600;margin-bottom:6px">Nenhum anúncio encontrado</div>
+<div style="font-size:13px">Quando você criar anúncios promovidos no Mercado Livre, os dados aparecerão aqui automaticamente.</div>
+</div>
+{% endif %}
+
+{% elif avg_acos <= 30 %}var(--yellow){% else %}var(--red){% endif %}">{{ avg_acos }}%</div>
   </div>
   <div class="card">
     <div class="card-title">✅ Conversões</div>
