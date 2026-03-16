@@ -178,7 +178,8 @@
   <div class="card">
     <div class="card-title">↩️ Taxa de Devolução</div>
     <div class="kpi-val" style="color:{% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}">{{ returns.return_rate }}%</div>
-    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:{{ returns.return_rate * 10 }}%;background:{% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}"></div></div>
+    <div class="kpi-bar">{% if not ads.get('_empty', false) %}
+<div class="kpi-bar-fill" style="width:{{ returns.return_rate * 10 }}%;background:{% if returns.return_rate < 4 %}var(--green){% elif returns.return_rate < 7 %}var(--yellow){% else %}var(--red){% endif %}"></div></div>
   </div>
 </div>
 
@@ -211,6 +212,13 @@
   <div class="sec-title" style="margin-bottom:0">🔍 {{ competitors|length }} Concorrentes — {{ mp_name }}</div>
   <div style="font-size:12px;color:var(--text2)">Atualizado agora</div>
 </div>
+{% else %}
+<div class="card" style="padding:30px;text-align:center;color:var(--text2)">
+<div style="font-size:24px;margin-bottom:8px">📊</div>
+<div style="font-size:16px;font-weight:600">Sem dados de anúncios</div>
+<div style="font-size:13px;margin-top:4px">Crie anúncios promovidos no Mercado Livre para ver dados aqui</div>
+</div>
+{% endif %}
 
 <!-- Você vs todos -->
 <div class="card" style="margin-bottom:20px;border:2px solid {{ mp_color }}">
