@@ -407,3 +407,91 @@ def is_platform_synced(org_id, marketplace):
         return row['cnt'] > 0
     except Exception:
         return False
+
+
+def get_ads_live(org_id, marketplace):
+    """Returns real ads/promoted listings from mp_ads table."""
+    try:
+        from database import get_db
+        db = get_db()
+        rows = db.execute(
+            "SELECT * FROM mp_ads WHERE org_id=? AND platform=? ORDER BY spend DESC",
+            (org_id, marketplace)
+        ).fetchall()
+        db.close()
+
+        if rows:
+            ads_list = []
+            total_spend = 0
+            total_revenue = 0
+            for r in rows:
+                ad = dict(r)
+                ads_list.append(ad)
+                total_spend += (ad.get('spend') or 0)
+                total_revenue += (ad.get('revenue') or 0)
+
+            return {
+                'ads': ads_list,
+                'total_spend': total_spend,
+                'total_revenue': total_revenue,
+                'roas': round(total_revenue / total_spend, 1) if total_spend > 0 else 0,
+                '_live': True,
+            }
+    except Exception as e:
+        print(f"[marketplace_intel] DB error for ads: {e}")
+
+    return None
+
+
+def get_real_orders_totals(org_id, marketplace, date_start='', date_end=''):
+    """Returns revenue/orders from REAL synced orders only (with external_id)."""
+    try:
+        from database import get_db
+        db = get_db()
+        sql = "SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders FROM orders WHERE org_id=? AND marketplace=? AND external_id IS NOT NULL AND external_id != ''"
+        params = [org_id, marketplace]
+        if date_start:
+            sql += " AND date(ordered_at) >= date(?)"
+            params.append(date_start)
+        if date_end:
+            sql += " AND date(ordered_at) <= date(?)"
+            params.append(date_end)
+        row = db.execute(sql, params).fetchone()
+        db.close()
+        return {'revenue': row['revenue'], 'orders': row['orders']}
+    except Exception as e:
+        print(f"[marketplace_intel] DB error for real orders: {e}")
+        return {'revenue': 0, 'orders': 0}
+
+
+def get_real_products_list(org_id, marketplace):
+    """Returns list of real synced products for display."""
+    try:
+        from database import get_db
+        db = get_db()
+        rows = db.execute(
+            "SELECT * FROM mp_products WHERE org_id=? AND platform=? ORDER BY sold_qty DESC",
+            (org_id, marketplace)
+        ).fetchall()
+        db.close()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[marketplace_intel] DB error for products list: {e}")
+        return []
+
+
+def get_ads_from_campaigns(org_id, marketplace):
+    """Returns ad campaigns from ad_campaigns table for this marketplace/platform."""
+    try:
+        from database import get_db
+        db = get_db()
+        rows = db.execute(
+            "SELECT * FROM ad_campaigns WHERE org_id=? AND platform=? ORDER BY spend DESC LIMIT 10",
+            (org_id, marketplace)
+        ).fetchall()
+        db.close()
+        if rows:
+            return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[marketplace_intel] DB error for ad campaigns: {e}")
+    return []
