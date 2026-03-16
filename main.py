@@ -16,7 +16,14 @@ def ensure_db_ready():
     if not _db_ready:
         _db_ready = True
         try:
-            from database import init_db, migrate_db
+            import os as _os
+            from database import init_db, migrate_db, DB_PATH, DATA_DIR
+            print(f"[startup] DB_PATH={DB_PATH}")
+            print(f"[startup] DATA_DIR={DATA_DIR}")
+            print(f"[startup] RAILWAY_VOLUME={_os.environ.get('RAILWAY_VOLUME_MOUNT_PATH', 'NOT SET')}")
+            print(f"[startup] DB exists={_os.path.exists(DB_PATH)}")
+            if _os.path.exists(DB_PATH):
+                print(f"[startup] DB size={_os.path.getsize(DB_PATH)} bytes")
             init_db()
             migrate_db()
         except Exception as e:
@@ -746,6 +753,39 @@ def debug_live_data():
         result['raw_db_error'] = str(e)
         import traceback
         result['raw_db_trace'] = traceback.format_exc()
+
+    return jsonify(result)
+
+
+@app.route('/api/debug/db-info')
+@login_required
+def debug_db_info():
+    """Show database path and volume info."""
+    import os
+    from database import DB_PATH, DATA_DIR
+    result = {
+        'DB_PATH': DB_PATH,
+        'DATA_DIR': DATA_DIR,
+        'RAILWAY_VOLUME_MOUNT_PATH': os.environ.get('RAILWAY_VOLUME_MOUNT_PATH', 'NOT SET'),
+        'db_exists': os.path.exists(DB_PATH),
+        'db_size': os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0,
+        'wal_exists': os.path.exists(DB_PATH + '-wal'),
+        'wal_size': os.path.getsize(DB_PATH + '-wal') if os.path.exists(DB_PATH + '-wal') else 0,
+        'shm_exists': os.path.exists(DB_PATH + '-shm'),
+        'data_dir_contents': os.listdir(DATA_DIR) if os.path.isdir(DATA_DIR) else 'NOT A DIR',
+        'cwd': os.getcwd(),
+        'app_dir': os.path.dirname(os.path.abspath(__file__)),
+    }
+
+    # Check integrations
+    db = get_db()
+    rows = db.execute('SELECT id, org_id, platform, status, account_name FROM api_integrations ORDER BY id').fetchall()
+    result['integrations'] = [dict(r) for r in rows]
+
+    # Check if there are any tables
+    tables = db.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
+    result['tables'] = [r[0] for r in tables]
+    db.close()
 
     return jsonify(result)
 
