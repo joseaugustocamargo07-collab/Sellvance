@@ -687,6 +687,69 @@ def api_sync_status(platform):
 
 
 # ══ ROTAS DE RELATORIOS EXPORTAVEIS ═══════════════════════════════
+
+@app.route('/api/debug/sync-diag')
+@login_required
+def sync_diagnostic():
+    """Diagnostic endpoint to debug sync issues."""
+    from oauth_manager import get_integration
+    org_id = session.get('org_id', 1)
+    result = {'org_id': org_id, 'platforms': {}}
+    
+    for platform in ['mercado_livre', 'meta_ads', 'google_ads', 'tiktok_shop']:
+        info = {'connected': False}
+        try:
+            integration = get_integration(org_id, platform)
+            if integration:
+                info['connected'] = integration.get('status') == 'connected'
+                info['status'] = integration.get('status', 'unknown')
+                info['account_name'] = integration.get('account_name', '')
+                config = integration.get('config', {})
+                info['has_access_token'] = bool(config.get('access_token'))
+                info['has_refresh_token'] = bool(config.get('refresh_token'))
+                info['token_len'] = len(config.get('access_token', ''))
+                info['user_id'] = config.get('user_id', '')
+        except Exception as e:
+            info['error'] = str(e)
+        result['platforms'][platform] = info
+    
+    # Check sync_log
+    try:
+        db = get_db()
+        rows = db.execute('SELECT * FROM sync_log WHERE org_id=? ORDER BY created_at DESC LIMIT 20', (org_id,)).fetchall()
+        result['sync_log'] = [dict(r) for r in rows]
+        db.close()
+    except Exception as e:
+        result['sync_log_error'] = str(e)
+    
+    # Check table counts
+    try:
+        db = get_db()
+        for table in ['mp_products', 'mp_account_health', 'mp_returns', 'mp_ads', 'orders']:
+            try:
+                count = db.execute(f'SELECT COUNT(*) as c FROM {table} WHERE org_id=?', (org_id,)).fetchone()['c']
+                result[f'count_{table}'] = count
+            except Exception as e:
+                result[f'count_{table}'] = f'ERROR: {e}'
+        db.close()
+    except Exception as e:
+        result['table_count_error'] = str(e)
+    
+    # Try a manual sync test
+    if request.args.get('try_sync') == '1':
+        try:
+            from sync_mercadolivre import sync_all as ml_sync
+            from sync_base import run_sync_if_needed
+            sync_result = run_sync_if_needed(org_id, 'mercado_livre', ml_sync, max_age=0)
+            result['manual_sync_result'] = sync_result
+        except Exception as e:
+            import traceback
+            result['manual_sync_error'] = str(e)
+            result['manual_sync_trace'] = traceback.format_exc()
+    
+    return jsonify(result)
+
+
 @app.route('/reports/dashboard')
 @login_required
 def report_dashboard():
