@@ -686,6 +686,69 @@ def api_sync_status(platform):
     return jsonify({'last_sync': info, 'is_stale': stale})
 
 
+
+@app.route('/api/debug/live-data')
+@login_required
+def debug_live_data():
+    """Show exactly what live data functions return for the template."""
+    from marketplace_intel import (get_my_products_live, get_account_health_live,
+                                   get_returns_live, is_platform_synced,
+                                   MY_PRODUCTS, ACCOUNT_HEALTH, RETURNS_DATA)
+    from oauth_manager import get_integration
+    org_id = session.get('org_id', 1)
+    mp = request.args.get('mp', 'mercado_livre')
+    result = {'org_id': org_id, 'marketplace': mp}
+
+    # Check connection
+    integration = get_integration(org_id, mp)
+    is_connected = integration and integration.get('status') == 'connected'
+    result['is_connected'] = is_connected
+
+    # What do the live functions return?
+    try:
+        result['products_live'] = get_my_products_live(org_id, mp)
+    except Exception as e:
+        result['products_error'] = str(e)
+        import traceback
+        result['products_trace'] = traceback.format_exc()
+
+    try:
+        result['health_live'] = get_account_health_live(org_id, mp)
+    except Exception as e:
+        result['health_error'] = str(e)
+        import traceback
+        result['health_trace'] = traceback.format_exc()
+
+    try:
+        result['returns_live'] = get_returns_live(org_id, mp)
+    except Exception as e:
+        result['returns_error'] = str(e)
+        import traceback
+        result['returns_trace'] = traceback.format_exc()
+
+    result['is_synced'] = is_platform_synced(org_id, mp)
+
+    # Compare with demo data
+    result['products_demo'] = MY_PRODUCTS.get(mp, {})
+    result['health_demo'] = ACCOUNT_HEALTH.get(mp, {})
+
+    # Raw DB data
+    try:
+        db = get_db()
+        products = db.execute("SELECT * FROM mp_products WHERE org_id=? AND platform=?", (org_id, mp)).fetchall()
+        result['raw_products'] = [dict(p) for p in products]
+        health = db.execute("SELECT * FROM mp_account_health WHERE org_id=? AND platform=?", (org_id, mp)).fetchone()
+        result['raw_health'] = dict(health) if health else None
+        returns = db.execute("SELECT * FROM mp_returns WHERE org_id=? AND platform=?", (org_id, mp)).fetchone()
+        result['raw_returns'] = dict(returns) if returns else None
+        db.close()
+    except Exception as e:
+        result['raw_db_error'] = str(e)
+        import traceback
+        result['raw_db_trace'] = traceback.format_exc()
+
+    return jsonify(result)
+
 # ══ ROTAS DE RELATORIOS EXPORTAVEIS ═══════════════════════════════
 
 @app.route('/api/debug/sync-diag')
