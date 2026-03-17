@@ -19,6 +19,17 @@ def ensure_db_ready():
         try:
             import os as _os
             from database import init_db, migrate_db, DB_PATH, DATA_DIR
+            # Update org name from connected ML account
+            try:
+                from database import get_db as _gdb
+                _d = _gdb()
+                _ml = _d.execute("SELECT account_name FROM integrations WHERE platform='mercado_livre' AND status='connected' AND account_name IS NOT NULL LIMIT 1").fetchone()
+                if _ml and dict(_ml).get('account_name'):
+                    _d.execute("UPDATE organizations SET name=? WHERE id=1", (dict(_ml)['account_name'],))
+                    _d.commit()
+                _d.close()
+            except Exception:
+                pass
             print(f"[startup] DB_PATH={DB_PATH}")
             print(f"[startup] DATA_DIR={DATA_DIR}")
             print(f"[startup] RAILWAY_VOLUME={_os.environ.get('RAILWAY_VOLUME_MOUNT_PATH', 'NOT SET')}")
