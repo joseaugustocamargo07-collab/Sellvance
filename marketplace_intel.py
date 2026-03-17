@@ -613,88 +613,130 @@ def get_keywords_from_products(org_id, marketplace):
 
 
 def search_ml_competitors(org_id, marketplace, token=None):
-    """Search ML for competitors selling similar products."""
+    """Search ML for competitors selling similar products using authenticated API."""
     try:
         from database import get_db
         db = get_db()
 
-        # Get user's products to know what category to search
+        # Get user's product categories
         rows = db.execute(
-            "SELECT title, category, price, sold_qty FROM mp_products WHERE org_id=? AND platform=? AND status='active' ORDER BY sold_qty DESC LIMIT 3",
+            "SELECT category, title, price FROM mp_products WHERE org_id=? AND platform=? AND status='active' ORDER BY sold_qty DESC LIMIT 3",
             (org_id, marketplace)
         ).fetchall()
+
+        # Get our seller ID
+        integration = db.execute(
+            "SELECT account_id FROM integrations WHERE org_id=? AND platform=?",
+            (org_id, marketplace)
+        ).fetchone()
         db.close()
 
         if not rows:
             return []
 
-        # Get the top product's category
-        top_product = dict(rows[0])
-        category = top_product.get('category', '')
+        our_seller_id = str(dict(integration).get('account_id', '')) if integration else ''
 
-        # Search ML for similar products
+        # Get ML token for authenticated API calls
         if not token:
             from sync_base import get_valid_token
             token = get_valid_token(org_id, marketplace)
 
         if not token:
+            print("[competitors] No valid ML token")
             return []
-
-        # Search by category or by keywords from title
-        import re
-        title_words = re.sub(r'[^a-zA-Z\u00C0-\u017F\s]', '', top_product.get('title', '')).split()
-        search_terms = [w for w in title_words if len(w) > 3][:3]
-        query = '+'.join(search_terms)
 
         headers = {
             'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/json',
+            'Accept': 'application/json',
         }
 
-        url = f"https://api.mercadolibre.com/sites/MLB/search?q={query}&limit=15"
-        req = urllib.request.Request(url, headers=headers)
-        resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
+        # Search by category (most reliable method)
+        top_product = dict(rows[0])
+        category = top_product.get('category', '')
 
-        # Get our seller_id to exclude ourselves
-        integration_db = get_db()
-        integration = integration_db.execute(
-            "SELECT account_id FROM integrations WHERE org_id=? AND platform=?",
-            (org_id, marketplace)
-        ).fetchone()
-        integration_db.close()
-        our_seller_id = str(dict(integration).get('account_id', '')) if integration else ''
+        all_items = []
 
-        # Group results by seller and build competitor list
+        # Try category search first
+        if category:
+            try:
+                url = f"https://api.mercadolibre.com/sites/MLB/search?category={category}&limit=20&sort=sold_quantity_desc"
+                req = urllib.request.Request(url, headers=headers)
+                resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
+                all_items = resp.get('results', [])
+                print(f"[competitors] Found {len(all_items)} items in category {category}")
+            except Exception as e:
+                print(f"[competitors] Category search error: {e}")
+
+        # Fallback: search by keywords from title
+        if not all_items:
+            try:
+                import re
+                title = top_product.get('title', '')
+                # Extract key terms
+                words = re.sub(r'[^a-zA-Z\u00C0-\u024F\s]', ' ', title).split()
+                search_words = [w for w in words if len(w) > 3 and w.lower() not in ('para', 'preto', 'branco', 'azul')][:3]
+                query = '+'.join(search_words)
+                url = f"https://api.mercadolibre.com/sites/MLB/search?q={query}&limit=20&sort=sold_quantity_desc"
+                req = urllib.request.Request(url, headers=headers)
+                resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
+                all_items = resp.get('results', [])
+                print(f"[competitors] Found {len(all_items)} items by keyword search")
+            except Exception as e:
+                print(f"[competitors] Keyword search error: {e}")
+
+        if not all_items:
+            return []
+
+        # Group by seller
         sellers = {}
-        for item in resp.get('results', []):
+        our_prices = [dict(r).get('price', 0) for r in rows]
+        our_avg_price = sum(our_prices) / len(our_prices) if our_prices else 0
+
+        for item in all_items:
             seller = item.get('seller', {})
             seller_id = str(seller.get('id', ''))
+
+            # Skip ourselves
             if seller_id == our_seller_id or not seller_id:
                 continue
 
             if seller_id not in sellers:
                 rep = seller.get('seller_reputation', {})
-                transactions = rep.get('transactions', {})
-                ratings = transactions.get('ratings', {})
+                trans = rep.get('transactions', {})
+                ratings = trans.get('ratings', {})
+                positive_pct = ratings.get('positive', 0) or 0
+
+                power = rep.get('power_seller_status') or ''
+                badge_map = {
+                    'platinum': 'MercadoLider Platinum',
+                    'gold': 'MercadoLider Gold',
+                    'silver': 'MercadoLider',
+                    '': 'Seller padrao',
+                }
+
                 sellers[seller_id] = {
                     'name': seller.get('nickname', 'Vendedor'),
-                    'rating': round((ratings.get('positive', 0) or 0) * 5, 1),
-                    'reviews': transactions.get('completed', 0) or 0,
+                    'rating': round(positive_pct * 5, 1),
+                    'reviews': trans.get('completed', 0) or 0,
                     'price_32l': item.get('price', 0),
-                    'price_20l': item.get('price', 0) * 0.9,
+                    'price_20l': round(item.get('price', 0) * 0.85, 2),
                     'stock_32l': item.get('available_quantity', 0),
                     'stock_20l': 0,
-                    'badge': rep.get('power_seller_status') or 'Seller padrao',
+                    'badge': badge_map.get(power, power or 'Seller padrao'),
                     'fulfillment': item.get('shipping', {}).get('logistic_type') == 'fulfillment',
                     'sponsored': item.get('listing_type_id', '') in ('gold_pro', 'gold_premium'),
-                    'stock': 'normal',
-                    'items': [item.get('title', '')],
+                    'stock': 'normal' if item.get('available_quantity', 0) > 10 else 'critical' if item.get('available_quantity', 0) > 0 else 'out',
+                    'sold_qty': item.get('sold_quantity', 0),
                 }
             else:
-                sellers[seller_id]['items'].append(item.get('title', ''))
+                # Update with additional item data (average prices)
+                existing = sellers[seller_id]
+                existing['stock_20l'] = item.get('available_quantity', 0)
+                existing['price_20l'] = item.get('price', existing['price_20l'])
 
-        # Convert to list, sort by reviews
-        competitors = sorted(sellers.values(), key=lambda x: -x['reviews'])[:6]
+        # Sort by sales volume, take top 6
+        competitors = sorted(sellers.values(), key=lambda x: -(x.get('sold_qty', 0) or 0))[:6]
+        print(f"[competitors] Returning {len(competitors)} competitors")
         return competitors
 
     except Exception as e:
