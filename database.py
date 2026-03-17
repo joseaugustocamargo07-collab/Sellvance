@@ -371,6 +371,31 @@ def migrate_db():
         for i in integrations:
             db.execute('INSERT OR IGNORE INTO api_integrations (org_id,platform,status,account_id,account_name) VALUES (?,?,?,?,?)', i)
 
+
+    # Deduplicate orders with external_id (from sync)
+    try:
+        db.execute('''
+            DELETE FROM orders WHERE id NOT IN (
+                SELECT MIN(id) FROM orders
+                WHERE external_id IS NOT NULL AND external_id != ''
+                GROUP BY org_id, marketplace, external_id
+            ) AND external_id IS NOT NULL AND external_id != ''
+        ''')
+        deduped = db.execute("SELECT changes()").fetchone()[0]
+        if deduped > 0:
+            print(f"[migrate] Removed {deduped} duplicate orders")
+    except Exception as e:
+        print(f"[migrate] Dedup error (ok on first run): {e}")
+
+    # Create unique index to prevent future duplicates
+    try:
+        db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_external
+                      ON orders(org_id, marketplace, external_id)
+                      WHERE external_id IS NOT NULL AND external_id != \'\'  ''')
+        print("[migrate] Created unique index on orders.external_id")
+    except Exception as e:
+        print(f"[migrate] Index already exists or error: {e}")
+
         db.commit()
         print('✅ Migração concluída!')
 
