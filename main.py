@@ -342,17 +342,21 @@ def _marketplaces_inner():
 
 
 @app.route('/api/force-sync')
-@login_required
 def force_sync():
-    """Force a full re-sync for the connected ML account."""
-    org_id = session.get('org_id', 1)
+    """Force a full re-sync (bypasses staleness check)."""
+    org_id = 1
     mp = request.args.get('mp', 'mercado_livre')
     try:
-        from sync_base import run_sync_if_needed
-        records = run_sync_if_needed(org_id, mp, force=True)
-        return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp})
+        if mp == 'mercado_livre':
+            from sync_mercadolivre import sync_all
+            from sync_base import log_sync
+            records = sync_all(org_id)
+            log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
+            return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp})
+        return jsonify({'status': 'error', 'error': f'Unknown platform: {mp}'})
     except Exception as e:
-        return jsonify({'status': 'error', 'error': str(e)})
+        import traceback
+        return jsonify({'status': 'error', 'error': str(e), 'trace': traceback.format_exc()})
 
 
 @app.route('/api/debug/competitors')
