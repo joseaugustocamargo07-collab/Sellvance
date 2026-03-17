@@ -196,13 +196,24 @@ def _sync_orders(org_id, token, user_id):
             buyer_nick = buyer.get('nickname', '')
 
             try:
-                db.execute("""
-                    INSERT OR IGNORE INTO orders (org_id, marketplace, external_id, status, gmv, revenue, cost, channel, ordered_at)
-                    VALUES (?, 'mercado_livre', ?, ?, ?, ?, 0, 'marketplace', ?)
-                """, (org_id, ext_id, status, total, revenue, date_created))
+                # Update if exists, insert if not
+                existing = db.execute(
+                    "SELECT id FROM orders WHERE org_id=? AND marketplace='mercado_livre' AND external_id=?",
+                    (org_id, ext_id)
+                ).fetchone()
+                if existing:
+                    db.execute("""
+                        UPDATE orders SET status=?, gmv=?, revenue=?, ordered_at=?
+                        WHERE org_id=? AND marketplace='mercado_livre' AND external_id=?
+                    """, (status, total, revenue, date_created, org_id, ext_id))
+                else:
+                    db.execute("""
+                        INSERT INTO orders (org_id, marketplace, external_id, status, gmv, revenue, cost, channel, ordered_at)
+                        VALUES (?, 'mercado_livre', ?, ?, ?, ?, 0, 'marketplace', ?)
+                    """, (org_id, ext_id, status, total, revenue, date_created))
                 count += 1
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[ml_sync] Order insert error: {e}")
 
         db.commit()
         db.close()
