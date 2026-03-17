@@ -410,15 +410,17 @@ def is_platform_synced(org_id, marketplace):
 
 
 def get_ads_live(org_id, marketplace):
-    """Returns real ads/promoted listings from mp_ads table."""
+    """Returns promoted listings data. Checks mp_ads first, then falls back to
+    mp_products with promoted listing types (gold_pro, gold_special, gold_premium)."""
     try:
         from database import get_db
         db = get_db()
+
+        # First try mp_ads table (has spend/revenue data if populated)
         rows = db.execute(
             "SELECT * FROM mp_ads WHERE org_id=? AND platform=? ORDER BY spend DESC",
             (org_id, marketplace)
         ).fetchall()
-        db.close()
 
         if rows:
             ads_list = []
@@ -429,12 +431,39 @@ def get_ads_live(org_id, marketplace):
                 ads_list.append(ad)
                 total_spend += (ad.get('spend') or 0)
                 total_revenue += (ad.get('revenue') or 0)
-
+            db.close()
             return {
                 'ads': ads_list,
                 'total_spend': total_spend,
                 'total_revenue': total_revenue,
                 'roas': round(total_revenue / total_spend, 1) if total_spend > 0 else 0,
+                '_live': True,
+            }
+
+        # Fallback: get promoted products from mp_products
+        promoted_types = ('gold_pro', 'gold_special', 'gold_premium')
+        placeholders = ','.join('?' for _ in promoted_types)
+        rows = db.execute(
+            f"SELECT * FROM mp_products WHERE org_id=? AND platform=? AND listing_type IN ({placeholders}) ORDER BY sold_qty DESC",
+            (org_id, marketplace) + promoted_types
+        ).fetchall()
+        db.close()
+
+        if rows:
+            ads_list = []
+            for r in rows:
+                p = dict(r)
+                revenue = (p.get('price', 0) or 0) * (p.get('sold_qty', 0) or 0)
+                listing_label = {
+                    'gold_pro': 'Premium',
+                    'gold_special': 'Clássico',
+                    'gold_premium': 'Premium',
+                }.get(p.get('listing_type', ''), 'Promovido')
+                ads_list.append(p | {'_revenue_estimated': revenue, '_listing_label': listing_label})
+
+            return {
+                'ads': ads_list,
+                '_from_products': True,
                 '_live': True,
             }
     except Exception as e:
