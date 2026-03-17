@@ -614,6 +614,8 @@ def get_keywords_from_products(org_id, marketplace):
 
 def search_ml_competitors(org_id, marketplace, token=None):
     """Search ML for competitors selling similar products using authenticated API."""
+    import json
+    import urllib.request
     try:
         from database import get_db
         db = get_db()
