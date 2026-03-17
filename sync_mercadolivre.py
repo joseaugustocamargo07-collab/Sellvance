@@ -384,3 +384,101 @@ def _sync_returns(org_id):
     db.commit()
     db.close()
     return 1
+
+
+def _sync_competitors(org_id, token, user_id):
+    """Search ML for competing sellers in same categories."""
+    count = 0
+    try:
+        db = get_db()
+        rows = db.execute(
+            "SELECT DISTINCT category FROM mp_products WHERE org_id=? AND platform='mercado_livre' AND status='active'",
+            (org_id,)
+        ).fetchall()
+        db.close()
+
+        if not rows:
+            return 0
+
+        our_seller_id = str(user_id)
+        seen_sellers = set()
+
+        for row in rows[:2]:
+            category = dict(row).get('category', '')
+            if not category:
+                continue
+
+            try:
+                url = f"{ML_API}/sites/MLB/search?category={category}&limit=20&sort=sold_quantity_desc"
+                data = api_request(url, _auth_headers(token))
+                items = data.get('results', [])
+                print(f"[ml_sync] Category {category}: found {len(items)} items")
+
+                db = get_db()
+                for item in items:
+                    seller = item.get('seller', {})
+                    seller_id = str(seller.get('id', ''))
+
+                    if not seller_id or seller_id == our_seller_id or seller_id in seen_sellers:
+                        continue
+                    seen_sellers.add(seller_id)
+
+                    rep = seller.get('seller_reputation', {})
+                    trans = rep.get('transactions', {})
+                    ratings = trans.get('ratings', {})
+                    positive = ratings.get('positive', 0) or 0
+                    power = rep.get('power_seller_status') or ''
+
+                    badge_map = {
+                        'platinum': 'MercadoLider Platinum',
+                        'gold': 'MercadoLider Gold',
+                        'silver': 'MercadoLider',
+                    }
+
+                    ship = item.get('shipping', {})
+                    is_full = 1 if ship.get('logistic_type') == 'fulfillment' else 0
+                    is_spons = 1 if item.get('listing_type_id') in ('gold_pro', 'gold_premium') else 0
+
+                    try:
+                        db.execute("""
+                            INSERT INTO mp_competitors (org_id, platform, seller_id, nickname, rating,
+                                completed_sales, price, stock, badge, fulfillment, sponsored,
+                                sold_qty, power_status, last_synced)
+                            VALUES (?, 'mercado_livre', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                            ON CONFLICT(org_id, platform, seller_id)
+                            DO UPDATE SET nickname=?, rating=?, completed_sales=?, price=?,
+                                stock=?, badge=?, fulfillment=?, sponsored=?, sold_qty=?,
+                                power_status=?, last_synced=datetime('now')
+                        """, (
+                            org_id, seller_id, seller.get('nickname', ''),
+                            round(positive * 5, 1), trans.get('completed', 0),
+                            item.get('price', 0), item.get('available_quantity', 0),
+                            badge_map.get(power, power or 'Seller padrao'),
+                            is_full, is_spons,
+                            item.get('sold_quantity', 0), power,
+                            seller.get('nickname', ''), round(positive * 5, 1),
+                            trans.get('completed', 0), item.get('price', 0),
+                            item.get('available_quantity', 0),
+                            badge_map.get(power, power or 'Seller padrao'),
+                            is_full, is_spons,
+                            item.get('sold_quantity', 0), power,
+                        ))
+                        count += 1
+                    except Exception as e:
+                        print(f"[ml_sync] Error saving competitor {seller_id}: {e}")
+
+                db.commit()
+                db.close()
+            except AuthError:
+                raise
+            except Exception as e:
+                print(f"[ml_sync] Error searching category {category}: {e}")
+
+    except AuthError:
+        raise
+    except Exception as e:
+        print(f"[ml_sync] Error in competitor sync: {e}")
+        import traceback
+        traceback.print_exc()
+
+    return count
