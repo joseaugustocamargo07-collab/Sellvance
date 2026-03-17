@@ -4,6 +4,7 @@ from database import get_db
 from auth import login_required, verify_password, hash_password
 from traffic_ai import analyze_all, calc_metrics, score_campaign
 import os
+import json
 
 app = Flask(__name__, template_folder='.')
 app.secret_key = os.environ.get('SECRET_KEY', 'sellvance-secret-2026-change-in-prod')
