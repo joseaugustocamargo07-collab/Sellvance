@@ -185,20 +185,19 @@
 <!-- Top Anúncios do MP -->
 {% if ads %}
 <div class="card">
-  <div class="sec-title">🎯 Top Anúncios — {{ mp_name }}</div>
+  <div class="sec-title">🎯 Anúncios Promovidos — {{ mp_name }}</div>
   <table class="tbl">
-    <thead><tr><th>Anúncio</th><th>Tipo</th><th>ACoS</th><th>ROAS</th><th>CTR</th><th>Conversões</th><th>Receita</th><th>Ação IA</th></tr></thead>
+    <thead><tr><th>Anúncio</th><th>Tipo</th><th>Preço</th><th>Vendas</th><th>Estoque</th><th>Receita Est.</th><th>Status</th></tr></thead>
     <tbody>
     {% for ad in ads[:4] %}
     <tr>
-      <td style="font-weight:600;font-size:12px">{{ ad.name }}</td>
+      <td style="font-weight:600;font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ad.name }}</td>
       <td><span class="badge b-purple" style="font-size:10px">{{ ad.type }}</span></td>
-      <td style="color:{% if ad.acos <= 20 %}var(--green){% elif ad.acos <= 30 %}var(--yellow){% else %}var(--red){% endif %};font-weight:700">{{ ad.acos }}%</td>
-      <td style="font-weight:700;color:{% if ad.roas >= 5 %}var(--green){% elif ad.roas >= 3 %}var(--yellow){% else %}var(--red){% endif %}">{{ ad.roas }}x</td>
-      <td style="color:var(--text2)">{{ ad.ctr }}%</td>
-      <td style="color:var(--accent)">{{ ad.conversions }}</td>
+      <td style="font-weight:700;color:var(--green)">R$ {{ "{:,.2f}".format(ad.price or 0) }}</td>
+      <td style="color:var(--accent);font-weight:700">{{ ad.conversions }}</td>
+      <td style="color:{% if (ad.stock or 0) > 20 %}var(--green){% elif (ad.stock or 0) > 5 %}var(--yellow){% else %}var(--red){% endif %};font-weight:700">{{ ad.stock or 0 }}</td>
       <td style="color:var(--green);font-weight:700">R$ {{ "{:,.0f}".format(ad.revenue) }}</td>
-      <td><span style="font-size:12px">{{ ad.action_label }}</span></td>
+      <td><span class="badge {% if ad.status == 'active' %}b-green{% else %}b-yellow{% endif %}" style="font-size:10px">{{ ad.status or 'ativo' }}</span></td>
     </tr>
     {% endfor %}
     </tbody>
