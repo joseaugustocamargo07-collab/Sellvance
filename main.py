@@ -330,7 +330,7 @@ def _marketplaces_inner():
     db.close()
 
     account_name = integration.get('account_name', '') if integration else ''
-        return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info, account_name=account_name,
+    return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info, account_name=account_name,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
                            mp_totals=mp_totals, date_start=date_start, date_end=date_end)
