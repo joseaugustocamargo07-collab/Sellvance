@@ -301,58 +301,75 @@
 
 {% if ads %}
 <div style="margin-bottom:16px">
-  <div class="sec-title">🎯 Gestão de Anúncios — {{ mp_name }}</div>
-  <div style="font-size:12px;color:var(--text2)">ACoS = Advertising Cost of Sale (quanto % da receita vai para anúncios — menor é melhor)</div>
+  <div class="sec-title">🎯 Anúncios Promovidos — {{ mp_name }}</div>
+  <div style="font-size:12px;color:var(--text2)">Listagens com destaque pago no marketplace</div>
 </div>
 
+{% set total_spend = ads | sum(attribute='spend') %}
+{% set total_revenue = ads | sum(attribute='revenue') %}
+{% set total_conv = ads | sum(attribute='conversions') %}
+{% set has_spend = total_spend > 0 %}
+
 <div class="grid g4" style="margin-bottom:20px">
-  {% set total_spend = ads | sum(attribute='spend') %}
-  {% set total_revenue = ads | sum(attribute='revenue') %}
-  {% set total_conv = ads | sum(attribute='conversions') %}
-  {% set avg_acos = (total_spend / total_revenue * 100) | round(1) if total_revenue > 0 else 0 %}
+  <div class="card">
+    <div class="card-title">📦 Anúncios Ativos</div>
+    <div class="kpi-val" style="color:var(--accent)">{{ ads|length }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">💰 Receita Estimada</div>
+    <div class="kpi-val" style="color:var(--green)">R$ {{ "{:,.0f}".format(total_revenue) }}</div>
+  </div>
+  <div class="card">
+    <div class="card-title">✅ Vendas</div>
+    <div class="kpi-val" style="color:var(--accent)">{{ total_conv }}</div>
+  </div>
+  {% if has_spend %}
   <div class="card">
     <div class="card-title">💸 Total Investido</div>
     <div class="kpi-val">R$ {{ "{:,.0f}".format(total_spend) }}</div>
   </div>
+  {% else %}
   <div class="card">
-    <div class="card-title">💰 Receita de Ads</div>
-    <div class="kpi-val" style="color:var(--green)">R$ {{ "{:,.0f}".format(total_revenue) }}</div>
+    <div class="card-title">📊 Status</div>
+    <div class="kpi-val" style="color:var(--green);font-size:16px">Dados ao vivo</div>
+    <div style="font-size:11px;color:var(--text3)">Sincronizado do ML</div>
   </div>
-  <div class="card">
-    <div class="card-title">📊 ACoS Médio</div>
-    <div class="kpi-val" style="color:{% if avg_acos <= 20 %}var(--green){% elif avg_acos <= 30 %}var(--yellow){% else %}var(--red){% endif %}">{{ avg_acos }}%</div>
-  </div>
-  <div class="card">
-    <div class="card-title">✅ Conversões</div>
-    <div class="kpi-val" style="color:var(--accent)">{{ total_conv }}</div>
-  </div>
+  {% endif %}
 </div>
 
 <div style="display:flex;flex-direction:column;gap:10px">
 {% for ad in ads %}
-{% set acos_color = '#10b981' if ad.acos <= 20 else '#f59e0b' if ad.acos <= 30 else '#ef4444' %}
-<div class="card" style="border-left:4px solid {{ acos_color }}">
+{% set status_color = '#10b981' if ad.status == 'active' or ad.conversions > 0 else '#f59e0b' %}
+<div class="card" style="border-left:4px solid {{ status_color }}">
   <div style="display:flex;align-items:center;gap:14px">
-    <div style="width:52px;height:52px;border-radius:10px;background:{{ acos_color }}22;border:2px solid {{ acos_color }};display:flex;align-items:center;justify-content:center;flex-direction:column;flex-shrink:0">
-      <div style="font-size:14px;font-weight:900;color:{{ acos_color }}">{{ ad.acos }}%</div>
-      <div style="font-size:8px;color:{{ acos_color }}">ACoS</div>
+    {% if ad.thumbnail %}
+    <img src="{{ ad.thumbnail }}" style="width:52px;height:52px;border-radius:10px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">
+    {% else %}
+    <div style="width:52px;height:52px;border-radius:10px;background:{{ status_color }}22;border:2px solid {{ status_color }};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <div style="font-size:20px">🎯</div>
     </div>
-    <div style="flex:1">
-      <div style="font-weight:700;font-size:13px;margin-bottom:3px">{{ ad.name }}</div>
+    {% endif %}
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:700;font-size:13px;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ad.name }}</div>
       <div style="font-size:11px;color:var(--text3)">{{ ad.type }} · {{ ad.action_label }}</div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center;flex-shrink:0">
-      {% for label, val, color in [
-        ('ROAS', ad.roas|string + 'x', '#10b981' if ad.roas >= 5 else '#f59e0b' if ad.roas >= 3 else '#ef4444'),
-        ('CTR',  ad.ctr|string + '%',  'var(--text)'),
-        ('Conv', ad.conversions|string, 'var(--accent)'),
-        ('Receita', 'R$' + "{:,.0f}".format(ad.revenue), 'var(--green)'),
-      ] %}
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;text-align:center;flex-shrink:0">
       <div>
-        <div style="font-size:14px;font-weight:800;color:{{ color }}">{{ val }}</div>
-        <div style="font-size:10px;color:var(--text3)">{{ label }}</div>
+        <div style="font-size:14px;font-weight:800;color:var(--green)">R$ {{ "{:,.2f}".format(ad.price or 0) }}</div>
+        <div style="font-size:10px;color:var(--text3)">Preço</div>
       </div>
-      {% endfor %}
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--accent)">{{ ad.conversions }}</div>
+        <div style="font-size:10px;color:var(--text3)">Vendas</div>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--text)">{{ ad.stock or 0 }}</div>
+        <div style="font-size:10px;color:var(--text3)">Estoque</div>
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--green)">R$ {{ "{:,.0f}".format(ad.revenue) }}</div>
+        <div style="font-size:10px;color:var(--text3)">Receita</div>
+      </div>
     </div>
   </div>
 </div>
