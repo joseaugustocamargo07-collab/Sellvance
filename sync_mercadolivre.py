@@ -411,14 +411,15 @@ def _sync_competitors(org_id, token, user_id):
                 continue
 
             # Method 1: Try /highlights endpoint (featured items in category)
+            # Use raw urllib with access_token query param (no auth header - avoids 403)
             for endpoint in [
-                f"{ML_API}/highlights/MLB/{category}",
                 f"{ML_API}/sites/MLB/search?category={category}&limit=20&sort=sold_quantity_desc&access_token={token}",
             ]:
                 try:
-                    headers = _auth_headers(token)
-                    headers['User-Agent'] = 'Sellvance/1.0'
-                    resp = api_request(endpoint, headers)
+                    import urllib.request as _ur
+                    _req = _ur.Request(endpoint, headers={'User-Agent': 'Mozilla/5.0 (compatible; Sellvance/1.0)'})
+                    _raw = _ur.urlopen(_req, timeout=20).read()
+                    resp = json.loads(_raw)
 
                     items = resp.get('results', []) or resp.get('content', [])
                     if items:
