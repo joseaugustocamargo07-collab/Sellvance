@@ -58,11 +58,13 @@ def sync_all(org_id):
     print(f"[ml_sync] Synced returns: {returns_count}")
     total += returns_count
 
-    # Competitor sync disabled - ML blocks search API from cloud servers
-    # Competitors are populated via browser-side search or manual import
-    # comp_count = _sync_competitors(org_id, token, user_id)
-    # print(f"[ml_sync] Synced {comp_count} competitors")
-    # total += comp_count
+    # Sync competitors via catalog product discovery
+    try:
+        comp_count = _sync_competitors(org_id, token, user_id)
+        print(f"[ml_sync] Synced {comp_count} competitors")
+        total += comp_count
+    except Exception as e:
+        print(f"[ml_sync] Competitor sync error (non-fatal): {e}")
 
     print(f"[ml_sync] Total records synced: {total}")
 
@@ -386,74 +388,132 @@ def _sync_returns(org_id):
     db.close()
     return 1
 
-
 def _sync_competitors(org_id, token, user_id):
-    """Find competitors by looking at other items in same categories."""
+    """Discover competitors using catalog products and item multi-get.
+
+    Strategy (all endpoints work from cloud servers):
+    1. Get our items via multi-get /items?ids=... (includes catalog_product_id)
+    2. For catalog items: GET /products/{catalog_product_id}/items to find other sellers
+    3. For found competitor items: multi-get /items?ids=... to get seller details
+    4. Fallback: GET /users/{seller_id} for any seller we found
+    """
     count = 0
     try:
         db = get_db()
         rows = db.execute(
-            "SELECT DISTINCT category FROM mp_products WHERE org_id=? AND platform='mercado_livre' AND status='active'",
+            "SELECT external_id, category FROM mp_products WHERE org_id=? AND platform='mercado_livre' AND status='active'",
             (org_id,)
         ).fetchall()
         db.close()
 
         if not rows:
-            print("[ml_sync] No products/categories for competitor search")
+            print("[ml_sync] No active products for competitor discovery")
             return 0
 
         our_seller_id = str(user_id)
         seen_sellers = set()
-        all_items = []
+        competitor_item_ids = []
+        headers = _auth(token)
 
-        for row in rows[:2]:
-            category = dict(row).get('category', '')
-            if not category:
-                continue
+        item_ids = [dict(r)['external_id'] for r in rows if dict(r).get('external_id')]
+        print(f"[ml_sync] Checking {len(item_ids)} items for catalog products...")
 
-            # Method 1: Try /highlights endpoint (featured items in category)
-            # Use raw urllib with access_token query param (no auth header - avoids 403)
-            for endpoint in [
-                f"{ML_API}/sites/MLB/search?category={category}&limit=20&sort=sold_quantity_desc&access_token={token}",
-            ]:
+        # Step 1: Multi-get our items to find catalog_product_id
+        catalog_products = []
+        for batch_start in range(0, len(item_ids), 20):
+            batch = item_ids[batch_start:batch_start+20]
+            ids_str = ','.join(batch)
+            try:
+                multi_url = f"{ML_API}/items?ids={ids_str}&attributes=id,catalog_product_id,category_id,seller_id"
+                multi_resp = api_request(multi_url, headers)
+                for entry in multi_resp:
+                    if entry.get('code') != 200:
+                        continue
+                    item = entry.get('body', {})
+                    cat_prod_id = item.get('catalog_product_id')
+                    if cat_prod_id:
+                        catalog_products.append(cat_prod_id)
+                        print(f"[ml_sync] Item {item.get('id')} -> catalog: {cat_prod_id}")
+            except Exception as e:
+                print(f"[ml_sync] Multi-get failed: {e}")
+
+        print(f"[ml_sync] Found {len(catalog_products)} catalog products")
+
+        # Step 2: For each catalog product, find other sellers' items
+        for cat_prod_id in catalog_products[:5]:  # Limit to 5 catalog products
+            try:
+                # This endpoint returns items from different sellers for same catalog product
+                cat_url = f"{ML_API}/products/{cat_prod_id}/items?status=active&limit=20"
+                cat_resp = api_request(cat_url, headers)
+
+                # Response can be a list of item IDs or objects
+                items = cat_resp if isinstance(cat_resp, list) else cat_resp.get('results', cat_resp.get('items', []))
+                print(f"[ml_sync] Catalog {cat_prod_id}: {len(items)} items found")
+
+                for ci in items:
+                    ci_id = ci if isinstance(ci, str) else ci.get('id', ci.get('item_id', ''))
+                    if ci_id and str(ci_id) not in item_ids:
+                        competitor_item_ids.append(str(ci_id))
+            except Exception as e:
+                print(f"[ml_sync] Catalog {cat_prod_id} failed: {e}")
+
+        # Step 3: If no catalog items found, try category-based approach
+        # Use /sites/MLB/search with access_token (may work for some categories)
+        if not competitor_item_ids:
+            print("[ml_sync] No catalog items, trying category search...")
+            categories = list(set(dict(r).get('category', '') for r in rows if dict(r).get('category')))
+            for cat_id in categories[:2]:
+                if not cat_id:
+                    continue
                 try:
                     import urllib.request as _ur
-                    _req = _ur.Request(endpoint, headers={'User-Agent': 'Mozilla/5.0 (compatible; Sellvance/1.0)'})
-                    _raw = _ur.urlopen(_req, timeout=20).read()
+                    search_url = f"{ML_API}/sites/MLB/search?category={cat_id}&limit=20&sort=sold_quantity_desc&access_token={token}"
+                    _req = _ur.Request(search_url, headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'application/json',
+                    })
+                    _raw = _ur.urlopen(_req, timeout=15).read()
                     resp = json.loads(_raw)
-
-                    items = resp.get('results', []) or resp.get('content', [])
+                    items = resp.get('results', [])
                     if items:
-                        print(f"[ml_sync] Endpoint worked: {endpoint[:80]}... got {len(items)} items")
-
-                        # If we got item IDs (highlights returns IDs), fetch full items
-                        if items and isinstance(items[0], str):
-                            # These are item IDs, fetch details in batches
-                            batch = items[:20]
-                            ids_str = ','.join(batch)
-                            try:
-                                multi = api_request(f"{ML_API}/items?ids={ids_str}", headers)
-                                items = [m.get('body', {}) for m in multi if m.get('code') == 200]
-                                print(f"[ml_sync] Fetched {len(items)} item details")
-                            except Exception as e:
-                                print(f"[ml_sync] Error fetching item details: {e}")
-                                continue
-
-                        all_items.extend(items)
-                        break  # Got results, no need to try next endpoint
+                        print(f"[ml_sync] Category search for {cat_id}: {len(items)} results")
+                        for it in items:
+                            if isinstance(it, dict):
+                                it_id = it.get('id', '')
+                                if it_id and str(it_id) not in item_ids:
+                                    competitor_item_ids.append(str(it_id))
+                            elif isinstance(it, str) and it not in item_ids:
+                                competitor_item_ids.append(it)
+                        if competitor_item_ids:
+                            break
                 except Exception as e:
-                    print(f"[ml_sync] Endpoint failed ({endpoint[:60]}...): {e}")
-                    continue
+                    print(f"[ml_sync] Category search {cat_id} failed: {e}")
 
-        if not all_items:
-            print("[ml_sync] No competitor items found from any endpoint")
+        if not competitor_item_ids:
+            print("[ml_sync] No competitor items found via any method")
             return 0
 
-        print(f"[ml_sync] Processing {len(all_items)} competitor items")
+        # Deduplicate
+        competitor_item_ids = list(dict.fromkeys(competitor_item_ids))[:50]
+        print(f"[ml_sync] Fetching details for {len(competitor_item_ids)} competitor items...")
 
-        # Group by seller
+        # Step 4: Multi-get competitor items for full details
+        items_to_save = []
+        for batch_start in range(0, len(competitor_item_ids), 20):
+            batch = competitor_item_ids[batch_start:batch_start+20]
+            ids_str = ','.join(batch)
+            try:
+                multi_url = f"{ML_API}/items?ids={ids_str}"
+                multi_resp = api_request(multi_url, headers)
+                for entry in multi_resp:
+                    if entry.get('code') == 200:
+                        items_to_save.append(entry.get('body', {}))
+            except Exception as e:
+                print(f"[ml_sync] Batch fetch failed: {e}")
+
+        # Step 5: Save competitors to DB
         db = get_db()
-        for item in all_items:
+        for item in items_to_save:
             seller = item.get('seller', {}) or {}
             seller_id = str(seller.get('id', ''))
 
@@ -517,3 +577,4 @@ def _sync_competitors(org_id, token, user_id):
         traceback.print_exc()
 
     return count
+
