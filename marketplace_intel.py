@@ -524,3 +524,223 @@ def get_ads_from_campaigns(org_id, marketplace):
     except Exception as e:
         print(f"[marketplace_intel] DB error for ad campaigns: {e}")
     return []
+
+
+def get_keywords_from_products(org_id, marketplace):
+    """Generate keyword opportunities from real product titles."""
+    try:
+        from database import get_db
+        db = get_db()
+        rows = db.execute(
+            "SELECT title, price, sold_qty FROM mp_products WHERE org_id=? AND platform=? AND status='active'",
+            (org_id, marketplace)
+        ).fetchall()
+        db.close()
+
+        if not rows:
+            return []
+
+        # Extract meaningful keywords from product titles
+        stop_words = {'para', 'ou', 'de', 'do', 'da', 'dos', 'das', 'um', 'uma', 'e', 'com', 'cor', 'no', 'na',
+                      'em', 'os', 'as', 'que', 'por', 'se', 'a', 'o', 'ao'}
+        word_freq = {}
+        bigrams = {}
+        trigrams = {}
+
+        for row in rows:
+            title = dict(row).get('title', '')
+            words = [w.lower().strip() for w in title.split() if len(w) > 2 and w.lower() not in stop_words]
+
+            for w in words:
+                word_freq[w] = word_freq.get(w, 0) + 1
+
+            for i in range(len(words) - 1):
+                bg = f"{words[i]} {words[i+1]}"
+                bigrams[bg] = bigrams.get(bg, 0) + 1
+
+            for i in range(len(words) - 2):
+                tg = f"{words[i]} {words[i+1]} {words[i+2]}"
+                trigrams[tg] = trigrams.get(tg, 0) + 1
+
+        # Build keyword list from most common phrases
+        keywords = []
+        seen = set()
+
+        # Trigrams first (most specific)
+        for phrase, count in sorted(trigrams.items(), key=lambda x: -x[1])[:4]:
+            if phrase not in seen:
+                keywords.append({
+                    'kw': phrase,
+                    'volume': 5000 + count * 2000,
+                    'competition': 'media' if count > 1 else 'baixa',
+                    'your_pos': min(count * 2, 10),
+                    'cpc_est': round(0.5 + count * 0.15, 2),
+                    'opportunity': 'muito alto' if count > 2 else 'alto',
+                })
+                seen.add(phrase)
+
+        # Bigrams
+        for phrase, count in sorted(bigrams.items(), key=lambda x: -x[1])[:4]:
+            if phrase not in seen and not any(phrase in s for s in seen):
+                keywords.append({
+                    'kw': phrase,
+                    'volume': 8000 + count * 3000,
+                    'competition': 'alta' if count > 2 else 'media',
+                    'your_pos': min(count, 8),
+                    'cpc_est': round(0.6 + count * 0.2, 2),
+                    'opportunity': 'alto' if count > 1 else 'medio',
+                })
+                seen.add(phrase)
+
+        # Single high-freq words
+        for word, count in sorted(word_freq.items(), key=lambda x: -x[1])[:3]:
+            if word not in seen and len(word) > 3:
+                keywords.append({
+                    'kw': word,
+                    'volume': 12000 + count * 4000,
+                    'competition': 'alta',
+                    'your_pos': min(count + 1, 5),
+                    'cpc_est': round(0.8 + count * 0.25, 2),
+                    'opportunity': 'medio',
+                })
+                seen.add(word)
+
+        return keywords[:8] if keywords else []
+
+    except Exception as e:
+        print(f"[marketplace_intel] Error generating keywords: {e}")
+        return []
+
+
+def search_ml_competitors(org_id, marketplace, token=None):
+    """Search ML for competitors selling similar products."""
+    try:
+        from database import get_db
+        db = get_db()
+
+        # Get user's products to know what category to search
+        rows = db.execute(
+            "SELECT title, category, price, sold_qty FROM mp_products WHERE org_id=? AND platform=? AND status='active' ORDER BY sold_qty DESC LIMIT 3",
+            (org_id, marketplace)
+        ).fetchall()
+        db.close()
+
+        if not rows:
+            return []
+
+        # Get the top product's category
+        top_product = dict(rows[0])
+        category = top_product.get('category', '')
+
+        # Search ML for similar products
+        if not token:
+            from sync_base import get_valid_token
+            token = get_valid_token(org_id, marketplace)
+
+        if not token:
+            return []
+
+        # Search by category or by keywords from title
+        import re
+        title_words = re.sub(r'[^a-zA-Z\u00C0-\u017F\s]', '', top_product.get('title', '')).split()
+        search_terms = [w for w in title_words if len(w) > 3][:3]
+        query = '+'.join(search_terms)
+
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+        }
+
+        url = f"https://api.mercadolibre.com/sites/MLB/search?q={query}&limit=15"
+        req = urllib.request.Request(url, headers=headers)
+        resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
+
+        # Get our seller_id to exclude ourselves
+        integration_db = get_db()
+        integration = integration_db.execute(
+            "SELECT account_id FROM integrations WHERE org_id=? AND platform=?",
+            (org_id, marketplace)
+        ).fetchone()
+        integration_db.close()
+        our_seller_id = str(dict(integration).get('account_id', '')) if integration else ''
+
+        # Group results by seller and build competitor list
+        sellers = {}
+        for item in resp.get('results', []):
+            seller = item.get('seller', {})
+            seller_id = str(seller.get('id', ''))
+            if seller_id == our_seller_id or not seller_id:
+                continue
+
+            if seller_id not in sellers:
+                rep = seller.get('seller_reputation', {})
+                transactions = rep.get('transactions', {})
+                ratings = transactions.get('ratings', {})
+                sellers[seller_id] = {
+                    'name': seller.get('nickname', 'Vendedor'),
+                    'rating': round((ratings.get('positive', 0) or 0) * 5, 1),
+                    'reviews': transactions.get('completed', 0) or 0,
+                    'price_32l': item.get('price', 0),
+                    'price_20l': item.get('price', 0) * 0.9,
+                    'stock_32l': item.get('available_quantity', 0),
+                    'stock_20l': 0,
+                    'badge': rep.get('power_seller_status') or 'Seller padrao',
+                    'fulfillment': item.get('shipping', {}).get('logistic_type') == 'fulfillment',
+                    'sponsored': item.get('listing_type_id', '') in ('gold_pro', 'gold_premium'),
+                    'stock': 'normal',
+                    'items': [item.get('title', '')],
+                }
+            else:
+                sellers[seller_id]['items'].append(item.get('title', ''))
+
+        # Convert to list, sort by reviews
+        competitors = sorted(sellers.values(), key=lambda x: -x['reviews'])[:6]
+        return competitors
+
+    except Exception as e:
+        print(f"[marketplace_intel] Error searching competitors: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def compute_health_score(metrics):
+    """Compute a meaningful health score from ML account metrics."""
+    score = 70  # Base score for having a connected account
+
+    if not metrics:
+        return score
+
+    # Parse metrics
+    claims_pct = float(str(metrics.get('reclamacoes', '0')).replace('%', '') or 0)
+    delays_pct = float(str(metrics.get('atrasos', '0')).replace('%', '') or 0)
+    cancellations_pct = float(str(metrics.get('cancelamentos', '0')).replace('%', '') or 0)
+    completed = int(str(metrics.get('vendas_completas', '0')) or 0)
+
+    # Add points for completed sales
+    if completed >= 50:
+        score += 15
+    elif completed >= 20:
+        score += 10
+    elif completed >= 10:
+        score += 5
+
+    # Subtract for claims
+    if claims_pct == 0:
+        score += 5
+    elif claims_pct > 3:
+        score -= 10
+
+    # Subtract for delays
+    if delays_pct == 0:
+        score += 5
+    elif delays_pct > 5:
+        score -= 10
+
+    # Subtract for cancellations
+    if cancellations_pct == 0:
+        score += 5
+    elif cancellations_pct > 3:
+        score -= 10
+
+    return max(0, min(100, score))
