@@ -338,6 +338,97 @@ def _marketplaces_inner():
 
 
 
+
+
+@app.route('/api/debug/competitors')
+def debug_competitors():
+    """Debug endpoint for competitor search."""
+    import traceback
+    org_id = 1
+    mp = request.args.get('mp', 'mercado_livre')
+    result = {'org_id': org_id, 'marketplace': mp, 'steps': []}
+
+    try:
+        from marketplace_intel import search_ml_competitors, get_keywords_from_products
+        from sync_base import get_valid_token
+
+        # Step 1: Get token
+        token = get_valid_token(org_id, mp)
+        result['has_token'] = bool(token)
+        result['token_preview'] = token[:15] + '...' if token else None
+        result['steps'].append('Got token' if token else 'No token')
+
+        # Step 2: Check products
+        from database import get_db
+        db = get_db()
+        products = db.execute(
+            "SELECT title, category, price, sold_qty, status FROM mp_products WHERE org_id=? AND platform=?",
+            (org_id, mp)
+        ).fetchall()
+        result['products'] = [dict(p) for p in products]
+        result['steps'].append(f'Found {len(products)} products')
+
+        # Step 3: Try category search
+        if products:
+            top = dict(products[0])
+            category = top.get('category', '')
+            result['top_category'] = category
+
+            if token and category:
+                try:
+                    url = f"https://api.mercadolibre.com/sites/MLB/search?category={category}&limit=5&sort=sold_quantity_desc"
+                    import urllib.request as ur
+                    req = ur.Request(url, headers={
+                        'Authorization': f'Bearer {token}',
+                        'Accept': 'application/json',
+                    })
+                    resp_data = json.loads(ur.urlopen(req, timeout=15).read())
+                    result['category_search_total'] = resp_data.get('paging', {}).get('total', 0)
+                    result['category_search_results'] = len(resp_data.get('results', []))
+                    items = []
+                    for item in resp_data.get('results', [])[:3]:
+                        seller = item.get('seller', {})
+                        items.append({
+                            'title': item.get('title', '')[:60],
+                            'price': item.get('price'),
+                            'seller': seller.get('nickname'),
+                            'seller_id': seller.get('id'),
+                        })
+                    result['sample_items'] = items
+                    result['steps'].append(f'Category search OK: {len(resp_data.get("results",[]))} results')
+                except Exception as e:
+                    result['category_search_error'] = str(e)
+                    result['steps'].append(f'Category search FAILED: {e}')
+
+        # Step 4: Try full competitor search
+        try:
+            competitors = search_ml_competitors(org_id, mp, token)
+            result['competitors_count'] = len(competitors)
+            result['competitors'] = competitors
+            result['steps'].append(f'Competitor search returned {len(competitors)}')
+        except Exception as e:
+            result['competitor_error'] = str(e)
+            result['competitor_traceback'] = traceback.format_exc()
+            result['steps'].append(f'Competitor search FAILED: {e}')
+
+        # Step 5: Try keywords
+        try:
+            keywords = get_keywords_from_products(org_id, mp)
+            result['keywords_count'] = len(keywords)
+            result['keywords'] = keywords
+            result['steps'].append(f'Keywords returned {len(keywords)}')
+        except Exception as e:
+            result['keywords_error'] = str(e)
+            result['steps'].append(f'Keywords FAILED: {e}')
+
+        db.close()
+
+    except Exception as e:
+        result['error'] = str(e)
+        result['traceback'] = traceback.format_exc()
+
+    return jsonify(result)
+
 @app.route('/integrations')
 @login_required
 def integrations():
