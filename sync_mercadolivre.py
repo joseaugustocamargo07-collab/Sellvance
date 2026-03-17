@@ -409,8 +409,8 @@ def _sync_competitors(org_id, token, user_id):
                 continue
 
             try:
-                url = f"{ML_API}/sites/MLB/search?category={category}&limit=20&sort=sold_quantity_desc"
-                data = api_request(url, _auth_headers(token))
+                url = f"{ML_API}/sites/MLB/search?category={category}&limit=20&sort=sold_quantity_desc&access_token={token}"
+                data = api_request(url)
                 items = data.get('results', [])
                 print(f"[ml_sync] Category {category}: found {len(items)} items")
 
