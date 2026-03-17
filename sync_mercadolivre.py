@@ -102,12 +102,25 @@ def _sync_user_info(org_id, token):
     delayed_rate = metrics.get('delayed_handling_time', {}).get('rate', 0)
     cancel_rate = metrics.get('cancellations', {}).get('rate', 0)
 
-    score = int(positive_pct * 100) if positive_pct <= 1 else int(positive_pct)
+    # Calculate health score
+    if positive_pct > 0:
+        base_score = int(positive_pct * 100) if positive_pct <= 1 else int(positive_pct)
+    else:
+        # New seller with no ratings yet - calculate from metrics
+        completed = transactions.get('completed', 0)
+        if completed > 0:
+            base_score = 85  # Good baseline for active seller
+        else:
+            base_score = 70  # Neutral for brand new seller
+
     # Penalize for problems
-    score -= int(claims_rate * 200)
-    score -= int(delayed_rate * 150)
-    score -= int(cancel_rate * 200)
-    score = max(0, min(100, score))
+    base_score -= int(claims_rate * 200)
+    base_score -= int(delayed_rate * 150)
+    base_score -= int(cancel_rate * 200)
+    # Bonus for zero problems
+    if claims_rate == 0 and delayed_rate == 0 and cancel_rate == 0 and transactions.get('completed', 0) > 5:
+        base_score = max(base_score, 90)
+    score = max(0, min(100, base_score))
 
     level_map = {
         'platinum': 'MercadoLider Platinum',
