@@ -341,6 +341,68 @@ def _marketplaces_inner():
 
 
 
+@app.route('/api/save-competitors', methods=['POST'])
+def save_competitors():
+    """Receive competitor data from browser-side ML search."""
+    try:
+        data = request.get_json()
+        items = data.get('items', [])
+        org_id = data.get('org_id', 1)
+        our_seller_id = str(data.get('our_seller_id', ''))
+        if not items:
+            return jsonify({'status': 'error', 'error': 'No items'})
+
+        from database import get_db
+        db = get_db()
+        count = 0
+        seen = set()
+        for item in items:
+            seller = item.get('seller', {}) or {}
+            sid = str(seller.get('id', ''))
+            if not sid or sid == our_seller_id or sid in seen:
+                continue
+            seen.add(sid)
+            rep = seller.get('seller_reputation', {}) or {}
+            trans = rep.get('transactions', {}) or {}
+            ratings = trans.get('ratings', {}) or {}
+            positive = ratings.get('positive', 0) or 0
+            power = rep.get('power_seller_status') or ''
+            badge_map = {'platinum':'MercadoLider Platinum','gold':'MercadoLider Gold','silver':'MercadoLider'}
+            ship = item.get('shipping', {}) or {}
+            is_full = 1 if ship.get('logistic_type') == 'fulfillment' else 0
+            is_spons = 1 if item.get('listing_type_id') in ('gold_pro','gold_premium') else 0
+            try:
+                db.execute("""
+                    INSERT INTO mp_competitors (org_id, platform, seller_id, nickname, rating,
+                        completed_sales, price, stock, badge, fulfillment, sponsored,
+                        sold_qty, power_status, last_synced)
+                    VALUES (?, 'mercado_livre', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    ON CONFLICT(org_id, platform, seller_id)
+                    DO UPDATE SET nickname=?, rating=?, completed_sales=?, price=?,
+                        stock=?, badge=?, fulfillment=?, sponsored=?, sold_qty=?,
+                        power_status=?, last_synced=datetime('now')
+                """, (
+                    org_id, sid, seller.get('nickname',''),
+                    round(positive*5,1), trans.get('completed',0),
+                    item.get('price',0), item.get('available_quantity',0),
+                    badge_map.get(power, power or 'Seller padrao'),
+                    is_full, is_spons, item.get('sold_quantity',0), power,
+                    seller.get('nickname',''), round(positive*5,1),
+                    trans.get('completed',0), item.get('price',0),
+                    item.get('available_quantity',0),
+                    badge_map.get(power, power or 'Seller padrao'),
+                    is_full, is_spons, item.get('sold_quantity',0), power,
+                ))
+                count += 1
+            except Exception:
+                pass
+        db.commit()
+        db.close()
+        return jsonify({'status': 'ok', 'saved': count})
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)})
+
+
 @app.route('/api/force-sync')
 def force_sync():
     """Force a full re-sync (bypasses staleness check)."""
