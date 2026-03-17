@@ -118,7 +118,7 @@
   <div class="card">
     <div class="sec-title">📍 Posição no Mercado</div>
     <div style="margin-bottom:14px">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Preço Cooler 32L vs concorrentes</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Preço Produto 1 vs concorrentes</div>
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <div style="font-size:11px;color:var(--text3);width:60px">Mínimo</div>
         <div style="flex:1;height:6px;background:var(--border);border-radius:3px;position:relative">
@@ -231,8 +231,8 @@
     <div style="margin-left:auto;display:flex;gap:20px">
       <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--yellow)">{{ my.rating }}⭐</div><div style="font-size:10px;color:var(--text3)">Avaliação</div></div>
       <div style="text-align:center"><div style="font-size:18px;font-weight:900">{{ "{:,}".format(my.reviews) }}</div><div style="font-size:10px;color:var(--text3)">Reviews</div></div>
-      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_32l }}</div><div style="font-size:10px;color:var(--text3)">Cooler 32L</div></div>
-      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_20l }}</div><div style="font-size:10px;color:var(--text3)">Cooler 20L</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_32l }}</div><div style="font-size:10px;color:var(--text3)">Produto 1</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_20l }}</div><div style="font-size:10px;color:var(--text3)">Produto 2</div></div>
       <div style="text-align:center">
         <div style="font-size:18px;font-weight:900;color:{% if my.stock_32l > 20 %}var(--green){% elif my.stock_32l > 5 %}var(--yellow){% else %}var(--red){% endif %}">{{ my.stock_32l }}</div>
         <div style="font-size:10px;color:var(--text3)">Estoque 32L</div>
