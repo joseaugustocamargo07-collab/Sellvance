@@ -414,6 +414,88 @@ def save_competitors():
         return jsonify({'status': 'error', 'error': str(e)})
 
 
+
+
+@app.route('/api/add-competitor', methods=['POST'])
+@login_required
+def add_competitor():
+    """Manually add a competitor by ML seller ID."""
+    try:
+        data = request.get_json() or {}
+        seller_input = data.get('seller_id', '').strip()
+
+        if not seller_input:
+            return jsonify({'status': 'error', 'error': 'Informe o ID do vendedor'})
+
+        import re
+        seller_id = re.sub(r'[^0-9]', '', seller_input)
+        if not seller_id:
+            return jsonify({'status': 'error', 'error': 'ID do vendedor deve ser numerico'})
+
+        org_id = session.get('org_id', 1)
+        from database import get_db
+        db = get_db()
+        integ = db.execute(
+            "SELECT access_token FROM integrations WHERE org_id=? AND platform='mercado_livre' AND status='connected'",
+            (org_id,)
+        ).fetchone()
+
+        if not integ:
+            db.close()
+            return jsonify({'status': 'error', 'error': 'Conecte sua conta ML primeiro'})
+
+        token = dict(integ)['access_token']
+
+        # Fetch seller info from ML API
+        import urllib.request as ur
+        headers_ml = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+
+        try:
+            req_ml = ur.Request(f'https://api.mercadolibre.com/users/{seller_id}', headers=headers_ml)
+            seller_data = json.loads(ur.urlopen(req_ml, timeout=10).read())
+        except Exception as e:
+            db.close()
+            return jsonify({'status': 'error', 'error': f'Vendedor nao encontrado: {str(e)}'})
+
+        nickname = seller_data.get('nickname', '')
+        rep = seller_data.get('seller_reputation', {}) or {}
+        trans = rep.get('transactions', {}) or {}
+        ratings = trans.get('ratings', {}) or {}
+        positive = ratings.get('positive', 0) or 0
+        power = rep.get('power_seller_status') or ''
+
+        badge_map = {
+            'platinum': 'MercadoLider Platinum',
+            'gold': 'MercadoLider Gold',
+            'silver': 'MercadoLider',
+        }
+
+        try:
+            db.execute("""
+                INSERT INTO mp_competitors (org_id, platform, seller_id, nickname, rating,
+                    completed_sales, badge, power_status, last_synced)
+                VALUES (?, 'mercado_livre', ?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(org_id, platform, seller_id)
+                DO UPDATE SET nickname=?, rating=?, completed_sales=?,
+                    badge=?, power_status=?, last_synced=datetime('now')
+            """, (
+                org_id, seller_id, nickname,
+                round(positive * 5, 1), trans.get('completed', 0),
+                badge_map.get(power, power or 'Seller padrao'), power,
+                nickname, round(positive * 5, 1), trans.get('completed', 0),
+                badge_map.get(power, power or 'Seller padrao'), power,
+            ))
+            db.commit()
+        except Exception as e:
+            db.close()
+            return jsonify({'status': 'error', 'error': f'Erro ao salvar: {str(e)}'})
+
+        db.close()
+        return jsonify({'status': 'ok', 'seller': {'id': seller_id, 'nickname': nickname}})
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)})
+
 @app.route('/api/force-sync')
 def force_sync():
     """Force a full re-sync (bypasses staleness check)."""
