@@ -159,7 +159,8 @@ def _marketplaces_inner():
                                    analyze_mp_ads, get_keyword_opportunities,
                                    get_my_products_live, get_account_health_live,
                                    get_returns_live, get_mp_totals_live, is_platform_synced,
-                                   get_ads_live, get_real_orders_totals, get_real_products_list, get_ads_from_campaigns)
+                                   get_ads_live, get_real_orders_totals, get_real_products_list, get_ads_from_campaigns,
+                                   get_keywords_from_products, search_ml_competitors, compute_health_score)
     from oauth_manager import get_integration
     from sync_base import run_sync_if_needed, get_last_sync_info
     mp  = request.args.get('mp', 'mercado_livre')
@@ -187,8 +188,18 @@ def _marketplaces_inner():
         health      = get_account_health_live(org_id, mp)
         my_product  = get_my_products_live(org_id, mp)
         returns     = get_returns_live(org_id, mp)
-        competitors = []  # No competitor data from API yet
-        keywords    = get_keyword_opportunities(mp)
+
+        # Search for real competitors on ML
+        competitors = search_ml_competitors(org_id, mp)
+
+        # Generate keywords from actual product titles
+        keywords = get_keywords_from_products(org_id, mp)
+        if not keywords:
+            keywords = get_keyword_opportunities(mp)
+
+        # Compute real health score from metrics
+        if health.get('score', 0) == 0 and health.get('metrics'):
+            health['score'] = compute_health_score(health['metrics'])
 
         # Build comp_analysis from real product data to match template fields
         real_products = get_real_products_list(org_id, mp)
@@ -318,7 +329,8 @@ def _marketplaces_inner():
             mp_totals[m_id] = {'revenue': row['revenue'], 'orders': row['orders']}
     db.close()
 
-    return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info,
+    account_name = integration.get('account_name', '') if integration else ''
+        return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info, account_name=account_name,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
                            mp_totals=mp_totals, date_start=date_start, date_end=date_end)
