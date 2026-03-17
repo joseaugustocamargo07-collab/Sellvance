@@ -326,15 +326,7 @@
   </div>
   <div class="card">
     <div class="card-title">📊 ACoS Médio</div>
-    <div class="kpi-val" style="color:{% if avg_acos <= 20 %}var(--green){% else %}
-<div class="card" style="padding:40px;text-align:center;color:var(--text2)">
-<div style="font-size:32px;margin-bottom:12px">📊</div>
-<div style="font-size:18px;font-weight:600;margin-bottom:6px">Nenhum anúncio encontrado</div>
-<div style="font-size:13px">Quando você criar anúncios promovidos no Mercado Livre, os dados aparecerão aqui automaticamente.</div>
-</div>
-{% endif %}
-
-{% elif avg_acos <= 30 %}var(--yellow){% else %}var(--red){% endif %}">{{ avg_acos }}%</div>
+    <div class="kpi-val" style="color:{% if avg_acos <= 20 %}var(--green){% elif avg_acos <= 30 %}var(--yellow){% else %}var(--red){% endif %}">{{ avg_acos }}%</div>
   </div>
   <div class="card">
     <div class="card-title">✅ Conversões</div>
@@ -355,11 +347,10 @@
       <div style="font-weight:700;font-size:13px;margin-bottom:3px">{{ ad.name }}</div>
       <div style="font-size:11px;color:var(--text3)">{{ ad.type }} · {{ ad.action_label }}</div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;text-align:center;flex-shrink:0">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center;flex-shrink:0">
       {% for label, val, color in [
         ('ROAS', ad.roas|string + 'x', '#10b981' if ad.roas >= 5 else '#f59e0b' if ad.roas >= 3 else '#ef4444'),
         ('CTR',  ad.ctr|string + '%',  'var(--text)'),
-        ('CPC',  'R$' + "{:.2f}".format(ad.cpc), 'var(--text)'),
         ('Conv', ad.conversions|string, 'var(--accent)'),
         ('Receita', 'R$' + "{:,.0f}".format(ad.revenue), 'var(--green)'),
       ] %}
@@ -369,17 +360,18 @@
       </div>
       {% endfor %}
     </div>
-    <div style="display:flex;gap:6px;flex-shrink:0">
-      {% if ad.action == 'pause' %}
-      <button onclick="toggleMpAd('{{ ad.name }}','pause')" style="padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;background:rgba(239,68,68,.1);color:#fca5a5;border:1px solid rgba(239,68,68,.3)">⏸ Pausar</button>
-      {% elif ad.action == 'scale' %}
-      <button onclick="toggleMpAd('{{ ad.name }}','scale')" style="padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.3)">🚀 Escalar +20%</button>
-      {% endif %}
-    </div>
   </div>
 </div>
 {% endfor %}
 </div>
+
+{% else %}
+<div class="card" style="padding:50px;text-align:center;color:var(--text2)">
+  <div style="font-size:40px;margin-bottom:12px">📊</div>
+  <div style="font-size:18px;font-weight:700;margin-bottom:8px">Nenhum anúncio promovido encontrado</div>
+  <div style="font-size:13px;max-width:400px;margin:0 auto">Quando você criar anúncios promovidos no Mercado Livre, os dados de performance aparecerão aqui automaticamente.</div>
+</div>
+{% endif %}
 
 <!-- ══════════════════════════════════════════════════════════════ -->
 {% elif tab == 'returns' %}
