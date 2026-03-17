@@ -58,10 +58,11 @@ def sync_all(org_id):
     print(f"[ml_sync] Synced returns: {returns_count}")
     total += returns_count
 
-    # Sync competitors
-    comp_count = _sync_competitors(org_id, token, user_id)
-    print(f"[ml_sync] Synced {comp_count} competitors")
-    total += comp_count
+    # Competitor sync disabled - ML blocks search API from cloud servers
+    # Competitors are populated via browser-side search or manual import
+    # comp_count = _sync_competitors(org_id, token, user_id)
+    # print(f"[ml_sync] Synced {comp_count} competitors")
+    # total += comp_count
 
     print(f"[ml_sync] Total records synced: {total}")
 
