@@ -334,10 +334,35 @@ def get_account_health_live(org_id, marketplace):
         db.close()
 
         if row:
+            raw_metrics = _json.loads(row['metrics_json'] or '{}')
+            # Convert to template format: {"label": {"ok": bool, "val": str}}
+            formatted = {}
+            thresholds = {
+                'reputacao': lambda v: _parse_pct(v) >= 80,
+                'vendas_completas': lambda v: True,
+                'reclamacoes': lambda v: _parse_pct(v) <= 3,
+                'atrasos': lambda v: _parse_pct(v) <= 5,
+                'cancelamentos': lambda v: _parse_pct(v) <= 3,
+            }
+            label_map = {
+                'reputacao': 'Reputação',
+                'vendas_completas': 'Vendas completas',
+                'reclamacoes': 'Reclamações',
+                'atrasos': 'Envio no prazo',
+                'cancelamentos': 'Cancelamentos',
+            }
+            for key, val in raw_metrics.items():
+                check = thresholds.get(key, lambda v: True)
+                try:
+                    ok = check(val)
+                except Exception:
+                    ok = True
+                formatted[label_map.get(key, key)] = {'ok': ok, 'val': str(val)}
+
             return {
                 'score': row['score'],
                 'level': row['level'],
-                'metrics': _json.loads(row['metrics_json'] or '{}'),
+                'metrics': formatted,
                 'alerts': _json.loads(row['alerts_json'] or '[]'),
                 '_live': True,
             }
@@ -647,8 +672,9 @@ def search_ml_competitors(org_id, marketplace, token=None):
             print("[competitors] No valid ML token")
             return []
 
+        # Use public API (no auth) - more reliable for search
         headers = {
-            'Authorization': f'Bearer {token}',
+            'User-Agent': 'Sellvance/1.0',
             'Accept': 'application/json',
         }
 
