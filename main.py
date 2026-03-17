@@ -223,22 +223,43 @@ def _marketplaces_inner():
         # Real ads from synced data (template expects a LIST of ad dicts)
         ads = []  # Default: empty list = no ads
         ads_data = get_ads_live(org_id, mp)
-        if ads_data and ads_data.get('_live') and ads_data.get('ads'):
-            # Convert mp_ads rows to template format
-            for a in ads_data['ads']:
-                spend = a.get('spend', 0) or 0
-                rev = a.get('revenue', 0) or 0
-                ads.append({
-                    'name': a.get('title', a.get('name', 'Anúncio')),
-                    'type': a.get('listing_type_id', 'promoted'),
-                    'spend': spend,
-                    'revenue': rev,
-                    'acos': round(spend / rev * 100, 1) if rev > 0 else 0,
-                    'roas': round(rev / spend, 1) if spend > 0 else 0,
-                    'ctr': round(a.get('ctr', 0) or 0, 2),
-                    'conversions': a.get('conversions', 0) or 0,
-                    'action_label': 'Monitorar',
-                })
+        if ads_data and ads_data.get('_live'):
+            if ads_data.get('_from_products'):
+                # Promoted products from mp_products (no spend data from ML API)
+                for p in ads_data.get('ads', []):
+                    revenue = p.get('_revenue_estimated', 0)
+                    listing_label = p.get('_listing_label', 'Promovido')
+                    ads.append({
+                        'name': p.get('title', 'Anúncio'),
+                        'type': listing_label,
+                        'spend': 0,
+                        'revenue': revenue,
+                        'acos': 0,
+                        'roas': 0,
+                        'ctr': 0,
+                        'conversions': p.get('sold_qty', 0) or 0,
+                        'action_label': 'Monitorar',
+                        'price': p.get('price', 0),
+                        'stock': p.get('stock_qty', 0),
+                        'status': p.get('status', ''),
+                        'thumbnail': p.get('thumbnail_url', ''),
+                    })
+            elif ads_data.get('ads'):
+                # Direct mp_ads data (has spend/revenue)
+                for a in ads_data['ads']:
+                    spend = a.get('spend', 0) or 0
+                    rev = a.get('revenue', 0) or 0
+                    ads.append({
+                        'name': a.get('title', a.get('name', 'Anúncio')),
+                        'type': a.get('listing_type_id', 'promoted'),
+                        'spend': spend,
+                        'revenue': rev,
+                        'acos': round(spend / rev * 100, 1) if rev > 0 else 0,
+                        'roas': round(rev / spend, 1) if spend > 0 else 0,
+                        'ctr': round(a.get('ctr', 0) or 0, 2),
+                        'conversions': a.get('conversions', 0) or 0,
+                        'action_label': 'Monitorar',
+                    })
         if not ads:
             # Check ad_campaigns table
             real_campaigns = get_ads_from_campaigns(org_id, mp)
