@@ -638,138 +638,46 @@ def get_keywords_from_products(org_id, marketplace):
 
 
 def search_ml_competitors(org_id, marketplace, token=None):
-    """Search ML for competitors selling similar products using authenticated API."""
-    import json
-    import urllib.request
+    """Read competitors from mp_competitors table (populated during sync)."""
     try:
         from database import get_db
         db = get_db()
-
-        # Get user's product categories
         rows = db.execute(
-            "SELECT category, title, price FROM mp_products WHERE org_id=? AND platform=? AND status='active' ORDER BY sold_qty DESC LIMIT 3",
+            """SELECT seller_id, nickname, rating, completed_sales, price,
+                      stock, badge, fulfillment, sponsored, sold_qty, power_status
+               FROM mp_competitors
+               WHERE org_id=? AND platform=?
+               ORDER BY sold_qty DESC
+               LIMIT 8""",
             (org_id, marketplace)
         ).fetchall()
-
-        # Get our seller ID
-        integration = db.execute(
-            "SELECT account_id FROM integrations WHERE org_id=? AND platform=?",
-            (org_id, marketplace)
-        ).fetchone()
         db.close()
 
-        if not rows:
-            return []
+        competitors = []
+        for row in rows:
+            r = dict(row)
+            stock_val = r.get('stock', 0) or 0
+            competitors.append({
+                'id': r['seller_id'],
+                'name': r.get('nickname', 'Vendedor'),
+                'rating': r.get('rating', 0),
+                'reviews': r.get('completed_sales', 0),
+                'price_32l': r.get('price', 0),
+                'price_20l': round(r.get('price', 0) * 0.85, 2),
+                'stock_32l': stock_val,
+                'stock_20l': 0,
+                'badge': r.get('badge', 'Seller padrao'),
+                'fulfillment': bool(r.get('fulfillment', 0)),
+                'sponsored': bool(r.get('sponsored', 0)),
+                'stock': 'ok' if stock_val > 10 else 'critical' if stock_val > 0 else 'out',
+                'sold_qty': r.get('sold_qty', 0),
+                'shipping': 'gratis' if r.get('fulfillment') else 'pago',
+            })
 
-        our_seller_id = str(dict(integration).get('account_id', '')) if integration else ''
-
-        # Get ML token for authenticated API calls
-        if not token:
-            from sync_base import get_valid_token
-            token = get_valid_token(org_id, marketplace)
-
-        if not token:
-            print("[competitors] No valid ML token")
-            return []
-
-        # Use authenticated API (Railway IPs get 403 without auth)
-        headers = {
-            'Authorization': f'Bearer {token}',
-            'User-Agent': 'Sellvance/1.0',
-            'Accept': 'application/json',
-        }
-
-        # Search by category (most reliable method)
-        top_product = dict(rows[0])
-        category = top_product.get('category', '')
-
-        all_items = []
-
-        # Try category search first
-        if category:
-            try:
-                url = f"https://api.mercadolibre.com/sites/MLB/search?category={category}&limit=20&sort=sold_quantity_desc"
-                req = urllib.request.Request(url, headers=headers)
-                resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
-                all_items = resp.get('results', [])
-                print(f"[competitors] Found {len(all_items)} items in category {category}")
-            except Exception as e:
-                print(f"[competitors] Category search error: {e}")
-
-        # Fallback: search by keywords from title
-        if not all_items:
-            try:
-                import re
-                title = top_product.get('title', '')
-                # Extract key terms
-                words = re.sub(r'[^a-zA-Z\u00C0-\u024F\s]', ' ', title).split()
-                search_words = [w for w in words if len(w) > 3 and w.lower() not in ('para', 'preto', 'branco', 'azul')][:3]
-                query = '+'.join(search_words)
-                url = f"https://api.mercadolibre.com/sites/MLB/search?q={query}&limit=20&sort=sold_quantity_desc"
-                req = urllib.request.Request(url, headers=headers)
-                resp = json.loads(urllib.request.urlopen(req, timeout=15).read())
-                all_items = resp.get('results', [])
-                print(f"[competitors] Found {len(all_items)} items by keyword search")
-            except Exception as e:
-                print(f"[competitors] Keyword search error: {e}")
-
-        if not all_items:
-            return []
-
-        # Group by seller
-        sellers = {}
-        our_prices = [dict(r).get('price', 0) for r in rows]
-        our_avg_price = sum(our_prices) / len(our_prices) if our_prices else 0
-
-        for item in all_items:
-            seller = item.get('seller', {})
-            seller_id = str(seller.get('id', ''))
-
-            # Skip ourselves
-            if seller_id == our_seller_id or not seller_id:
-                continue
-
-            if seller_id not in sellers:
-                rep = seller.get('seller_reputation', {})
-                trans = rep.get('transactions', {})
-                ratings = trans.get('ratings', {})
-                positive_pct = ratings.get('positive', 0) or 0
-
-                power = rep.get('power_seller_status') or ''
-                badge_map = {
-                    'platinum': 'MercadoLider Platinum',
-                    'gold': 'MercadoLider Gold',
-                    'silver': 'MercadoLider',
-                    '': 'Seller padrao',
-                }
-
-                sellers[seller_id] = {
-                    'name': seller.get('nickname', 'Vendedor'),
-                    'rating': round(positive_pct * 5, 1),
-                    'reviews': trans.get('completed', 0) or 0,
-                    'price_32l': item.get('price', 0),
-                    'price_20l': round(item.get('price', 0) * 0.85, 2),
-                    'stock_32l': item.get('available_quantity', 0),
-                    'stock_20l': 0,
-                    'badge': badge_map.get(power, power or 'Seller padrao'),
-                    'fulfillment': item.get('shipping', {}).get('logistic_type') == 'fulfillment',
-                    'sponsored': item.get('listing_type_id', '') in ('gold_pro', 'gold_premium'),
-                    'stock': 'normal' if item.get('available_quantity', 0) > 10 else 'critical' if item.get('available_quantity', 0) > 0 else 'out',
-                    'sold_qty': item.get('sold_quantity', 0),
-                }
-            else:
-                # Update with additional item data (average prices)
-                existing = sellers[seller_id]
-                existing['stock_20l'] = item.get('available_quantity', 0)
-                existing['price_20l'] = item.get('price', existing['price_20l'])
-
-        # Sort by sales volume, take top 6
-        competitors = sorted(sellers.values(), key=lambda x: -(x.get('sold_qty', 0) or 0))[:6]
-        print(f"[competitors] Returning {len(competitors)} competitors")
         return competitors
 
     except Exception as e:
-        print(f"[marketplace_intel] Error searching competitors: {e}")
+        print(f"[marketplace_intel] Error reading competitors from DB: {e}")
         import traceback
         traceback.print_exc()
         return []
