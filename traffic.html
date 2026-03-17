@@ -225,7 +225,7 @@
   <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
     <span style="font-size:22px">{{ mp_icons[mp] }}</span>
     <div>
-      <div style="font-weight:900;font-size:15px">Primeplas Coolers <span style="color:{{ mp_color }};font-size:12px">● VOCÊ</span></div>
+      <div style="font-weight:900;font-size:15px">{{ account_name or 'Minha Loja' }} <span style="color:{{ mp_color }};font-size:12px">● VOCÊ</span></div>
       <div style="font-size:11px;color:var(--text2)">{{ my.badge or 'Seller padrão' }} · Fulfillment: {{ 'Sim ✅' if my.fulfillment else 'Não ❌' }}</div>
     </div>
     <div style="margin-left:auto;display:flex;gap:20px">
