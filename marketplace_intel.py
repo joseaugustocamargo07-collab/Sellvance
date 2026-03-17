@@ -672,8 +672,9 @@ def search_ml_competitors(org_id, marketplace, token=None):
             print("[competitors] No valid ML token")
             return []
 
-        # Use public API (no auth) - more reliable for search
+        # Use authenticated API (Railway IPs get 403 without auth)
         headers = {
+            'Authorization': f'Bearer {token}',
             'User-Agent': 'Sellvance/1.0',
             'Accept': 'application/json',
         }
