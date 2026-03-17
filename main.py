@@ -381,6 +381,7 @@ def debug_competitors():
                     import urllib.request as ur
                     req = ur.Request(url, headers={
                         'Authorization': f'Bearer {token}',
+                        'User-Agent': 'Sellvance/1.0',
                         'Accept': 'application/json',
                     })
                     resp_data = json.loads(ur.urlopen(req, timeout=15).read())
