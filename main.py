@@ -641,20 +641,79 @@ def debug_competitors():
         result['catalog_products'] = catalog_products
         result['steps'].append(f'Found {len(catalog_products)} catalog products')
 
-        # Step 2: Try catalog product items
+        # Step 2: Try catalog product items + also try /products/{id} for buy_box_winner
         competitor_items = []
-        for cp in catalog_products[:3]:
+        competitor_sellers = []  # Direct seller data from catalog
+        seen_catalogs = set()
+
+        for cp in catalog_products[:5]:
+            if cp in seen_catalogs:
+                continue
+            seen_catalogs.add(cp)
+
+            # Method A: Try /products/{cp} for buy_box_winner and pickers
             try:
-                req_ml = ur.Request(f'{ML_API}/products/{cp}/items?status=active&limit=10', headers=headers_ml)
-                resp_ml = json.loads(ur.urlopen(req_ml, timeout=15).read())
+                req_ml = ur.Request(f'{ML_API}/products/{cp}', headers=headers_ml)
+                prod_data = json.loads(ur.urlopen(req_ml, timeout=15).read())
+
+                # buy_box_winner has direct seller/item info
+                bbw = prod_data.get('buy_box_winner', {})
+                if bbw:
+                    bbw_item_id = bbw.get('item_id', '')
+                    bbw_seller_id = bbw.get('seller_id', '')
+                    if bbw_item_id and str(bbw_item_id) not in item_ids:
+                        competitor_items.append(str(bbw_item_id))
+                        result['steps'].append(f'Buy box winner: item={bbw_item_id} seller={bbw_seller_id}')
+
+                # pickers has all competing items
+                pickers = prod_data.get('pickers', [])
+                if pickers:
+                    result['steps'].append(f'Catalog {cp}: {len(pickers)} pickers')
+
+                # main_features, attributes etc
+                result['catalog_raw_keys'] = list(prod_data.keys())
+
+            except Exception as e:
+                result['steps'].append(f'Product {cp} detail: {e}')
+
+            # Method B: Try /products/{cp}/items
+            try:
+                req_ml = ur.Request(f'{ML_API}/products/{cp}/items?status=active&limit=20', headers=headers_ml)
+                raw = ur.urlopen(req_ml, timeout=15).read()
+                resp_ml = json.loads(raw)
+
+                # Log raw response structure
+                if isinstance(resp_ml, list):
+                    result['steps'].append(f'Catalog {cp} items: list of {len(resp_ml)}')
+                    if resp_ml:
+                        first = resp_ml[0]
+                        if isinstance(first, dict):
+                            result['steps'].append(f'First item keys: {list(first.keys())[:10]}')
+                            # If items have seller info directly, extract it
+                            seller = first.get('seller', first.get('seller_id', ''))
+                            result['steps'].append(f'First item seller: {seller}')
+                elif isinstance(resp_ml, dict):
+                    result['steps'].append(f'Catalog {cp} items: dict keys={list(resp_ml.keys())[:10]}')
+                    result['catalog_items_raw'] = str(resp_ml)[:500]
+
                 items = resp_ml if isinstance(resp_ml, list) else resp_ml.get('results', resp_ml.get('items', []))
-                result['steps'].append(f'Catalog {cp}: {len(items)} items found')
                 for ci in items:
                     ci_id = ci if isinstance(ci, str) else ci.get('id', ci.get('item_id', ''))
                     if ci_id and str(ci_id) not in item_ids:
                         competitor_items.append(str(ci_id))
+                    # Try to extract seller directly from catalog response
+                    if isinstance(ci, dict):
+                        s_id = ci.get('seller_id') or (ci.get('seller', {}) or {}).get('id')
+                        if s_id:
+                            competitor_sellers.append({
+                                'seller_id': str(s_id),
+                                'item_id': ci.get('id', ci.get('item_id', '')),
+                                'price': ci.get('price', 0),
+                            })
             except Exception as e:
-                result['steps'].append(f'Catalog {cp} FAILED: {e}')
+                result['steps'].append(f'Catalog {cp} items FAILED: {e}')
+
+        result['competitor_sellers_from_catalog'] = competitor_sellers
 
         result['competitor_item_ids'] = competitor_items[:20]
 
