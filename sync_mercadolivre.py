@@ -387,15 +387,14 @@ def _sync_returns(org_id):
     db.commit()
     db.close()
     return 1
-
 def _sync_competitors(org_id, token, user_id):
-    """Discover competitors using catalog products and item multi-get.
+    """Discover competitors using catalog products.
 
-    Strategy (all endpoints work from cloud servers):
-    1. Get our items via multi-get /items?ids=... (includes catalog_product_id)
-    2. For catalog items: GET /products/{catalog_product_id}/items to find other sellers
-    3. For found competitor items: multi-get /items?ids=... to get seller details
-    4. Fallback: GET /users/{seller_id} for any seller we found
+    Strategy:
+    1. Multi-get our items to find catalog_product_id
+    2. For each catalog: GET /products/{id}/items -> extract seller_id + price from results
+    3. For each competitor seller: GET /users/{seller_id} -> get reputation details
+    4. Save to mp_competitors table
     """
     count = 0
     # Ensure table exists
@@ -427,19 +426,20 @@ def _sync_competitors(org_id, token, user_id):
 
         our_seller_id = str(user_id)
         seen_sellers = set()
-        competitor_item_ids = []
+        competitor_data = []  # List of {seller_id, price, item_id, fulfillment, sponsored}
         headers = _auth(token)
 
         item_ids = [dict(r)['external_id'] for r in rows if dict(r).get('external_id')]
+        item_ids_set = set(item_ids)
         print(f"[ml_sync] Checking {len(item_ids)} items for catalog products...")
 
         # Step 1: Multi-get our items to find catalog_product_id
-        catalog_products = []
+        catalog_products = set()
         for batch_start in range(0, len(item_ids), 20):
             batch = item_ids[batch_start:batch_start+20]
             ids_str = ','.join(batch)
             try:
-                multi_url = f"{ML_API}/items?ids={ids_str}&attributes=id,catalog_product_id,category_id,seller_id"
+                multi_url = f"{ML_API}/items?ids={ids_str}&attributes=id,catalog_product_id"
                 multi_resp = api_request(multi_url, headers)
                 for entry in multi_resp:
                     if entry.get('code') != 200:
@@ -447,112 +447,82 @@ def _sync_competitors(org_id, token, user_id):
                     item = entry.get('body', {})
                     cat_prod_id = item.get('catalog_product_id')
                     if cat_prod_id:
-                        catalog_products.append(cat_prod_id)
-                        print(f"[ml_sync] Item {item.get('id')} -> catalog: {cat_prod_id}")
+                        catalog_products.add(cat_prod_id)
             except Exception as e:
                 print(f"[ml_sync] Multi-get failed: {e}")
 
-        print(f"[ml_sync] Found {len(catalog_products)} catalog products")
+        print(f"[ml_sync] Found {len(catalog_products)} unique catalog products")
 
-        # Step 2: For each catalog product, find other sellers' items
-        for cat_prod_id in catalog_products[:5]:  # Limit to 5 catalog products
+        # Step 2: For each catalog product, get items with seller data
+        for cat_prod_id in catalog_products:
             try:
-                # This endpoint returns items from different sellers for same catalog product
                 cat_url = f"{ML_API}/products/{cat_prod_id}/items?status=active&limit=20"
                 cat_resp = api_request(cat_url, headers)
 
-                # Response can be a list of item IDs or objects
-                items = cat_resp if isinstance(cat_resp, list) else cat_resp.get('results', cat_resp.get('items', []))
-                print(f"[ml_sync] Catalog {cat_prod_id}: {len(items)} items found")
+                # Response is {paging: ..., results: [{item_id, seller_id, price, ...}]}
+                items = []
+                if isinstance(cat_resp, dict):
+                    items = cat_resp.get('results', cat_resp.get('items', []))
+                elif isinstance(cat_resp, list):
+                    items = cat_resp
 
                 for ci in items:
-                    ci_id = ci if isinstance(ci, str) else ci.get('id', ci.get('item_id', ''))
-                    if ci_id and str(ci_id) not in item_ids:
-                        competitor_item_ids.append(str(ci_id))
-            except Exception as e:
-                print(f"[ml_sync] Catalog {cat_prod_id} failed: {e}")
+                    if not isinstance(ci, dict):
+                        continue
+                    ci_seller = str(ci.get('seller_id', ''))
+                    ci_item = ci.get('item_id', ci.get('id', ''))
 
-        # Step 3: If no catalog items found, try category-based approach
-        # Use /sites/MLB/search with access_token (may work for some categories)
-        if not competitor_item_ids:
-            print("[ml_sync] No catalog items, trying category search...")
-            categories = list(set(dict(r).get('category', '') for r in rows if dict(r).get('category')))
-            for cat_id in categories[:2]:
-                if not cat_id:
-                    continue
-                try:
-                    import urllib.request as _ur
-                    search_url = f"{ML_API}/sites/MLB/search?category={cat_id}&limit=20&sort=sold_quantity_desc&access_token={token}"
-                    _req = _ur.Request(search_url, headers={
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'Accept': 'application/json',
+                    # Skip our own items
+                    if ci_seller == our_seller_id or str(ci_item) in item_ids_set:
+                        continue
+                    if not ci_seller or ci_seller in seen_sellers:
+                        continue
+                    seen_sellers.add(ci_seller)
+
+                    ship = ci.get('shipping', {}) or {}
+                    competitor_data.append({
+                        'seller_id': ci_seller,
+                        'item_id': ci_item,
+                        'price': ci.get('price', 0),
+                        'listing_type': ci.get('listing_type_id', ''),
+                        'fulfillment': ship.get('logistic_type') == 'fulfillment' if isinstance(ship, dict) else False,
                     })
-                    _raw = _ur.urlopen(_req, timeout=15).read()
-                    resp = json.loads(_raw)
-                    items = resp.get('results', [])
-                    if items:
-                        print(f"[ml_sync] Category search for {cat_id}: {len(items)} results")
-                        for it in items:
-                            if isinstance(it, dict):
-                                it_id = it.get('id', '')
-                                if it_id and str(it_id) not in item_ids:
-                                    competitor_item_ids.append(str(it_id))
-                            elif isinstance(it, str) and it not in item_ids:
-                                competitor_item_ids.append(it)
-                        if competitor_item_ids:
-                            break
-                except Exception as e:
-                    print(f"[ml_sync] Category search {cat_id} failed: {e}")
+                    print(f"[ml_sync] Catalog {cat_prod_id}: found competitor seller {ci_seller} at R${ci.get('price', 0)}")
 
-        if not competitor_item_ids:
-            print("[ml_sync] No competitor items found via any method")
+            except Exception as e:
+                print(f"[ml_sync] Catalog {cat_prod_id} items failed: {e}")
+
+        if not competitor_data:
+            print("[ml_sync] No competitor sellers found via catalog")
             return 0
 
-        # Deduplicate
-        competitor_item_ids = list(dict.fromkeys(competitor_item_ids))[:50]
-        print(f"[ml_sync] Fetching details for {len(competitor_item_ids)} competitor items...")
+        print(f"[ml_sync] Found {len(competitor_data)} competitor sellers, fetching details...")
 
-        # Step 4: Multi-get competitor items for full details
-        items_to_save = []
-        for batch_start in range(0, len(competitor_item_ids), 20):
-            batch = competitor_item_ids[batch_start:batch_start+20]
-            ids_str = ','.join(batch)
-            try:
-                multi_url = f"{ML_API}/items?ids={ids_str}"
-                multi_resp = api_request(multi_url, headers)
-                for entry in multi_resp:
-                    if entry.get('code') == 200:
-                        items_to_save.append(entry.get('body', {}))
-            except Exception as e:
-                print(f"[ml_sync] Batch fetch failed: {e}")
-
-        # Step 5: Save competitors to DB
+        # Step 3: Get seller details via /users/{seller_id}
         db = get_db()
-        for item in items_to_save:
-            seller = item.get('seller', {}) or {}
-            seller_id = str(seller.get('id', ''))
-
-            if not seller_id or seller_id == our_seller_id or seller_id in seen_sellers:
-                continue
-            seen_sellers.add(seller_id)
-
-            rep = seller.get('seller_reputation', {}) or {}
-            trans = rep.get('transactions', {}) or {}
-            ratings = trans.get('ratings', {}) or {}
-            positive = ratings.get('positive', 0) or 0
-            power = rep.get('power_seller_status') or ''
-
-            badge_map = {
-                'platinum': 'MercadoLider Platinum',
-                'gold': 'MercadoLider Gold',
-                'silver': 'MercadoLider',
-            }
-
-            ship = item.get('shipping', {}) or {}
-            is_full = 1 if ship.get('logistic_type') == 'fulfillment' else 0
-            is_spons = 1 if item.get('listing_type_id') in ('gold_pro', 'gold_premium') else 0
-
+        for comp in competitor_data:
+            seller_id = comp['seller_id']
             try:
+                user_url = f"{ML_API}/users/{seller_id}"
+                seller_data = api_request(user_url, headers)
+
+                nickname = seller_data.get('nickname', '')
+                rep = seller_data.get('seller_reputation', {}) or {}
+                trans = rep.get('transactions', {}) or {}
+                ratings = trans.get('ratings', {}) or {}
+                positive = ratings.get('positive', 0) or 0
+                power = rep.get('power_seller_status') or ''
+
+                badge_map = {
+                    'platinum': 'MercadoLider Platinum',
+                    'gold': 'MercadoLider Gold',
+                    'silver': 'MercadoLider',
+                }
+
+                is_full = 1 if comp.get('fulfillment') else 0
+                is_spons = 1 if comp.get('listing_type') in ('gold_pro', 'gold_premium') else 0
+                price = comp.get('price', 0)
+
                 db.execute("""
                     INSERT INTO mp_competitors (org_id, platform, seller_id, nickname, rating,
                         completed_sales, price, stock, badge, fulfillment, sponsored,
@@ -563,26 +533,28 @@ def _sync_competitors(org_id, token, user_id):
                         stock=?, badge=?, fulfillment=?, sponsored=?, sold_qty=?,
                         power_status=?, last_synced=datetime('now')
                 """, (
-                    org_id, seller_id, seller.get('nickname', ''),
+                    org_id, seller_id, nickname,
                     round(positive * 5, 1), trans.get('completed', 0),
-                    item.get('price', 0), item.get('available_quantity', 0),
+                    price, 0,
                     badge_map.get(power, power or 'Seller padrao'),
                     is_full, is_spons,
-                    item.get('sold_quantity', 0), power,
-                    seller.get('nickname', ''), round(positive * 5, 1),
-                    trans.get('completed', 0), item.get('price', 0),
-                    item.get('available_quantity', 0),
+                    trans.get('completed', 0), power,
+                    nickname, round(positive * 5, 1),
+                    trans.get('completed', 0), price,
+                    0,
                     badge_map.get(power, power or 'Seller padrao'),
                     is_full, is_spons,
-                    item.get('sold_quantity', 0), power,
+                    trans.get('completed', 0), power,
                 ))
                 count += 1
+                print(f"[ml_sync] Saved competitor: {nickname} (seller {seller_id})")
+
             except Exception as e:
-                print(f"[ml_sync] Error saving competitor {seller_id}: {e}")
+                print(f"[ml_sync] Error fetching seller {seller_id}: {e}")
 
         db.commit()
         db.close()
-        print(f"[ml_sync] Saved {count} competitors")
+        print(f"[ml_sync] Saved {count} competitors total")
 
     except AuthError:
         raise
