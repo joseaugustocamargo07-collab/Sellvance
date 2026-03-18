@@ -496,6 +496,76 @@ def add_competitor():
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)})
 
+
+@app.route('/api/refresh-token')
+def api_refresh_token():
+    """Force refresh ML token and create missing tables."""
+    org_id = 1
+    mp = request.args.get('mp', 'mercado_livre')
+    result = {'org_id': org_id, 'platform': mp}
+    
+    try:
+        # Create mp_competitors table if missing
+        from database import get_db
+        db = get_db()
+        db.execute("""CREATE TABLE IF NOT EXISTS mp_competitors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, org_id INTEGER NOT NULL,
+            platform TEXT NOT NULL DEFAULT 'mercado_livre', seller_id TEXT NOT NULL,
+            nickname TEXT DEFAULT '', rating REAL DEFAULT 0, completed_sales INTEGER DEFAULT 0,
+            price REAL DEFAULT 0, stock INTEGER DEFAULT 0, badge TEXT DEFAULT '',
+            fulfillment INTEGER DEFAULT 0, sponsored INTEGER DEFAULT 0, sold_qty INTEGER DEFAULT 0,
+            power_status TEXT DEFAULT '', last_synced TEXT DEFAULT (datetime('now')),
+            UNIQUE(org_id, platform, seller_id))""")
+        db.commit()
+        result['table_created'] = True
+        
+        # Check existing tables
+        tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+        result['tables'] = tables
+        db.close()
+        
+        # Force token refresh
+        from sync_base import force_refresh_token, get_valid_token
+        
+        # First check current token
+        token = get_valid_token(org_id, mp)
+        if token:
+            # Test if it works
+            import urllib.request as ur
+            try:
+                req_ml = ur.Request(f'https://api.mercadolibre.com/users/me', headers={'Authorization': f'Bearer {token}'})
+                me = json.loads(ur.urlopen(req_ml, timeout=10).read())
+                result['token_valid'] = True
+                result['user'] = me.get('nickname', me.get('id', ''))
+                return jsonify({**result, 'status': 'ok'})
+            except Exception as e:
+                result['token_test'] = str(e)
+        
+        # Token invalid, try refresh
+        new_token = force_refresh_token(org_id, mp)
+        if new_token:
+            result['refreshed'] = True
+            result['new_token_preview'] = new_token[:15] + '...'
+            # Test new token
+            import urllib.request as ur
+            try:
+                req_ml = ur.Request(f'https://api.mercadolibre.com/users/me', headers={'Authorization': f'Bearer {new_token}'})
+                me = json.loads(ur.urlopen(req_ml, timeout=10).read())
+                result['token_valid'] = True
+                result['user'] = me.get('nickname', me.get('id', ''))
+            except Exception as e:
+                result['new_token_test'] = str(e)
+        else:
+            result['refresh_failed'] = True
+            result['message'] = 'Token refresh falhou. Reconecte a conta ML em Integracoes.'
+        
+        return jsonify({**result, 'status': 'ok' if result.get('token_valid') else 'needs_reconnect'})
+    
+    except Exception as e:
+        import traceback
+        return jsonify({**result, 'status': 'error', 'error': str(e), 'trace': traceback.format_exc()})
+
+
 @app.route('/api/force-sync')
 def force_sync():
     """Force a full re-sync (bypasses staleness check)."""
