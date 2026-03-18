@@ -566,6 +566,65 @@ def api_refresh_token():
         return jsonify({**result, 'status': 'error', 'error': str(e), 'trace': traceback.format_exc()})
 
 
+
+@app.route('/api/test-competitor-sync')
+def test_competitor_sync():
+    """Test _sync_competitors directly and return result."""
+    import traceback, io, sys
+    org_id = 1
+    result = {}
+
+    # Capture print output
+    old_stdout = sys.stdout
+    sys.stdout = buffer = io.StringIO()
+
+    try:
+        from sync_base import get_valid_token, force_refresh_token
+        from sync_mercadolivre import _sync_competitors
+
+        token = get_valid_token(org_id, 'mercado_livre')
+        if not token:
+            token_new = force_refresh_token(org_id, 'mercado_livre')
+            if token_new:
+                token = token_new
+            else:
+                result['error'] = 'No valid token'
+                sys.stdout = old_stdout
+                return jsonify(result)
+
+        # Get user_id
+        import urllib.request as ur
+        headers_ml = {'Authorization': f'Bearer {token}'}
+        req_ml = ur.Request('https://api.mercadolibre.com/users/me', headers=headers_ml)
+        me = json.loads(ur.urlopen(req_ml, timeout=10).read())
+        user_id = str(me.get('id', ''))
+        result['user_id'] = user_id
+        result['nickname'] = me.get('nickname', '')
+
+        # Run competitor sync
+        count = _sync_competitors(org_id, token, user_id)
+        result['competitors_synced'] = count
+        result['status'] = 'ok'
+
+        # Check DB
+        from database import get_db
+        db = get_db()
+        comps = db.execute(
+            "SELECT seller_id, nickname, price, rating, sold_qty, badge FROM mp_competitors WHERE org_id=? AND platform='mercado_livre'",
+            (org_id,)
+        ).fetchall()
+        db.close()
+        result['db_competitors'] = [dict(c) for c in comps]
+
+    except Exception as e:
+        result['error'] = str(e)
+        result['trace'] = traceback.format_exc()
+
+    sys.stdout = old_stdout
+    result['logs'] = buffer.getvalue()
+
+    return jsonify(result)
+
 @app.route('/api/force-sync')
 def force_sync():
     """Force a full re-sync (bypasses staleness check)."""
