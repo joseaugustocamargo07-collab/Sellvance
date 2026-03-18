@@ -506,6 +506,33 @@ def migrate_db():
         print('✅ Banco já migrado.')
     db.close()
 
+    if 'mp_competitors' not in existing:
+        db = get_db()
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS mp_competitors (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id          INTEGER NOT NULL,
+                platform        TEXT NOT NULL DEFAULT 'mercado_livre',
+                seller_id       TEXT NOT NULL,
+                nickname        TEXT DEFAULT '',
+                rating          REAL DEFAULT 0,
+                completed_sales INTEGER DEFAULT 0,
+                price           REAL DEFAULT 0,
+                stock           INTEGER DEFAULT 0,
+                badge           TEXT DEFAULT '',
+                fulfillment     INTEGER DEFAULT 0,
+                sponsored       INTEGER DEFAULT 0,
+                sold_qty        INTEGER DEFAULT 0,
+                power_status    TEXT DEFAULT '',
+                last_synced     TEXT DEFAULT (datetime('now')),
+                UNIQUE(org_id, platform, seller_id)
+            );
+        """)
+        db.commit()
+        db.close()
+        print('[migrate_db] Created mp_competitors table')
+
+
 def datetime_ago(days):
     from datetime import datetime, timedelta
     return (datetime.now() + timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
