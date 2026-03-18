@@ -678,28 +678,59 @@ def debug_competitors():
                 except Exception as e:
                     result['steps'].append(f'Category search {cat_id} FAILED: {e}')
 
+        # Deduplicate competitor_items
+        competitor_items = list(dict.fromkeys(competitor_items))
+        result['competitor_item_ids'] = competitor_items[:20]
+        result['steps'].append(f'{len(competitor_items)} unique competitor items after dedup')
+
+        # Get our user ID first
+        our_user_id = None
+        try:
+            me_req = ur.Request(f'{ML_API}/users/me', headers=headers_ml)
+            me_data = json.loads(ur.urlopen(me_req, timeout=10).read())
+            our_user_id = str(me_data.get('id', ''))
+            result['our_user_id'] = our_user_id
+        except Exception as e:
+            result['steps'].append(f'Could not get our user: {e}')
+
         # Step 4: Multi-get competitor items for seller details
         if competitor_items:
             ids_str = ','.join(competitor_items[:20])
+            result['steps'].append(f'Fetching items: {ids_str}')
             try:
                 req_ml = ur.Request(f'{ML_API}/items?ids={ids_str}', headers=headers_ml)
-                resp_ml = json.loads(ur.urlopen(req_ml, timeout=15).read())
+                raw_resp = ur.urlopen(req_ml, timeout=15).read()
+                resp_ml = json.loads(raw_resp)
+                result['steps'].append(f'Got {len(resp_ml)} item responses')
                 competitors = []
                 for entry in resp_ml:
-                    if entry.get('code') == 200:
+                    code = entry.get('code')
+                    if code == 200:
                         item = entry.get('body', {})
-                        seller = item.get('seller', {})
-                        competitors.append({
-                            'item_id': item.get('id'),
-                            'seller_id': seller.get('id'),
-                            'nickname': seller.get('nickname'),
-                            'price': item.get('price'),
-                            'title': (item.get('title', '')[:60])
-                        })
+                        seller = item.get('seller', {}) or {}
+                        seller_id = str(seller.get('id', ''))
+                        nickname = seller.get('nickname', '?')
+                        is_ours = seller_id == our_user_id if our_user_id else False
+                        result['steps'].append(f'Item {item.get("id")}: seller={seller_id} nick={nickname} ours={is_ours}')
+                        if not is_ours and seller_id:
+                            competitors.append({
+                                'item_id': item.get('id'),
+                                'seller_id': seller.get('id'),
+                                'nickname': nickname,
+                                'price': item.get('price'),
+                                'title': (item.get('title', '')[:60])
+                            })
+                    else:
+                        msg = entry.get('body', {})
+                        if isinstance(msg, dict):
+                            msg = msg.get('message', str(msg))
+                        result['steps'].append(f'Item response code={code}: {str(msg)[:80]}')
                 result['found_competitors'] = competitors
-                result['steps'].append(f'Found {len(competitors)} competitor sellers from items')
+                result['steps'].append(f'Found {len(competitors)} competitor sellers (excluding ours)')
             except Exception as e:
-                result['steps'].append(f'Competitor detail fetch failed: {e}')
+                result['steps'].append(f'Competitor detail fetch FAILED: {e}')
+                import traceback as tb
+                result['fetch_trace'] = tb.format_exc()
         else:
             result['steps'].append('No competitor items found via any method')
 
