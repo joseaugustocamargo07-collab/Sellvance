@@ -736,4 +736,66 @@ function showToast(msg, type) {
 })();
 </script>
 
+
+<!-- Competitor management JS -->
+<script>
+async function addCompetitorById() {
+  const input = document.getElementById('competitor-id-input');
+  const btn = document.getElementById('add-competitor-btn');
+  const msg = document.getElementById('competitor-msg');
+  if (!input || !input.value.trim()) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Buscando...';
+  msg.textContent = '';
+
+  try {
+    const resp = await fetch('/api/add-competitor', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({seller_id: input.value.trim()})
+    });
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      msg.textContent = 'Concorrente adicionado: ' + (data.seller.nickname || data.seller.id);
+      msg.style.color = 'var(--green)';
+      input.value = '';
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      msg.textContent = data.error || 'Erro ao adicionar';
+      msg.style.color = 'var(--red)';
+    }
+  } catch(e) {
+    msg.textContent = 'Erro de conexao';
+    msg.style.color = 'var(--red)';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Adicionar';
+}
+
+async function triggerCompetitorSync() {
+  const btn = document.getElementById('sync-competitors-btn');
+  const msg = document.getElementById('competitor-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sincronizando...'; }
+  if (msg) msg.textContent = 'Buscando concorrentes...';
+
+  try {
+    const resp = await fetch('/api/force-sync?mp=mercado_livre');
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      if (msg) {
+        msg.textContent = 'Sync completo! ' + data.records_synced + ' registros. Recarregando...';
+        msg.style.color = 'var(--green)';
+      }
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      if (msg) { msg.textContent = 'Erro: ' + (data.error || 'falha').substring(0, 100); msg.style.color = 'var(--red)'; }
+    }
+  } catch(e) {
+    if (msg) { msg.textContent = 'Erro de conexao'; msg.style.color = 'var(--red)'; }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = 'Sincronizar'; }
+}
+</script>
+
 {% endblock %}
