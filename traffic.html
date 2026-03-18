@@ -4,84 +4,6 @@
 
 {% endblock %}
 {% block topbar_title %}🏪 Inteligência de Marketplaces
-<!-- Browser-side competitor search (ML blocks server IPs) -->
-<script>
-(function() {
-  const tab = new URLSearchParams(window.location.search).get('tab');
-  const mp = new URLSearchParams(window.location.search).get('mp') || 'mercado_livre';
-  if (mp !== 'mercado_livre') return;
-
-  // Auto-search competitors when page loads (if competitors tab is empty)
-  const competitorRows = document.querySelectorAll('table.tbl tbody tr');
-  const hasCompetitors = competitorRows && competitorRows.length > 0;
-
-  // Get product categories from the page data
-  async function searchAndSaveCompetitors() {
-    try {
-      // First get our product info from the server
-      const diagResp = await fetch('/api/debug/live-data?mp=mercado_livre');
-      const diag = await diagResp.json();
-      const products = diag.raw_products || [];
-      if (!products.length) return;
-
-      const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
-      const ourSellerId = diag.raw_health ? diag.raw_health.org_id : '';
-
-      // Get integration info for seller ID
-      const syncResp = await fetch('/api/debug/sync-diag');
-      const syncData = await syncResp.json();
-      const mlPlatform = syncData.platforms?.mercado_livre || {};
-      const sellerAccountId = String(mlPlatform.account_id || '');
-
-      let allItems = [];
-      for (const cat of categories.slice(0, 2)) {
-        try {
-          const searchUrl = `https://api.mercadolibre.com/sites/MLB/search?category=${cat}&limit=20&sort=sold_quantity_desc`;
-          const resp = await fetch(searchUrl);
-          if (resp.ok) {
-            const data = await resp.json();
-            const items = data.results || [];
-            allItems = allItems.concat(items);
-            console.log(`[Sellvance] Found ${items.length} items in category ${cat}`);
-          } else {
-            console.log(`[Sellvance] Search returned ${resp.status} for category ${cat}`);
-          }
-        } catch(e) {
-          console.log(`[Sellvance] Error searching category ${cat}:`, e);
-        }
-      }
-
-      if (allItems.length > 0) {
-        // Send to server
-        const saveResp = await fetch('/api/save-competitors', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            items: allItems,
-            org_id: 1,
-            our_seller_id: sellerAccountId
-          })
-        });
-        const result = await saveResp.json();
-        console.log(`[Sellvance] Saved ${result.saved} competitors`);
-
-        // Reload page to show new data
-        if (result.saved > 0 && !hasCompetitors) {
-          window.location.reload();
-        }
-      }
-    } catch(e) {
-      console.error('[Sellvance] Competitor search error:', e);
-    }
-  }
-
-  // Run search if no competitors found
-  if (!hasCompetitors) {
-    searchAndSaveCompetitors();
-  }
-})();
-</script>
-
 {% endblock %}
 
 {% block content %}
@@ -327,6 +249,37 @@
   </div>
 </div>
 
+<!-- Adicionar concorrente manualmente -->
+<div class="card" style="margin-bottom:16px">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div style="font-size:13px;font-weight:600;color:var(--text1)">Adicionar concorrente:</div>
+    <input id="competitor-id-input" type="text" placeholder="ID do vendedor ML (ex: 123456789)"
+      style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text1)">
+    <button id="add-competitor-btn" onclick="addCompetitorById()"
+      style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">
+      Adicionar
+    </button>
+    <button id="sync-competitors-btn" onclick="triggerCompetitorSync()"
+      style="padding:8px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text1)">
+      Sincronizar
+    </button>
+  </div>
+  <div id="competitor-msg" style="font-size:12px;margin-top:8px"></div>
+</div>
+
+{% if not competitors or competitors|length == 0 %}
+<div class="card" style="text-align:center;padding:40px 20px;color:var(--text2)">
+  <div style="font-size:48px;margin-bottom:12px">&#128269;</div>
+  <div style="font-size:16px;font-weight:600;margin-bottom:8px;color:var(--text1)">Nenhum concorrente encontrado</div>
+  <div style="font-size:13px;margin-bottom:16px;max-width:400px;margin-left:auto;margin-right:auto">
+    Seus concorrentes aparecem automaticamente quando sua conta ML está conectada.
+    Você também pode adicionar manualmente pelo ID do vendedor acima.
+  </div>
+  <div style="font-size:11px;color:var(--text3)">
+    Dica: para encontrar o ID de um vendedor, abra o anúncio dele no ML e veja a URL do perfil
+  </div>
+</div>
+{% else %}
 <!-- Tabela de concorrentes -->
 <div class="card" style="padding:0;overflow:hidden">
   <table class="tbl">
@@ -376,6 +329,8 @@
     </tbody>
   </table>
 </div>
+{% endif %}
+
 
 <!-- ══════════════════════════════════════════════════════════════ -->
 {% elif tab == 'ads' %}
