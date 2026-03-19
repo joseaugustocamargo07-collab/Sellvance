@@ -860,8 +860,10 @@
         <div style="display:flex;gap:6px;align-items:flex-start">
           <span style="color:var(--text2);flex-shrink:0">✔</span>
           <span style="color:var(--text2)">Desconto sugerido para manter margem positiva:
-            {% if avg_price > 0 and my_price > 0 %}
-            <strong style="color:var(--accent)">{{ [((my_price - avg_price * 0.95) / my_price * 100)|int, 5]|max }}%</strong>
+            {% set _real_my = comp_analysis.my_price if comp_analysis.my_price is defined and comp_analysis.my_price > 0 else my_price %}
+            {% set _real_avg = comp_analysis.avg_price if comp_analysis.avg_price is defined and comp_analysis.avg_price > 0 else avg_price %}
+            {% if _real_avg > 0 and _real_my > 0 %}
+            <strong style="color:var(--accent)">{{ [(_real_my - _real_avg * 0.95) / _real_my * 100|int, 5]|max }}%</strong>
             {% else %}mínimo 5%{% endif %}
           </span>
         </div>
@@ -965,7 +967,11 @@
       <div style="font-size:12px;color:var(--text2);line-height:1.7">
         <strong>Ações prioritárias:</strong><br>
         {% if comp_analysis.price_position == 'acima' %}
-        1. Ajuste de preço: seu produto está acima da média (R$ {{ "%.2f"|format(comp_analysis.avg_price_32l) }}) — desconto de {{ [(((my.price_32l or 0) - comp_analysis.avg_price_32l) / (my.price_32l or 1) * 100)|int + 2, 5]|max }}% posiciona melhor para Oferta do Dia.<br>
+        {% set _my_p = comp_analysis.my_price if comp_analysis.my_price is defined and comp_analysis.my_price > 0 else (my.price_32l or 0) %}
+        {% set _avg_p = comp_analysis.avg_price if comp_analysis.avg_price is defined and comp_analysis.avg_price > 0 else (comp_analysis.avg_price_32l or 0) %}
+        {% if _avg_p > 0 and _my_p > 0 %}
+        1. Ajuste de preço: seu produto (R$ {{ "%.2f"|format(_my_p) }}) está acima da média dos concorrentes (R$ {{ "%.2f"|format(_avg_p) }}) — desconto de {{ [((_my_p - _avg_p) / _my_p * 100)|int + 2, 5]|max }}% posiciona melhor para Oferta do Dia.<br>
+        {% endif %}
         {% endif %}
         {% if rebid_recs and rebid_recs[0].is_change %}
         2. Re-bid: {{ rebid_recs[0].title[:30] }} → upgrade de {{ rebid_recs[0].current_type }} para {{ rebid_recs[0].rec_type }} (+R$ {{ "{:,}".format(rebid_recs[0].monthly_gain) }}/mês est.).<br>
