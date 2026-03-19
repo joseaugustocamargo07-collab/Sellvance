@@ -1384,7 +1384,6 @@ def connect_wizard(platform):
             ],
             'hidden_fields': [],
         }
-        }
     else:
         return redirect('/integrations')
 
