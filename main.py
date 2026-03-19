@@ -166,6 +166,7 @@ def marketplaces():
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 def _marketplaces_inner():
+    from marketplace_strategy import compute_marketplace_scores, get_rebid_recommendations
     from marketplace_intel import (COMPETITORS, MY_PRODUCTS, MP_ADS_DATA, RETURNS_DATA,
                                    ACCOUNT_HEALTH, analyze_competitive_position,
                                    analyze_mp_ads, get_keyword_opportunities,
@@ -348,10 +349,20 @@ def _marketplaces_inner():
     db.close()
 
     account_name = integration.get('account_name', '') if integration else ''
+
+    # Strategy scores & re-bid recommendations
+    try:
+        strategy_scores = compute_marketplace_scores(org_id)
+        rebid_recs = get_rebid_recommendations(org_id, mp)
+    except Exception:
+        strategy_scores = []
+        rebid_recs = []
+
     return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info, account_name=account_name,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
-                           mp_totals=mp_totals, date_start=date_start, date_end=date_end)
+                           mp_totals=mp_totals, date_start=date_start, date_end=date_end,
+                           strategy_scores=strategy_scores, rebid_recs=rebid_recs)
 
 
 
