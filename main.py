@@ -646,16 +646,15 @@ def test_competitor_sync():
 @app.route('/api/marketplace-offers')
 @login_required
 def marketplace_offers():
-    """Return all offers/programs/promos for a marketplace (for strategy tab)."""
+    """Return real listing-type data + deal_ids for products (strategy tab)."""
     mp     = request.args.get('mp', 'mercado_livre')
     org_id = session.get('org_id', 1)
-
     if mp != 'mercado_livre':
-        return jsonify({'error': 'Platform not yet supported', 'platform': mp})
-
+        return jsonify({'error': 'platform_not_supported'})
     try:
         import urllib.request as ur
         from sync_base import get_valid_token
+        from database import get_db
 
         token = get_valid_token(org_id, 'mercado_livre')
         if not token:
@@ -665,151 +664,78 @@ def marketplace_offers():
         h  = {'Authorization': f'Bearer {token}'}
         result = {}
 
-        # ── Seller identity ────────────────────────────────────────────────
-        me_req  = ur.Request(f'{ML}/users/me', headers=h)
-        me      = json.loads(ur.urlopen(me_req, timeout=10).read())
-        user_id = str(me.get('id', ''))
-        rep     = me.get('seller_reputation', {}) or {}
+        # ── Seller info ───────────────────────────────────────────────────
+        me  = json.loads(ur.urlopen(ur.Request(f'{ML}/users/me', headers=h), timeout=10).read())
+        uid = str(me.get('id', ''))
         result['seller'] = {
-            'id':       user_id,
-            'nickname': me.get('nickname', ''),
-            'level':    rep.get('power_seller_status', '') or 'standard',
-            'completed': (rep.get('transactions', {}) or {}).get('completed', 0),
+            'id': uid, 'nickname': me.get('nickname', ''),
+            'level': (me.get('seller_reputation', {}) or {}).get('power_seller_status', '') or 'standard',
         }
 
-        # ── Listing types (public endpoint) ───────────────────────────────
-        lt_req = ur.Request(f'{ML}/sites/MLB/listing_types')
-        lt_raw = json.loads(ur.urlopen(lt_req, timeout=10).read())
-        # Enrich with known fee data
-        FEE_MAP = {
-            'free':         {'fee': 5,  'label': 'Grátis',       'visibility': 1, 'tip': 'Para testar o mercado. Comissão mínima.'},
-            'bronze':       {'fee': 10, 'label': 'Bronze',        'visibility': 2, 'tip': 'Baixa visibilidade. Para produtos de nicho.'},
-            'silver':       {'fee': 12, 'label': 'Prata',         'visibility': 3, 'tip': 'Visão mediana. Boa opção de entrada.'},
-            'gold':         {'fee': 16, 'label': 'Ouro',          'visibility': 4, 'tip': 'Alta visibilidade. Padrão para produtos competitivos.'},
-            'gold_special': {'fee': 16, 'label': 'Ouro Especial', 'visibility': 4, 'tip': 'Destaque especial. Indicado para picos de venda.'},
-            'gold_pro':     {'fee': 16, 'label': 'Ouro Pro',      'visibility': 5, 'tip': 'Máxima exposição + integra Product Ads.'},
-            'gold_premium': {'fee': 16, 'label': 'Ouro Premium',  'visibility': 5, 'tip': 'Posição de destaque. Melhor ROI para alto giro.'},
-        }
-        listing_types = []
-        for lt in lt_raw:
-            lt_id = lt.get('id', '')
-            extra = FEE_MAP.get(lt_id, {})
-            listing_types.append({
-                'id':         lt_id,
-                'name':       extra.get('label', lt.get('name', lt_id)),
-                'fee':        extra.get('fee', 16),
-                'visibility': extra.get('visibility', 3),
-                'tip':        extra.get('tip', ''),
-            })
-        # Ensure order: free < bronze < silver < gold < gold_special < gold_pro < gold_premium
-        ORDER = ['free','bronze','silver','gold','gold_special','gold_pro','gold_premium']
-        listing_types.sort(key=lambda x: ORDER.index(x['id']) if x['id'] in ORDER else 99)
-        result['listing_types'] = listing_types
+        # ── Product listing types + available upgrades ────────────────────
+        db = get_db()
+        products = db.execute(
+            "SELECT external_id, title, price, COALESCE(listing_type,'gold_special') as listing_type, category FROM mp_products WHERE org_id=? AND platform='mercado_livre' AND status='active' LIMIT 10",
+            (org_id,)
+        ).fetchall()
+        db.close()
 
-        # ── Available promotions (candidates) ─────────────────────────────
-        promos = []
-        for status in ('candidate', 'published'):
+        # ML listing type labels (API returns technical names, we show Portuguese)
+        LT_LABEL = {'gold_premium':'Diamante (Ouro Premium)','gold_pro':'Premium (Ouro Pro)',
+                    'gold_special':'Clássico (Ouro Especial)','gold':'Ouro',
+                    'silver':'Prata','bronze':'Bronze','free':'Grátis'}
+        LT_EXPOSURE = {'gold_premium':'highest','gold_pro':'highest','gold_special':'high',
+                       'gold':'high','silver':'mid','bronze':'low','free':'lowest'}
+        LT_ORDER = ['free','bronze','silver','gold','gold_special','gold_pro','gold_premium']
+        LT_FEE = {'gold_premium':16,'gold_pro':16,'gold_special':16,'gold':16,'silver':12,'bronze':10,'free':5}
+
+        product_data = []
+        deal_ids_all = []
+        seen_cats = {}
+
+        for row in products:
+            p = dict(row)
+            cat = p.get('category','')
+            lt  = p.get('listing_type','gold_special')
+
+            # Fetch available listing types per unique category
+            avail = []
+            if cat and cat not in seen_cats:
+                try:
+                    lt_req = ur.Request(f'{ML}/users/{uid}/available_listing_types?category_id={cat}', headers=h)
+                    lt_data = json.loads(ur.urlopen(lt_req, timeout=8).read())
+                    avail = [x.get('id') for x in lt_data.get('available', []) if x.get('id')]
+                    seen_cats[cat] = avail
+                except Exception:
+                    seen_cats[cat] = []
+            avail = seen_cats.get(cat, [])
+            avail_sorted = sorted(avail, key=lambda x: LT_ORDER.index(x) if x in LT_ORDER else 99)
+
+            # Check deal_ids from item
+            item_deal_ids = []
             try:
-                p_req  = ur.Request(
-                    f'{ML}/seller-promotions/users/{user_id}/promotions?status={status}&limit=30&offset=0',
-                    headers=h
-                )
-                p_data = json.loads(ur.urlopen(p_req, timeout=10).read())
-                items  = p_data if isinstance(p_data, list) else p_data.get('results', p_data.get('promotions', []))
-                for p in items:
-                    if not isinstance(p, dict):
-                        continue
-                    promos.append({
-                        'id':          p.get('id', ''),
-                        'type':        p.get('type', ''),
-                        'status':      status,
-                        'name':        p.get('name', p.get('type', 'Promoção')),
-                        'discount':    p.get('discount_rate', p.get('value', 0)),
-                        'start_date':  p.get('start_date', ''),
-                        'finish_date': p.get('finish_date', ''),
-                        'items_count': len(p.get('items', [])),
-                    })
-            except Exception as pe:
-                result[f'promo_{status}_error'] = str(pe)
-        result['promotions'] = promos
+                item_req = ur.Request(f'{ML}/items/{p["external_id"]}?attributes=deal_ids', headers=h)
+                item_data = json.loads(ur.urlopen(item_req, timeout=6).read())
+                item_deal_ids = item_data.get('deal_ids', [])
+                deal_ids_all.extend(item_deal_ids)
+            except Exception:
+                pass
 
-        # ── Shipping programs (hardcoded ML knowledge) ────────────────────
-        result['shipping_programs'] = [
-            {
-                'id': 'full', 'icon': '🏭',
-                'name': 'Mercado Envios Full',
-                'badge': 'FULL',
-                'badge_color': '#00a650',
-                'description': 'Fulfillment completo — seu estoque fica no CD do ML, despacho automático em horas.',
-                'benefit': '+30–40% conversão, frete grátis automático, posicionamento premium no buscador.',
-                'cost': 'Taxa por unidade operada (R$ 5–25 conforme dimensões + categoria)',
-                'action': 'Ativar Full',
-                'action_url': 'https://www.mercadolivre.com.br/fulfillment',
-                'highlight': True,
-            },
-            {
-                'id': 'flex', 'icon': '⚡',
-                'name': 'Mercado Envios Flex',
-                'badge': 'FLEX',
-                'badge_color': '#3483fa',
-                'description': 'Você despacha no mesmo dia usando etiqueta do ML. Sem estoque terceirizado.',
-                'benefit': '+15% conversão, selo Flex, entrega mesmo dia em capitais.',
-                'cost': 'Grátis (você cobre o custo do envio)',
-                'action': 'Ativar Flex',
-                'action_url': 'https://www.mercadolivre.com.br/flex',
-                'highlight': False,
-            },
-            {
-                'id': 'free_shipping', 'icon': '🚚',
-                'name': 'Frete Grátis',
-                'badge': 'FRETE GRÁTIS',
-                'badge_color': '#00a650',
-                'description': 'Você absorve o custo do frete — ML destaca seu anúncio com o badge no resultado de busca.',
-                'benefit': '+12–18% conversão. Consumidores filtram por frete grátis em 60% das buscas.',
-                'cost': 'Custo do frete absorvido na sua margem',
-                'action': 'Ativar no anúncio',
-                'action_url': 'https://vendedores.mercadolivre.com.br/nota/como-oferecer-frete-gratis',
-                'highlight': False,
-            },
-        ]
+            product_data.append({
+                'id':           p['external_id'],
+                'title':        (p.get('title') or '')[:50],
+                'price':        p.get('price', 0),
+                'listing_type': lt,
+                'lt_label':     LT_LABEL.get(lt, lt),
+                'lt_fee':       LT_FEE.get(lt, 16),
+                'available_lt': avail_sorted,
+                'available_lt_labels': [LT_LABEL.get(x, x) for x in avail_sorted],
+                'best_upgrade': next((x for x in reversed(avail_sorted) if LT_ORDER.index(x) if x in LT_ORDER else 0 > LT_ORDER.index(lt) if lt in LT_ORDER else 0), None),
+                'deal_ids':     item_deal_ids,
+            })
 
-        # ── Ads programs ──────────────────────────────────────────────────
-        result['ads_programs'] = [
-            {
-                'id': 'product_ads', 'icon': '📢',
-                'name': 'Product Ads',
-                'subtitle': 'CPC — Aparecer no topo',
-                'description': 'Seus produtos aparecem destacados no topo da busca e em páginas de concorrentes. Você só paga por clique.',
-                'benefit': 'ROAS médio 3–5x no ML. Acelerár as primeiras vendas de um novo produto.',
-                'cost': 'CPC médio: R$ 0,80 – R$ 3,50 (varia por categoria)',
-                'cta': 'Criar campanha',
-                'cta_url': 'https://adsmanager.mercadolivre.com.br',
-                'color': '#3483fa',
-            },
-            {
-                'id': 'promoted_listings', 'icon': '⭐',
-                'name': 'Promoted Listings',
-                'subtitle': 'CPS — Pago por venda',
-                'description': 'Promova anúncios existentes. Cobrado apenas quando há conversão — sem risco de gastar sem retorno.',
-                'benefit': 'Ideal para produtos já vendendo. Aumenta posicionamento sem risco.',
-                'cost': 'Taxa sobre a venda (3–10% adicional na categoria)',
-                'cta': 'Ativar promoção',
-                'cta_url': 'https://adsmanager.mercadolivre.com.br',
-                'color': '#ff7733',
-            },
-            {
-                'id': 'brand_ads', 'icon': '🎨',
-                'name': 'Brand Ads',
-                'subtitle': 'CPM — Display e Branding',
-                'description': 'Banners na home, categoria e busca do ML. Fortalece a marca e gera remarketing.',
-                'benefit': 'Recall de marca +40%. Remarketing automático para visitantes do seu anuncio.',
-                'cost': 'CPM a partir de R$ 12. Mínimo R$ 500/mês.',
-                'cta': 'Contratar',
-                'cta_url': 'https://adsmanager.mercadolivre.com.br',
-                'color': '#9333ea',
-            },
-        ]
-
+        result['products'] = product_data
+        result['active_deals'] = list(set(deal_ids_all))
         return jsonify(result)
 
     except Exception as e:
