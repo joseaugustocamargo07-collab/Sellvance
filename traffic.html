@@ -630,10 +630,26 @@
     </div>
   {% endif %}
 
-  {# Placeholder cards for disconnected marketplaces #}
+  {# Placeholder cards: connected-no-data vs truly not connected #}
   {% for mp_item in all_mp %}
   {% set already_shown = strategy_scores | selectattr('platform', 'equalto', mp_item.id) | list %}
   {% if not already_shown %}
+  {% if mp_item.is_connected %}
+  {# Connected but awaiting first sync #}
+  <div class="card" style="border-top:4px solid var(--green);padding:20px;opacity:0.9">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+      <div>
+        <div style="font-size:17px;font-weight:700">{{ mp_item.icon }} {{ mp_item.name }}</div>
+        <div style="font-size:11px;color:var(--green);margin-top:3px">✓ Conectado{% if mp_item.account_name %} — {{ mp_item.account_name }}{% endif %}</div>
+      </div>
+      <div style="font-size:22px">⏳</div>
+    </div>
+    <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--text2);line-height:1.5">
+      Conta conectada. Os dados de análise aparecerão aqui após a primeira sincronização.
+    </div>
+  </div>
+  {% else %}
+  {# Not connected #}
   <div class="card" style="border-top:4px solid var(--border);padding:20px;opacity:0.55">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
       <div>
@@ -644,9 +660,10 @@
     </div>
     <div style="text-align:center;padding:16px 0 8px;color:var(--text2)">
       <div style="font-size:13px;margin-bottom:8px">🔗 Conecte {{ mp_item.name }} para ver análise</div>
-      <a href="/settings" style="color:var(--accent);font-size:12px">Configurar integração &rarr;</a>
+      <a href="/integrations" style="color:var(--accent);font-size:12px">Configurar integração &rarr;</a>
     </div>
   </div>
+  {% endif %}
   {% endif %}
   {% endfor %}
 
