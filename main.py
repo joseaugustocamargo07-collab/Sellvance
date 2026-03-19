@@ -213,15 +213,24 @@ def _marketplaces_inner():
         if health.get('score', 0) == 0 and health.get('metrics'):
             health['score'] = compute_health_score(health['metrics'])
 
-        # Build comp_analysis from real product data to match template fields
+        # Build comp_analysis using COMPETITOR prices for range, our price for position
         real_products = get_real_products_list(org_id, mp)
+        my_product['_live'] = True
         if real_products:
-            prices = [p['price'] for p in real_products if p.get('price') and p['price'] > 0]
-            max_p = max(prices) if prices else 0
-            min_p = min(prices) if prices else 0
-            avg_p = round(sum(prices) / len(prices), 2) if prices else 0
-            my_p = my_product.get('price_32l', avg_p)
-            if avg_p > 0:
+            my_product['_products'] = real_products
+
+        # Use competitor prices for meaningful range/avg
+        comp_prices = [c.get('price_32l', 0) for c in competitors if c.get('price_32l', 0) > 0]
+        my_p = my_product.get('price_32l', 0)
+
+        # Include our price in the range too
+        all_prices = comp_prices + ([my_p] if my_p > 0 else [])
+
+        if all_prices:
+            max_p = round(max(all_prices), 2)
+            min_p = round(min(all_prices), 2)
+            avg_p = round(sum(comp_prices) / len(comp_prices), 2) if comp_prices else my_p
+            if avg_p > 0 and my_p > 0:
                 if my_p > avg_p * 1.1:
                     pos = 'acima'
                 elif my_p < avg_p * 0.9:
@@ -231,17 +240,14 @@ def _marketplaces_inner():
             else:
                 pos = 'na_media'
             analysis = {
-                'max_price_32l': max_p * 1.15,
-                'min_price_32l': min_p * 0.85,
+                'max_price_32l': max_p,
+                'min_price_32l': min_p,
                 'avg_price_32l': avg_p,
                 'price_position': pos,
                 'opportunities': [],
             }
-            my_product['_products'] = real_products
-            my_product['_live'] = True
         else:
             analysis = analyze_competitive_position(mp)
-            my_product['_live'] = True
 
         # Real ads from synced data (template expects a LIST of ad dicts)
         ads = []  # Default: empty list = no ads
