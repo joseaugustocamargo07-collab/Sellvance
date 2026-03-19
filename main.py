@@ -142,9 +142,9 @@ def ranking():
 
     # Check which platforms are connected (have a valid access_token)
     integrations = db.execute(
-        "SELECT platform, status, updated_at FROM api_integrations WHERE org_id=?", (org_id,)
+        "SELECT platform, status FROM api_integrations WHERE org_id=?", (org_id,)
     ).fetchall()
-    connected_platforms = {r['platform'] for r in integrations if r['status'] in ('active','connected')}
+    connected_platforms = {r['platform'] for r in integrations if r['status'] == 'connected'}
     meta_connected   = 'meta_ads'   in connected_platforms
     google_connected = 'google_ads' in connected_platforms
     tiktok_connected = 'tiktok_ads' in connected_platforms
@@ -163,7 +163,7 @@ def ranking():
     try:
         from sync_base import get_last_sync_info
         info = get_last_sync_info(org_id, 'meta_ads')
-        last_sync_meta = info.get('last_sync') if info else None
+        last_sync_meta = info.get('finished_at') if info else None
     except Exception:
         pass
 
