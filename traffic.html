@@ -78,7 +78,7 @@
 
 <!-- TABS -->
 <div style="display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
-  {% for t, label in [('overview','📊 Visão Geral'),('competitors','🔍 Concorrentes'),('ads','🎯 Anúncios'),('returns','↩️ Devoluções'),('keywords','🔑 Palavras-chave')] %}
+  {% for t, label in [('overview','📊 Visão Geral'),('competitors','🔍 Concorrentes'),('ads','🎯 Anúncios'),('returns','↩️ Devoluções'),('keywords','🔑 Palavras-chave'),('strategy','🎯 Estratégia')] %}
   <a href="/marketplaces?mp={{ mp }}&tab={{ t }}{% if date_start %}&date_start={{ date_start }}{% endif %}{% if date_end %}&date_end={{ date_end }}{% endif %}"
      style="padding:9px 16px;font-size:13px;font-weight:600;border-radius:8px 8px 0 0;text-decoration:none;
        {% if tab == t %}background:var(--card);color:var(--accent);border:1px solid var(--border);border-bottom:1px solid var(--card)
@@ -549,6 +549,250 @@
   </table>
 </div>
 {% endif %}
+
+{% if tab == 'strategy' %}
+
+<div style="margin-bottom:20px;display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
+  <div>
+    <div class="sec-title" style="font-size:17px;margin-bottom:4px">🎯 Estratégia de Vendas</div>
+    <div style="font-size:12px;color:var(--text2)">Análise comparativa · Melhor alocação de anúncios · Otimização de bid</div>
+  </div>
+  <div style="font-size:11px;color:var(--text2);background:var(--surface2);padding:6px 12px;border-radius:8px">
+    📊 Scores calculados com base nos concorrentes sincronizados
+  </div>
+</div>
+
+{# ── Score Cards por Marketplace ────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px;margin-bottom:24px">
+
+  {% if strategy_scores %}
+    {% for s in strategy_scores %}
+    <div class="card" style="border-top:4px solid {{ s.rec_color }};padding:20px;position:relative">
+
+      {# Header #}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+        <div>
+          <div style="font-size:17px;font-weight:700">{{ s.icon }} {{ s.name }}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px">
+            {{ s.num_competitors }} concorrentes
+            {% if s.full_sellers > 0 %} · {{ s.full_sellers }} c/ fulfillment{% endif %}
+            {% if s.platinum_count > 0 %} · {{ s.platinum_count }} Platinum{% endif %}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:38px;font-weight:900;line-height:1;color:{{ s.rec_color }}">{{ s.score }}</div>
+          <div style="font-size:10px;color:var(--text2);font-weight:600">/ 100</div>
+        </div>
+      </div>
+
+      {# Dimension bars #}
+      {% for label, val, tip in [
+          ('Concorrência', s.competition_score, 'Menor pressão competitiva = melhor'),
+          ('Preço',        s.price_score,       'Sua posição vs média do mercado'),
+          ('Demanda',       s.demand_score,      'Atividade e volume do mercado'),
+          ('Margem est.',   s.margin_score,      'Após comissão estimada do marketplace')
+      ] %}
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--text2)">{{ label }}</span>
+          <span style="font-size:11px;font-weight:700;color:{% if val >= 70 %}var(--green){% elif val >= 45 %}var(--yellow){% else %}var(--red){% endif %}">{{ val }}%</span>
+        </div>
+        <div class="prog">
+          <div class="prog-fill" style="width:{{ val }}%;background:{% if val >= 70 %}var(--green){% elif val >= 45 %}var(--yellow){% else %}var(--red){% endif %};transition:width .6s ease"></div>
+        </div>
+      </div>
+      {% endfor %}
+
+      {# Footer #}
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span style="font-size:11px;color:var(--text2);flex:1">{{ s.reason }}</span>
+        <span style="background:{{ s.rec_color }}22;color:{{ s.rec_color }};font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap">
+          {{ s.rec_icon }} {{ s.recommendation }}
+        </span>
+      </div>
+
+      {% if s.avg_comp_price > 0 %}
+      <div style="margin-top:10px;font-size:11px;color:var(--text2);background:var(--surface2);padding:8px 10px;border-radius:6px">
+        Média concorrentes: <strong>R$ {{ "%.2f"|format(s.avg_comp_price) }}</strong>
+        {% if s.our_price > 0 %} &nbsp;·&nbsp; Seu preço médio: <strong>R$ {{ "%.2f"|format(s.our_price) }}</strong>{% endif %}
+        {% if s.market_sales > 0 %} &nbsp;·&nbsp; Vendas no mercado: <strong>{{ s.market_sales }}</strong>{% endif %}
+      </div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+
+  {% else %}
+    <div class="card" style="padding:32px;text-align:center;color:var(--text2)">
+      <div style="font-size:32px;margin-bottom:8px">🔄</div>
+      <div style="font-weight:600;margin-bottom:4px">Aguardando sincronização</div>
+      <div style="font-size:12px">Sincronize os concorrentes para calcular os scores</div>
+    </div>
+  {% endif %}
+
+  {# Placeholder cards for disconnected marketplaces #}
+  {% for mp_item in all_mp %}
+  {% set already_shown = strategy_scores | selectattr('platform', 'equalto', mp_item.id) | list %}
+  {% if not already_shown %}
+  <div class="card" style="border-top:4px solid var(--border);padding:20px;opacity:0.55">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+      <div>
+        <div style="font-size:17px;font-weight:700">{{ mp_item.icon }} {{ mp_item.name }}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">Não conectado</div>
+      </div>
+      <div style="font-size:32px;color:var(--text2);font-weight:900">—</div>
+    </div>
+    <div style="text-align:center;padding:16px 0 8px;color:var(--text2)">
+      <div style="font-size:13px;margin-bottom:8px">🔗 Conecte {{ mp_item.name }} para ver análise</div>
+      <a href="/settings" style="color:var(--accent);font-size:12px">Configurar integração &rarr;</a>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+
+</div>
+
+{# ── Best Allocation Banner ────────────────────────────────────────────── #}
+{% if strategy_scores %}
+{% set best = strategy_scores[0] %}
+<div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.07) 0%,rgba(16,185,129,.07) 100%);border:1px solid rgba(99,102,241,.25);padding:20px;margin-bottom:24px">
+  <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+    <div style="font-size:48px;flex-shrink:0">🏆</div>
+    <div style="flex:1;min-width:200px">
+      <div style="font-weight:800;font-size:15px;margin-bottom:4px">
+        Melhor canal agora: {{ best.icon }} {{ best.name }}
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:6px">
+        Score <strong style="color:{{ best.rec_color }}">{{ best.score }}/100</strong> &nbsp;·&nbsp; {{ best.reason }}
+      </div>
+      <div style="font-size:12px;color:var(--text2)">
+        Priorize anúncios e estoque aqui para maximizar conversão no período atual.
+      </div>
+    </div>
+    {% if best.score >= 68 %}
+    <div style="background:{{ best.rec_color }}22;border:1px solid {{ best.rec_color }}44;border-radius:12px;padding:12px 20px;text-align:center;flex-shrink:0">
+      <div style="font-size:22px;font-weight:900;color:{{ best.rec_color }}">{{ best.recommendation }}</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px">recomendação</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Re-bid Recommendations Table ────────────────────────────────────── #}
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:24px">
+  <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div>
+      <div class="sec-title" style="margin:0">💡 Recomendações de Re-bid &mdash; {{ mp | replace('_', ' ') | title }}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">Otimize tipo de anúncio por produto para maximizar visibilidade e conversão</div>
+    </div>
+    <span style="font-size:11px;color:var(--text2);background:var(--surface2);padding:5px 10px;border-radius:6px">
+      {{ rebid_recs | length }} produto(s) analisado(s)
+    </span>
+  </div>
+
+  {% if rebid_recs %}
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th style="width:35%">Produto</th>
+        <th>Tipo Atual</th>
+        <th>Recomendado</th>
+        <th>Motivo</th>
+        <th style="text-align:right">Ganho Est./mês</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for rec in rebid_recs %}
+    {% if not rec.error %}
+    <tr style="{% if rec.urgency == 'high' and rec.is_change %}background:rgba(99,102,241,.03){% endif %}">
+      <td>
+        <div style="font-weight:600;font-size:13px">{{ rec.title }}{% if rec.title|length == 45 %}...{% endif %}</div>
+        <div style="font-size:11px;color:var(--text2)">
+          R$ {{ "%.2f"|format(rec.price) }}
+          {% if rec.sold_qty > 0 %} &nbsp;·&nbsp; {{ rec.sold_qty }} vendas{% endif %}
+          {% if rec.stock_qty > 0 %} &nbsp;·&nbsp; {{ rec.stock_qty }} em estoque{% endif %}
+        </div>
+      </td>
+      <td>
+        <span style="background:rgba(107,114,128,.15);color:var(--text2);font-size:11px;padding:3px 8px;border-radius:20px;font-weight:600">
+          {{ rec.current_type }}
+        </span>
+      </td>
+      <td>
+        {% if rec.is_change %}
+        <span style="background:rgba(16,185,129,.15);color:var(--green);font-size:11px;padding:3px 8px;border-radius:20px;font-weight:700">
+          {{ rec.rec_type }} &uarr;
+        </span>
+        {% else %}
+        <span style="background:rgba(107,114,128,.12);color:var(--text2);font-size:11px;padding:3px 8px;border-radius:20px">
+          {{ rec.rec_type }}
+        </span>
+        {% endif %}
+      </td>
+      <td style="font-size:12px;color:var(--text2);max-width:220px">
+        {% if rec.urgency == 'high' %}
+        <span style="color:var(--yellow);font-weight:700;margin-right:4px">&bull;</span>
+        {% endif %}
+        {{ rec.reason }}
+      </td>
+      <td style="text-align:right">
+        {% if rec.monthly_gain > 0 %}
+        <span style="color:var(--green);font-weight:700;font-size:14px">+R$ {{ "{:,.0f}".format(rec.monthly_gain) }}</span>
+        {% else %}
+        <span style="color:var(--text2);font-size:12px">&mdash;</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding:40px;text-align:center;color:var(--text2)">
+    <div style="font-size:28px;margin-bottom:8px">📋</div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:4px">Nenhum produto encontrado</div>
+    <div style="font-size:12px">Sincronize seus produtos para receber recomendações de bid</div>
+  </div>
+  {% endif %}
+
+  {# Total estimated gain #}
+  {% set total_gain = rebid_recs | selectattr('monthly_gain') | map(attribute='monthly_gain') | sum %}
+  {% if total_gain > 0 %}
+  <div style="padding:12px 20px;border-top:1px solid var(--border);background:rgba(16,185,129,.05);display:flex;align-items:center;justify-content:space-between">
+    <span style="font-size:12px;color:var(--text2)">Ganho potencial total ao implementar todas as recomendações</span>
+    <span style="color:var(--green);font-weight:800;font-size:16px">+R$ {{ "{:,.0f}".format(total_gain) }}/mês</span>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Dicas Estrategicas ────────────────────────────────────────────────── #}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+
+  <div class="card" style="padding:16px;border-left:3px solid var(--accent)">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">🛒 Anunciar com Fulfillment</div>
+    <div style="font-size:12px;color:var(--text2)">Produtos com fulfillment têm 2-3x mais visibilidade no resultado de busca e ganham o selo de entrega rápida — essencial para competir com lojistas grandes.</div>
+  </div>
+
+  <div class="card" style="padding:16px;border-left:3px solid var(--green)">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">💰 Precificação Dinâmica</div>
+    <div style="font-size:12px;color:var(--text2)">Monitore a média dos concorrentes diariamente. Ficar entre 5% abaixo e 5% acima da média maximiza conversão sem sacrificar margem.</div>
+  </div>
+
+  <div class="card" style="padding:16px;border-left:3px solid var(--yellow)">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">📈 Upgrade de Listing</div>
+    <div style="font-size:12px;color:var(--text2)">Produtos com mais de 50 vendas/mês em anúncios Grátis ou Bronze deixam receita na mesa. Upgrade para Ouro geralmente tem ROI positivo em 30 dias.</div>
+  </div>
+
+  <div class="card" style="padding:16px;border-left:3px solid #a855f7">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">📊 Diversificação</div>
+    <div style="font-size:12px;color:var(--text2)">Não concentre todos os anúncios em um marketplace. Conecte Amazon e TikTok Shop para comparar demanda, fees e concorrência por canal.</div>
+  </div>
+
+</div>
+
+{% endif %}
+
 
 <!-- MODAL IA SUGGESTIONS -->
 <div id="modal-ai" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center">
