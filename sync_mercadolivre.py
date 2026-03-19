@@ -427,7 +427,7 @@ def _sync_competitors(org_id, token, user_id):
         our_seller_id = str(user_id)
         seen_sellers = set()
         competitor_data = []  # List of {seller_id, price, item_id, fulfillment, sponsored}
-        headers = _auth(token)
+        headers = _auth_headers(token)
 
         item_ids = [dict(r)['external_id'] for r in rows if dict(r).get('external_id')]
         item_ids_set = set(item_ids)
