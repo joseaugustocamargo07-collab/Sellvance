@@ -680,284 +680,349 @@
 {% endif %}
 
 
-{# ── O que este marketplace oferece ─────────────────────────────────── #}
+{# ══════════════════════════════════════════════════════════════
+   VEREDICTO DE ALOCACAO — dados reais + documentados
+   ══════════════════════════════════════════════════════════ #}
 {% if strategy_scores %}
 {% set best = strategy_scores[0] %}
 
-<div style="margin-bottom:20px;margin-top:4px">
-  <div class="sec-title" style="font-size:16px;margin-bottom:3px">
-    {{ best.icon }} O que o {{ best.name }} oferece para você
+{# ─── Header ─── #}
+<div style="margin-bottom:20px">
+  <div class="sec-title" style="font-size:17px;margin-bottom:4px">🎯 Veredicto: Onde seu Produto Tem Mais Retorno</div>
+  <div style="font-size:12px;color:var(--text2)">
+    Análise baseada em dados reais de concorrência, taxas de marketplace e posicionamento de preço
   </div>
-  <div style="font-size:12px;color:var(--text2)">Melhores oportunidades de bid, promoções ativas e publicidade que vale o investimento</div>
 </div>
 
-{# ============================================================
-   1. MELHOR RE-BID  (instant, server-side)
-   ============================================================ #}
-<div class="card" style="padding:0;overflow:hidden;margin-bottom:18px">
-  <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-    <span style="font-size:18px">📈</span>
-    <div>
-      <div style="font-weight:700;font-size:14px">Melhor Re-bid para seus Anúncios</div>
-      <div style="font-size:11px;color:var(--text2)">Progressião de tipo de anúncio no Mercado Livre — escolha o certo por produto</div>
-    </div>
-  </div>
+{# ─── Comparativo de Marketplaces ─── #}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:24px">
 
-  {# Listing type progression bar #}
-  <div style="padding:16px 20px 8px;overflow-x:auto">
-    <div style="display:flex;align-items:stretch;gap:0;min-width:560px">
-      {% set lt_list = [
-        ('free',         'Grátis',       '5%',  1, '#6b7280'),
-        ('bronze',       'Bronze',        '10%', 2, '#b45309'),
-        ('silver',       'Prata',         '12%', 3, '#64748b'),
-        ('gold',         'Ouro',          '16%', 4, '#d97706'),
-        ('gold_pro',     'Ouro Pro',      '16%', 5, '#f59e0b'),
-        ('gold_premium', 'Ouro Premium',  '16%', 5, '#6c63ff'),
-      ] %}
-      {% for lt_id, lt_name, lt_fee, lt_vis, lt_color in lt_list %}
-      {% set is_current = rebid_recs and rebid_recs[0].current_type == lt_name %}
-      {% set is_rec = rebid_recs and rebid_recs[0].rec_type == lt_name and rebid_recs[0].is_change %}
-      <div style="flex:1;text-align:center;padding:12px 6px;border-right:1px solid var(--border);position:relative;
-                  {% if is_rec %}background:rgba(99,102,241,.08);border-bottom:3px solid {{ lt_color }};{% endif %}
-                  {% if is_current %}background:rgba(255,255,255,.04);{% endif %}">
-        {% if is_rec %}
-        <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:{{ lt_color }};color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;white-space:nowrap">⬆ RECOMENDADO</div>
-        {% endif %}
-        {% if is_current %}
-        <div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--surface2);color:var(--text2);font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap">● ATUAL</div>
-        {% endif %}
-        <div style="font-size:20px;margin-bottom:4px">
-          {% if lt_vis == 1 %}🟤{% elif lt_vis == 2 %}🟧{% elif lt_vis == 3 %}⚪{% elif lt_vis == 4 %}🟡{% else %}🟣{% endif %}
-        </div>
-        <div style="font-size:12px;font-weight:700;color:{{ lt_color }}">{{ lt_name }}</div>
-        <div style="font-size:11px;color:var(--text2);margin-top:2px">{{ lt_fee }} comissão</div>
-        <div style="display:flex;justify-content:center;gap:2px;margin-top:5px">
-          {% for i in range(5) %}
-          <span style="display:inline-block;width:8px;height:4px;border-radius:2px;background:{% if i < lt_vis %}{{ lt_color }}{% else %}rgba(255,255,255,.1){% endif %}"></span>
-          {% endfor %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-
-  {# Top rebid actions #}
-  {% if rebid_recs %}
-  <div style="padding:12px 20px 16px">
-    <div style="font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Ações recomendadas por produto</div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-    {% for rec in rebid_recs[:4] %}
-    {% if not rec.error %}
-    <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:var(--surface2);border:1px solid {% if rec.is_change and rec.urgency == 'high' %}rgba(99,102,241,.3){% else %}var(--border){% endif %}">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ rec.title }}{% if rec.title|length >= 45 %}...{% endif %}</div>
-        <div style="font-size:11px;color:var(--text2);margin-top:2px">{{ rec.reason }}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        <span style="background:rgba(107,114,128,.2);color:var(--text2);font-size:10px;padding:3px 8px;border-radius:12px;font-weight:600;white-space:nowrap">{{ rec.current_type }}</span>
-        {% if rec.is_change %}
-        <span style="color:var(--text2);font-size:12px">→</span>
-        <span style="background:rgba(99,102,241,.2);color:#a5b4fc;font-size:10px;padding:3px 8px;border-radius:12px;font-weight:700;white-space:nowrap">⬆ {{ rec.rec_type }}</span>
-        {% endif %}
-        {% if rec.monthly_gain > 0 %}
-        <span style="color:var(--green);font-weight:700;font-size:12px;white-space:nowrap">+R${{ "{:,.0f}".format(rec.monthly_gain) }}/mês</span>
-        {% endif %}
-      </div>
+  {# Connected marketplaces — real data #}
+  {% for s in strategy_scores %}
+  <div class="card" style="padding:0;overflow:hidden;border-top:4px solid {{ s.rec_color }};position:relative">
+    {% if loop.first %}
+    <div style="position:absolute;top:10px;right:10px;background:var(--green);color:#fff;font-size:9px;font-weight:900;padding:3px 8px;border-radius:8px;letter-spacing:.05em">
+      ⭐ MELHOR AGORA
     </div>
     {% endif %}
-    {% endfor %}
+    <div style="padding:16px 16px 12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="font-size:24px">{{ s.icon }}</span>
+        <div>
+          <div style="font-weight:700;font-size:14px">{{ s.name }}</div>
+          <div style="font-size:10px;color:var(--text2)">dados reais — conta conectada</div>
+        </div>
+        <div style="margin-left:auto;text-align:center">
+          <div style="font-size:30px;font-weight:900;color:{{ s.rec_color }};line-height:1">{{ s.score }}</div>
+          <div style="font-size:9px;color:var(--text2)">/100</div>
+        </div>
+      </div>
+
+      {# Key metrics grid #}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;color:var(--text2);margin-bottom:2px">Concorrência</div>
+          <div style="font-size:13px;font-weight:700;color:{% if s.competition_score >= 70 %}var(--green){% elif s.competition_score >= 45 %}var(--yellow){% else %}var(--red){% endif %}">
+            {{ s.num_competitors }} sellers
+          </div>
+          {% if s.platinum_count > 0 %}<div style="font-size:10px;color:var(--text2)">{{ s.platinum_count }} Platinum</div>{% endif %}
+          {% if s.full_sellers > 0 %}<div style="font-size:10px;color:var(--text2)">{{ s.full_sellers }} c/ Full</div>{% endif %}
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;color:var(--text2);margin-bottom:2px">Preço vs Mercado</div>
+          <div style="font-size:13px;font-weight:700;color:{% if comp_analysis.price_position == 'abaixo' %}var(--green){% elif comp_analysis.price_position == 'na_media' %}var(--yellow){% else %}var(--red){% endif %}">
+            {% if comp_analysis.price_position == 'abaixo' %}Abaixo{% elif comp_analysis.price_position == 'na_media' %}Na média{% else %}Acima{% endif %}
+          </div>
+          {% if comp_analysis.avg_price_32l > 0 %}<div style="font-size:10px;color:var(--text2)">média R$ {{ "%.2f"|format(comp_analysis.avg_price_32l) }}</div>{% endif %}
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;color:var(--text2);margin-bottom:2px">Taxa marketplace</div>
+          <div style="font-size:13px;font-weight:700;color:var(--yellow)">
+            {% if rebid_recs %}{{ rebid_recs[0].current_type }}{% else %}Ouro Especial{% endif %}
+          </div>
+          <div style="font-size:10px;color:var(--text2)">16% comissão</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;color:var(--text2);margin-bottom:2px">Tipo de Anúncio</div>
+          <div id="lt-label-{{ s.platform }}" style="font-size:13px;font-weight:700;color:var(--accent)">
+            {% if rebid_recs %}{{ rebid_recs[0].current_type }}{% else %}—{% endif %}
+          </div>
+          <div id="lt-upgrade-{{ s.platform }}" style="font-size:10px;color:var(--text2)">carregando...</div>
+        </div>
+      </div>
+
+      <div style="padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:11px;color:var(--text2)">{{ s.reason }}</span>
+        <span style="background:{{ s.rec_color }}22;color:{{ s.rec_color }};font-size:11px;font-weight:800;padding:4px 10px;border-radius:12px">
+          {{ s.rec_icon }} {{ s.recommendation }}
+        </span>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  {# Disconnected marketplaces — estimates + connect CTA #}
+  {% for mp_item in all_mp %}
+  {% set already = strategy_scores | selectattr('platform','equalto', mp_item.id) | list %}
+  {% if not already %}
+  {% set est_data = {
+    'amazon':      {'fee':15,'fee_note':'15% + FBA opcional','competition':'Alta (nacional)','score_est':62,'color':'#ff9900','note':'Maior base de clientes Prime. Taxa inferior ao ML na maioria das categorias.'},
+    'tiktok_shop': {'fee':5, 'fee_note':'5% (taxa promocional)','competition':'Baixa (mercado em crescimento)','score_est':55,'color':'#ff0050','note':'Taxa mais baixa do mercado. Demanda orgânica via vídeo/live. Ideal para produtos visuais.'},
+    'shopee':      {'fee':14,'fee_note':'14% + comissão variável','competition':'Média','score_est':58,'color':'#f05d23','note':'Alta trafego em categorias de eletrônicos e moda. Frete subsidiado pelo marketplace.'},
+  } %}
+  {% set est = est_data.get(mp_item.id, {'fee':15,'fee_note':'~15%','competition':'Desconhecida','score_est':50,'color':'#6b7280','note':''}) %}
+  <div class="card" style="padding:0;overflow:hidden;border-top:4px solid {{ est.color }};opacity:0.7">
+    <div style="padding:16px 16px 12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="font-size:24px">{{ mp_item.icon }}</span>
+        <div>
+          <div style="font-weight:700;font-size:14px">{{ mp_item.name }}</div>
+          <div style="font-size:10px;color:var(--yellow)">⚠ estimativa — não conectado</div>
+        </div>
+        <div style="margin-left:auto;text-align:center">
+          <div style="font-size:30px;font-weight:900;color:{{ est.color }};line-height:1">~{{ est.score_est }}</div>
+          <div style="font-size:9px;color:var(--text2)">/100</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;color:var(--text2);margin-bottom:2px">Concorrência</div>
+          <div style="font-size:12px;font-weight:600">{{ est.competition }}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div style="font-size:10px;color:var(--text2);margin-bottom:2px">Taxa</div>
+          <div style="font-size:12px;font-weight:600;color:{% if est.fee <= 7 %}var(--green){% elif est.fee <= 13 %}var(--yellow){% else %}var(--red){% endif %}">{{ est.fee_note }}</div>
+        </div>
+      </div>
+      {% if est.note %}<div style="font-size:11px;color:var(--text2);margin-bottom:12px;line-height:1.5">{{ est.note }}</div>{% endif %}
+      <a href="/settings" style="display:block;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;font-size:12px;font-weight:600;color:var(--accent);text-decoration:none">
+        🔗 Conectar {{ mp_item.name }} para dados reais
+      </a>
     </div>
   </div>
   {% endif %}
+  {% endfor %}
+
 </div>
 
-{# ============================================================
-   2. PROMOÇÕES DISPONÍVEIS  (async, loads after render)
-   ============================================================ #}
-<div class="card" style="padding:0;overflow:hidden;margin-bottom:18px">
-  <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+{# ─── Programas de Marketing — Mercado Livre ─── #}
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+  <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(255,230,0,.04);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <div style="display:flex;align-items:center;gap:10px">
-      <span style="font-size:18px">🏷️</span>
+      <span style="font-size:20px">🛒</span>
       <div>
-        <div style="font-weight:700;font-size:14px">Promoções Disponíveis na Sua Conta</div>
-        <div style="font-size:11px;color:var(--text2)">Candidatas e ativas — dados em tempo real via API Mercado Livre</div>
+        <div style="font-weight:700;font-size:14px">Programas da Central de Marketing — Mercado Livre</div>
+        <div style="font-size:11px;color:var(--text2)">Ative diretamente no painel do vendedor para acelerar suas vendas</div>
       </div>
     </div>
-    <button onclick="loadPromos(true)" id="promos-refresh-btn"
-      style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer">↻ Atualizar</button>
-  </div>
-  <div id="promos-content" style="padding:20px">
-    <div style="display:flex;align-items:center;gap:10px;color:var(--text2)">
-      <span style="display:inline-block;animation:spin .8s linear infinite;font-size:16px">&#9696;</span>
-      <span style="font-size:13px">Carregando promoções...</span>
-    </div>
+    <a href="https://www.mercadolivre.com.br/central-de-marketing" target="_blank"
+       style="font-size:11px;padding:6px 14px;border-radius:6px;border:1px solid rgba(255,230,0,.3);background:rgba(255,230,0,.08);color:#ffe600;font-weight:600;text-decoration:none">
+      Acessar Central de Marketing →
+    </a>
   </div>
 
-  {# Promo type legend #}
-  <div style="padding:10px 20px;border-top:1px solid var(--border);background:var(--surface2);display:flex;gap:16px;flex-wrap:wrap">
-    {% for badge, color, tip in [
-      ('Oferta do Dia', '#ff6900', 'Desconto destacado na home do ML por 24h'),
-      ('Relampago', '#e11d48', 'Flash sale curta — gera pico de demanda'),
-      ('Desconto', '#10b981', 'Promoção padrão com badge de preço'),
-      ('Desconto de Vitrine', '#6c63ff', 'Destaque na página da categoria'),
-    ] %}
-    <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)">
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:{{ color }}"></span>
-      <strong style="color:{{ color }}">{{ badge }}</strong> — {{ tip }}
-    </div>
-    {% endfor %}
-  </div>
-</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0">
 
-{# ============================================================
-   3. PUBLICIDADE QUE VALE A PENA  (server-side, instant)
-   ============================================================ #}
-<div class="card" style="padding:0;overflow:hidden;margin-bottom:4px">
-  <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-    <span style="font-size:18px">📢</span>
-    <div>
-      <div style="font-weight:700;font-size:14px">Publicidade que Vale Investir Agora</div>
-      <div style="font-size:11px;color:var(--text2)">
-        {% set total_gain = rebid_recs | map(attribute='monthly_gain') | select | sum if rebid_recs else 0 %}
-        Baseado no seu volume de vendas e perfil competitivo
-        {% if total_gain > 0 %} · Potencial identificado: <strong style="color:var(--green)">+R$ {{ "{:,.0f}".format(total_gain) }}/mês</strong>{% endif %}
-      </div>
-    </div>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0">
+    {# Oferta do Dia #}
+    {% set my_price = my.price_32l or 0 %}
+    {% set my_rating = my.rating or 0 %}
+    {% set avg_price = comp_analysis.avg_price_32l or 0 %}
+    {% set stock_ok = my.stock_32l is defined and my.stock_32l > 10 %}
+    {% set rating_ok = my_rating >= 4.0 %}
+    {% set eligible_deal = rating_ok and stock_ok %}
 
-    {# Product Ads #}
-    {% set has_volume = rebid_recs and rebid_recs | selectattr('sold_qty') | map(attribute='sold_qty') | sum > 20 %}
-    <div style="padding:18px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)">
+    <div style="padding:16px 18px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:22px">📢</span>
+        <span style="font-size:22px">🔥</span>
         <div>
-          <div style="font-weight:700;font-size:13px">Product Ads</div>
-          <div style="font-size:10px;font-weight:700;color:#3483fa">CPC — Aparecer no Topo</div>
+          <div style="font-weight:700;font-size:13px">Oferta do Dia</div>
+          <div style="font-size:10px;color:#ff6900;font-weight:700">MAIOR IMPACTO</div>
         </div>
-        {% if has_volume %}
-        <span style="margin-left:auto;background:rgba(16,185,129,.15);color:var(--green);font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px">⬆ RECOMENDADO</span>
-        {% endif %}
+        <span style="margin-left:auto;font-size:9px;font-weight:800;padding:2px 8px;border-radius:8px;
+          {% if eligible_deal %}background:rgba(16,185,129,.15);color:var(--green){% else %}background:rgba(245,158,11,.15);color:var(--yellow){% endif %}">
+          {% if eligible_deal %}✓ ELEGÍVEL{% else %}⚠ VERIFICAR{% endif %}
+        </span>
       </div>
       <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">
-        Seus produtos aparecem no topo da busca e nas páginas dos concorrentes. Paga apenas por clique.
+        Seu produto na <strong>home do Mercado Livre</strong> por 24h. Maior programa de visibilidade da plataforma.
       </div>
-      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">
-        <div style="font-size:11px;display:flex;gap:6px"><span style="color:var(--green)">✓</span> ROAS médio 3–5x no Mercado Livre</div>
-        <div style="font-size:11px;display:flex;gap:6px"><span style="color:var(--green)">✓</span> Ideal para acelerar novos produtos</div>
-        <div style="font-size:11px;display:flex;gap:6px"><span style="color:var(--green)">✓</span> CPC: R$ 0,80 – R$ 3,50 por categoria</div>
+      <div style="font-size:11px;margin-bottom:10px">
+        <div style="margin-bottom:4px;display:flex;gap:6px;align-items:flex-start">
+          <span style="color:var(--green);flex-shrink:0">✔</span>
+          <span style="color:var(--text2)">Impacto: <strong style="color:var(--green)">5–15x tráfego</strong> nas 24h</span>
+        </div>
+        <div style="margin-bottom:4px;display:flex;gap:6px;align-items:flex-start">
+          <span style="{% if eligible_deal %}color:var(--green){% else %}color:var(--yellow){% endif %};flex-shrink:0">✔</span>
+          <span style="color:var(--text2)">Requer: desconto mínimo 5%, avaliação 4★+
+            {% if rating_ok %}<strong style="color:var(--green)">({{ my_rating }}★ OK)</strong>{% else %}<strong style="color:var(--red)">({{ my_rating }}★ insuficiente)</strong>{% endif %}
+          </span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:flex-start">
+          <span style="color:var(--text2);flex-shrink:0">✔</span>
+          <span style="color:var(--text2)">Desconto sugerido para manter margem positiva:
+            {% if avg_price > 0 and my_price > 0 %}
+            <strong style="color:var(--accent)">{{ [((my_price - avg_price * 0.95) / my_price * 100)|int, 5]|max }}%</strong>
+            {% else %}mínimo 5%{% endif %}
+          </span>
+        </div>
       </div>
-      <a href="https://adsmanager.mercadolivre.com.br" target="_blank"
-         style="display:block;text-align:center;background:#3483fa;color:#fff;border-radius:8px;padding:8px;font-size:12px;font-weight:700;text-decoration:none">
-        Criar campanha →
+      <a href="https://www.mercadolivre.com.br/central-de-marketing/oferta-do-dia" target="_blank"
+         style="display:block;text-align:center;background:#ff690015;color:#ff6900;border:1px solid #ff690030;border-radius:8px;padding:7px;font-size:11px;font-weight:700;text-decoration:none">
+        Ativar Oferta do Dia →
       </a>
     </div>
 
-    {# Promoted Listings #}
-    <div style="padding:18px 20px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)">
+    {# Relampago #}
+    <div style="padding:16px 18px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:22px">⭐</span>
+        <span style="font-size:22px">⚡</span>
         <div>
-          <div style="font-weight:700;font-size:13px">Promoted Listings</div>
-          <div style="font-size:10px;font-weight:700;color:#ff7733">CPS — Pago só por Venda</div>
+          <div style="font-weight:700;font-size:13px">Relampângo</div>
+          <div style="font-size:10px;color:#e11d48;font-weight:700">URGÊNCIA DE COMPRA</div>
         </div>
+        <span style="margin-left:auto;font-size:9px;font-weight:800;padding:2px 8px;border-radius:8px;background:rgba(16,185,129,.15);color:var(--green)">✓ DISPONÍVEL</span>
       </div>
       <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">
-        Promove seus anúncios existentes. Cobrado apenas quando há conversão — sem risco de gastar sem retorno.
+        Flash sale de até 24h com cronômetro regressivo. Gera senso de urgência e aumenta conversão.
       </div>
-      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">
-        <div style="font-size:11px;display:flex;gap:6px"><span style="color:var(--green)">✓</span> Sem custo por clique sem conversão</div>
-        <div style="font-size:11px;display:flex;gap:6px"><span style="color:var(--green)">✓</span> Ideal para produtos já com histórico de vendas</div>
-        <div style="font-size:11px;display:flex;gap:6px"><span style="color:var(--yellow)">⚠</span> Taxa adicional: 3–10% sobre o valor da venda</div>
+      <div style="font-size:11px;margin-bottom:10px">
+        <div style="margin-bottom:4px;display:flex;gap:6px"><span style="color:var(--green)">✔</span><span style="color:var(--text2)">Impacto: <strong style="color:var(--green)">3–5x tráfego</strong> + cronômetro visual</span></div>
+        <div style="margin-bottom:4px;display:flex;gap:6px"><span style="color:var(--green)">✔</span><span style="color:var(--text2)">Requer: desconto mínimo 5% do preço cadastrado</span></div>
+        <div style="display:flex;gap:6px"><span style="color:var(--green)">✔</span><span style="color:var(--text2)">Duração: de 1h a 24h (você escolhe)</span></div>
       </div>
-      <a href="https://adsmanager.mercadolivre.com.br" target="_blank"
-         style="display:block;text-align:center;background:rgba(255,119,51,.15);color:#ff7733;border:1px solid rgba(255,119,51,.3);border-radius:8px;padding:8px;font-size:12px;font-weight:700;text-decoration:none">
-        Ativar Promoted Listings →
+      <a href="https://www.mercadolivre.com.br/central-de-marketing/relampago" target="_blank"
+         style="display:block;text-align:center;background:#e11d4815;color:#e11d48;border:1px solid #e11d4830;border-radius:8px;padding:7px;font-size:11px;font-weight:700;text-decoration:none">
+        Ativar Relampângo →
       </a>
     </div>
 
-    {# Frete Gratis #}
-    <div style="padding:18px 20px;border-bottom:1px solid var(--border)">
+    {# Desconto de Preco #}
+    <div style="padding:16px 18px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:22px">🚚</span>
+        <span style="font-size:22px">🏷️</span>
         <div>
-          <div style="font-weight:700;font-size:13px">Frete Grátis + Envios Full</div>
-          <div style="font-size:10px;font-weight:700;color:#00a650">CONVERTE MAIS — Sem custo de bid</div>
+          <div style="font-weight:700;font-size:13px">Desconto de Preço</div>
+          <div style="font-size:10px;color:#10b981;font-weight:700">MAIS FLEXIBLE</div>
         </div>
-        <span style="margin-left:auto;background:rgba(16,185,129,.15);color:var(--green);font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px">QUICK WIN</span>
+        <span style="margin-left:auto;font-size:9px;font-weight:800;padding:2px 8px;border-radius:8px;background:rgba(16,185,129,.15);color:var(--green)">✓ SEMPRE DISPONÍVEL</span>
       </div>
       <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">
-        60% dos compradores filtra por frete grátis. Envios Full adiciona o badge premium e aumenta ranking organicamente.
+        Badge <em>"X% OFF"</em> destacado no resultado de busca. Sem custo extra de marketplace além do desconto aplicado.
       </div>
-      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">
-        <div style="font-size:11px;display:flex;gap:6px"><span style="color:var(--green)">✓</span> Frete grátis: +12–18% conversão</div>
-        <div style="font-size:11px;display:flex;gap:6px"><span style="color:var(--green)">✓</span> Envios Full: +30–40% conversão + ranking</div>
-        <div style="font-size:11px;display:flex;gap:6px"><span style="color:var(--green)">✓</span> Sem custo de CPC — melhora orgânico</div>
+      <div style="font-size:11px;margin-bottom:10px">
+        <div style="margin-bottom:4px;display:flex;gap:6px"><span style="color:var(--green)">✔</span><span style="color:var(--text2)">Impacto: <strong style="color:var(--green)">+20–40% CTR</strong> no resultado de busca</span></div>
+        <div style="margin-bottom:4px;display:flex;gap:6px"><span style="color:var(--green)">✔</span><span style="color:var(--text2)">Sem pré-requisito — aplica em qualquer produto ativo</span></div>
+        <div style="display:flex;gap:6px"><span style="color:var(--green)">✔</span><span style="color:var(--text2)">Duração personalizável, sem prazo máximo</span></div>
+      </div>
+      <a href="https://www.mercadolivre.com.br/central-de-marketing/desconto" target="_blank"
+         style="display:block;text-align:center;background:#10b98115;color:var(--green);border:1px solid #10b98130;border-radius:8px;padding:7px;font-size:11px;font-weight:700;text-decoration:none">
+        Criar Desconto →
+      </a>
+    </div>
+
+    {# Envios Full #}
+    <div style="padding:16px 18px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:22px">🏭</span>
+        <div>
+          <div style="font-weight:700;font-size:13px">Envios Full</div>
+          <div style="font-size:10px;color:#00a650;font-weight:700">MAIOR CONVERSÃO</div>
+        </div>
+        <span style="margin-left:auto;font-size:9px;font-weight:800;padding:2px 8px;border-radius:8px;background:rgba(0,166,80,.15);color:#00a650">QUICK WIN</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">
+        Seu estoque no CD do ML. Despacho automático, frete grátis ao comprador e ranking premium no buscador.
+      </div>
+      <div style="font-size:11px;margin-bottom:10px">
+        <div style="margin-bottom:4px;display:flex;gap:6px"><span style="color:#00a650">✔</span><span style="color:var(--text2)">Impacto: <strong style="color:#00a650">+30–40% conversão</strong> + selo Full</span></div>
+        <div style="margin-bottom:4px;display:flex;gap:6px"><span style="color:#00a650">✔</span><span style="color:var(--text2)">Boost orgânico no algoritmo de busca do ML</span></div>
+        <div style="display:flex;gap:6px"><span style="color:var(--yellow)">⚠</span><span style="color:var(--text2)">Taxa: R$ 5–25/un operada (por dimensão)</span></div>
       </div>
       <a href="https://www.mercadolivre.com.br/fulfillment" target="_blank"
-         style="display:block;text-align:center;background:rgba(0,166,80,.15);color:#00a650;border:1px solid rgba(0,166,80,.3);border-radius:8px;padding:8px;font-size:12px;font-weight:700;text-decoration:none">
-        Ver Envios Full →
+         style="display:block;text-align:center;background:#00a65015;color:#00a650;border:1px solid #00a65030;border-radius:8px;padding:7px;font-size:11px;font-weight:700;text-decoration:none">
+        Ativar Envios Full →
       </a>
     </div>
 
+  </div>
+
+  {# Listing type upgrade banner — loaded from API #}
+  <div id="lt-upgrade-banner" style="padding:14px 20px;border-top:1px solid var(--border);background:rgba(99,102,241,.05);display:none">
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px">📊 Upgrade de Tipo de Anúncio Disponível</div>
+    <div id="lt-upgrade-content" style="font-size:12px;color:var(--text2)"></div>
+  </div>
+
+</div>
+
+{# ─── Veredicto Final ─── #}
+<div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.09),rgba(16,185,129,.07));border:1px solid rgba(99,102,241,.25);padding:20px;margin-bottom:8px">
+  <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap">
+    <div style="font-size:52px;flex-shrink:0">🏆</div>
+    <div style="flex:1;min-width:220px">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-bottom:6px">Veredicto baseado em dados reais</div>
+      <div style="font-weight:800;font-size:16px;margin-bottom:8px">
+        {{ best.icon }} {{ best.name }} é seu melhor canal agora
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <span style="background:rgba(16,185,129,.12);color:var(--green);font-size:11px;padding:3px 10px;border-radius:12px">
+          Score {{ best.score }}/100
+        </span>
+        <span style="background:rgba(99,102,241,.12);color:#a5b4fc;font-size:11px;padding:3px 10px;border-radius:12px">
+          {{ best.num_competitors }} concorrentes mapeados
+        </span>
+        <span style="background:rgba(245,158,11,.12);color:var(--yellow);font-size:11px;padding:3px 10px;border-radius:12px">
+          Preço {% if comp_analysis.price_position == 'abaixo' %}abaixo{% elif comp_analysis.price_position == 'na_media' %}na média{% else %}acima{% endif %} do mercado
+        </span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.7">
+        <strong>Ações prioritárias:</strong><br>
+        {% if comp_analysis.price_position == 'acima' %}
+        1. Ajuste de preço: seu produto está acima da média (R$ {{ "%.2f"|format(comp_analysis.avg_price_32l) }}) — desconto de {{ [(((my.price_32l or 0) - comp_analysis.avg_price_32l) / (my.price_32l or 1) * 100)|int + 2, 5]|max }}% posiciona melhor para Oferta do Dia.<br>
+        {% endif %}
+        {% if rebid_recs and rebid_recs[0].is_change %}
+        {{ loop.index if loop else 2 }}. Re-bid: {{ rebid_recs[0].title[:30] }} → upgrade de {{ rebid_recs[0].current_type }} para {{ rebid_recs[0].rec_type }} (+R$ {{ "{:,}".format(rebid_recs[0].monthly_gain) }}/mês est.).<br>
+        {% endif %}
+        3. Ative Oferta do Dia ou Relâmpago na Central de Marketing para visibilidade imediata.
+        {% if best.full_sellers == 0 %}<br>4. Considere Envios Full — nenhum concorrente usa e você ganha vantagem orgânica.{% endif %}
+      </div>
+    </div>
   </div>
 </div>
 
 <script>
-async function loadPromos(force) {
-  var el = document.getElementById('promos-content');
-  if (!el) return;
-  el.innerHTML = '<div style="display:flex;align-items:center;gap:10px;color:var(--text2)"><span style="display:inline-block;animation:spin .8s linear infinite;font-size:16px">&#9696;</span><span style="font-size:13px">Buscando na API do Mercado Livre...</span></div>';
+// Load real listing-type upgrade data from ML API
+(async function() {
   try {
-    var resp = await fetch('/api/marketplace-offers?mp={{ mp }}');
-    var d = await resp.json();
-    if (d.error) {
-      el.innerHTML = '<div style="color:var(--yellow);font-size:13px;padding:4px 0">⚠ ' + (d.error === 'no_token' ? 'Token do Mercado Livre não encontrado. Reconecte a conta.' : d.error) + '</div>';
-      return;
-    }
-    var promos = d.promotions || [];
-    if (promos.length === 0) {
-      el.innerHTML = '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
-        + '<div style="text-align:center;padding:8px 0">'
-        + '<div style="font-size:13px;color:var(--text2);margin-bottom:6px">Nenhuma promoção candidata ou ativa no momento.</div>'
-        + '<a href="https://www.mercadolivre.com.br/promotions" target="_blank" style="color:var(--accent);font-size:12px;font-weight:600">Criar promoção no Mercado Livre →</a>'
-        + '</div></div>';
-      return;
-    }
-    var typeColor = {'candidate':'#f59e0b','published':'#10b981','paused':'#6b7280'};
-    var typeLabel = {'candidate':'Candidata','published':'Ativa','paused':'Pausada'};
-    var promoTypeColor = {
-      'DEAL_OF_THE_DAY':'#ff6900','LIGHTNING':'#e11d48','DISCOUNT':'#10b981',
-      'showcase_discount':'#6c63ff','default':'#6b7280'
-    };
-    var promoTypeName = {
-      'DEAL_OF_THE_DAY':'Oferta do Dia','LIGHTNING':'Relampângo','DISCOUNT':'Desconto',
-      'showcase_discount':'Vitrine'
-    };
-    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">';
-    promos.forEach(function(p) {
-      var sc = typeColor[p.status] || '#6b7280';
-      var sl = typeLabel[p.status] || p.status;
-      var pt = p.type ? p.type.toUpperCase() : 'DEFAULT';
-      var pc = promoTypeColor[pt] || promoTypeColor[p.type] || promoTypeColor.default;
-      var pn = promoTypeName[p.type] || promoTypeName[pt] || p.name || p.type || 'Promoção';
-      html += '<div style="border:1px solid var(--border);border-radius:10px;padding:14px;border-left:3px solid ' + pc + '">';
-      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
-      html += '<span style="font-size:12px;font-weight:700;color:' + pc + '">' + pn + '</span>';
-      html += '<span style="background:' + sc + '22;color:' + sc + ';font-size:9px;font-weight:800;padding:2px 6px;border-radius:8px">' + sl + '</span>';
-      html += '</div>';
-      if (p.discount > 0) html += '<div style="font-size:26px;font-weight:900;color:' + pc + ';line-height:1">' + p.discount + '% <span style="font-size:12px;color:var(--text2)">OFF</span></div>';
-      if (p.items_count > 0) html += '<div style="font-size:11px;color:var(--text2);margin-top:4px">' + p.items_count + ' produto(s)</div>';
-      if (p.finish_date) html += '<div style="font-size:10px;color:var(--text2);margin-top:2px">Até ' + p.finish_date.substring(0,10) + '</div>';
-      html += '</div>';
+    var r = await fetch('/api/marketplace-offers?mp={{ mp }}');
+    var d = await r.json();
+    if (d.error || !d.products) return;
+
+    var upgrades = [];
+    d.products.forEach(function(p) {
+      var ORDER = ['free','bronze','silver','gold','gold_special','gold_pro','gold_premium'];
+      var curIdx = ORDER.indexOf(p.listing_type);
+      var bestAvail = null;
+      p.available_lt.forEach(function(lt) {
+        var idx = ORDER.indexOf(lt);
+        if (idx > curIdx) bestAvail = lt;
+      });
+      if (bestAvail) {
+        var LBL = {'gold_premium':'Diamante (Ouro Premium)','gold_pro':'Premium (Ouro Pro)',
+                   'gold_special':'Clássico','gold':'Ouro','silver':'Prata','bronze':'Bronze','free':'Grátis'};
+        upgrades.push(p.title.substring(0,40) + '…: ' + LBL[p.listing_type] + ' → <strong style="color:var(--green)">' + LBL[bestAvail] + '</strong>');
+      }
     });
-    html += '</div>';
-    el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = '<div style="color:var(--red);font-size:12px">Erro ao carregar: ' + e.message + '</div>';
-  }
-}
-loadPromos();
+
+    if (upgrades.length > 0) {
+      var banner = document.getElementById('lt-upgrade-banner');
+      var content = document.getElementById('lt-upgrade-content');
+      if (banner && content) {
+        content.innerHTML = upgrades.join('<br>');
+        banner.style.display = 'block';
+      }
+    }
+  } catch(e) {}
+})();
 </script>
 
 {% endif %}{# end strategy_scores #}
