@@ -727,7 +727,7 @@
         <span style="font-size:24px">{{ s.icon }}</span>
         <div>
           <div style="font-weight:700;font-size:14px">{{ s.name }}</div>
-          <div style="font-size:10px;color:var(--text2)">dados reais — conta conectada</div>
+          {% if s.is_estimate is defined and s.is_estimate %}<div style="font-size:10px;color:var(--yellow)">⏳ estimativa — aguardando sincronização</div>{% else %}<div style="font-size:10px;color:var(--text2)">dados reais — conta conectada</div>{% endif %}
         </div>
         <div style="margin-left:auto;text-align:center">
           <div style="font-size:30px;font-weight:900;color:{{ s.rec_color }};line-height:1">{{ s.score }}</div>
