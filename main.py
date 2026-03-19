@@ -393,6 +393,37 @@ def _marketplaces_inner():
         strategy_scores = []
         rebid_recs = []
 
+    # Always override comp_analysis with REAL DB prices (never demo data)
+    try:
+        _db2 = get_db()
+        _my_row = _db2.execute(
+            "SELECT AVG(price) as avg_p FROM mp_products WHERE org_id=? AND platform=? AND price > 0",
+            (org_id, mp)
+        ).fetchone()
+        _cp_row = _db2.execute(
+            "SELECT AVG(price) as avg_p, MIN(price) as min_p, MAX(price) as max_p FROM mp_competitors WHERE org_id=? AND platform=? AND price > 0",
+            (org_id, mp)
+        ).fetchone()
+        _db2.close()
+        _my_p = round(float(_my_row['avg_p'] or 0), 2) if _my_row and _my_row['avg_p'] else 0
+        _avg_p = round(float(_cp_row['avg_p'] or 0), 2) if _cp_row and _cp_row['avg_p'] else 0
+        _min_p = round(float(_cp_row['min_p'] or 0), 2) if _cp_row and _cp_row['min_p'] else 0
+        _max_p = round(float(_cp_row['max_p'] or 0), 2) if _cp_row and _cp_row['max_p'] else 0
+        if _my_p > 0:
+            _use_avg = _avg_p if _avg_p > 0 else _my_p
+            _pos = 'acima' if _my_p > _use_avg * 1.1 else 'abaixo' if _my_p < _use_avg * 0.9 else 'na_media'
+            analysis = {
+                'avg_price_32l': _use_avg,
+                'min_price_32l': _min_p,
+                'max_price_32l': _max_p,
+                'avg_price': _use_avg,
+                'my_price': _my_p,
+                'price_position': _pos,
+                'opportunities': analysis.get('opportunities', []) if isinstance(analysis, dict) else [],
+            }
+    except Exception as _e:
+        print(f"[comp_analysis override] {_e}")
+
     return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info, account_name=account_name,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
