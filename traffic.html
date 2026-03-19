@@ -770,7 +770,7 @@
     'tiktok_shop': {'fee':5, 'fee_note':'5% (taxa promocional)','competition':'Baixa (mercado em crescimento)','score_est':55,'color':'#ff0050','note':'Taxa mais baixa do mercado. Demanda orgânica via vídeo/live. Ideal para produtos visuais.'},
     'shopee':      {'fee':14,'fee_note':'14% + comissão variável','competition':'Média','score_est':58,'color':'#f05d23','note':'Alta trafego em categorias de eletrônicos e moda. Frete subsidiado pelo marketplace.'},
   } %}
-  {% set est = est_data.get(mp_item.id, {'fee':15,'fee_note':'~15%','competition':'Desconhecida','score_est':50,'color':'#6b7280','note':''}) %}
+  {% set est = est_data[mp_item.id] if mp_item.id in est_data else {'fee':15,'fee_note':'~15%','competition':'Desconhecida','score_est':50,'color':'#6b7280','note':''} %}
   <div class="card" style="padding:0;overflow:hidden;border-top:4px solid {{ est.color }};opacity:0.7">
     <div style="padding:16px 16px 12px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
@@ -980,7 +980,7 @@
         1. Ajuste de preço: seu produto está acima da média (R$ {{ "%.2f"|format(comp_analysis.avg_price_32l) }}) — desconto de {{ [(((my.price_32l or 0) - comp_analysis.avg_price_32l) / (my.price_32l or 1) * 100)|int + 2, 5]|max }}% posiciona melhor para Oferta do Dia.<br>
         {% endif %}
         {% if rebid_recs and rebid_recs[0].is_change %}
-        {{ loop.index if loop else 2 }}. Re-bid: {{ rebid_recs[0].title[:30] }} → upgrade de {{ rebid_recs[0].current_type }} para {{ rebid_recs[0].rec_type }} (+R$ {{ "{:,}".format(rebid_recs[0].monthly_gain) }}/mês est.).<br>
+        2. Re-bid: {{ rebid_recs[0].title[:30] }} → upgrade de {{ rebid_recs[0].current_type }} para {{ rebid_recs[0].rec_type }} (+R$ {{ "{:,}".format(rebid_recs[0].monthly_gain) }}/mês est.).<br>
         {% endif %}
         3. Ative Oferta do Dia ou Relâmpago na Central de Marketing para visibilidade imediata.
         {% if best.full_sellers == 0 %}<br>4. Considere Envios Full — nenhum concorrente usa e você ganha vantagem orgânica.{% endif %}
