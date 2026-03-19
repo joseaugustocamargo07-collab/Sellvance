@@ -642,6 +642,180 @@ def test_competitor_sync():
 
     return jsonify(result)
 
+
+@app.route('/api/marketplace-offers')
+@login_required
+def marketplace_offers():
+    """Return all offers/programs/promos for a marketplace (for strategy tab)."""
+    mp     = request.args.get('mp', 'mercado_livre')
+    org_id = session.get('org_id', 1)
+
+    if mp != 'mercado_livre':
+        return jsonify({'error': 'Platform not yet supported', 'platform': mp})
+
+    try:
+        import urllib.request as ur
+        from sync_base import get_valid_token
+
+        token = get_valid_token(org_id, 'mercado_livre')
+        if not token:
+            return jsonify({'error': 'no_token'})
+
+        ML = 'https://api.mercadolibre.com'
+        h  = {'Authorization': f'Bearer {token}'}
+        result = {}
+
+        # ── Seller identity ────────────────────────────────────────────────
+        me_req  = ur.Request(f'{ML}/users/me', headers=h)
+        me      = json.loads(ur.urlopen(me_req, timeout=10).read())
+        user_id = str(me.get('id', ''))
+        rep     = me.get('seller_reputation', {}) or {}
+        result['seller'] = {
+            'id':       user_id,
+            'nickname': me.get('nickname', ''),
+            'level':    rep.get('power_seller_status', '') or 'standard',
+            'completed': (rep.get('transactions', {}) or {}).get('completed', 0),
+        }
+
+        # ── Listing types (public endpoint) ───────────────────────────────
+        lt_req = ur.Request(f'{ML}/sites/MLB/listing_types')
+        lt_raw = json.loads(ur.urlopen(lt_req, timeout=10).read())
+        # Enrich with known fee data
+        FEE_MAP = {
+            'free':         {'fee': 5,  'label': 'Grátis',       'visibility': 1, 'tip': 'Para testar o mercado. Comissão mínima.'},
+            'bronze':       {'fee': 10, 'label': 'Bronze',        'visibility': 2, 'tip': 'Baixa visibilidade. Para produtos de nicho.'},
+            'silver':       {'fee': 12, 'label': 'Prata',         'visibility': 3, 'tip': 'Visão mediana. Boa opção de entrada.'},
+            'gold':         {'fee': 16, 'label': 'Ouro',          'visibility': 4, 'tip': 'Alta visibilidade. Padrão para produtos competitivos.'},
+            'gold_special': {'fee': 16, 'label': 'Ouro Especial', 'visibility': 4, 'tip': 'Destaque especial. Indicado para picos de venda.'},
+            'gold_pro':     {'fee': 16, 'label': 'Ouro Pro',      'visibility': 5, 'tip': 'Máxima exposição + integra Product Ads.'},
+            'gold_premium': {'fee': 16, 'label': 'Ouro Premium',  'visibility': 5, 'tip': 'Posição de destaque. Melhor ROI para alto giro.'},
+        }
+        listing_types = []
+        for lt in lt_raw:
+            lt_id = lt.get('id', '')
+            extra = FEE_MAP.get(lt_id, {})
+            listing_types.append({
+                'id':         lt_id,
+                'name':       extra.get('label', lt.get('name', lt_id)),
+                'fee':        extra.get('fee', 16),
+                'visibility': extra.get('visibility', 3),
+                'tip':        extra.get('tip', ''),
+            })
+        # Ensure order: free < bronze < silver < gold < gold_special < gold_pro < gold_premium
+        ORDER = ['free','bronze','silver','gold','gold_special','gold_pro','gold_premium']
+        listing_types.sort(key=lambda x: ORDER.index(x['id']) if x['id'] in ORDER else 99)
+        result['listing_types'] = listing_types
+
+        # ── Available promotions (candidates) ─────────────────────────────
+        promos = []
+        for status in ('candidate', 'published'):
+            try:
+                p_req  = ur.Request(
+                    f'{ML}/seller-promotions/users/{user_id}/promotions?status={status}&limit=30&offset=0',
+                    headers=h
+                )
+                p_data = json.loads(ur.urlopen(p_req, timeout=10).read())
+                items  = p_data if isinstance(p_data, list) else p_data.get('results', p_data.get('promotions', []))
+                for p in items:
+                    if not isinstance(p, dict):
+                        continue
+                    promos.append({
+                        'id':          p.get('id', ''),
+                        'type':        p.get('type', ''),
+                        'status':      status,
+                        'name':        p.get('name', p.get('type', 'Promoção')),
+                        'discount':    p.get('discount_rate', p.get('value', 0)),
+                        'start_date':  p.get('start_date', ''),
+                        'finish_date': p.get('finish_date', ''),
+                        'items_count': len(p.get('items', [])),
+                    })
+            except Exception as pe:
+                result[f'promo_{status}_error'] = str(pe)
+        result['promotions'] = promos
+
+        # ── Shipping programs (hardcoded ML knowledge) ────────────────────
+        result['shipping_programs'] = [
+            {
+                'id': 'full', 'icon': '🏭',
+                'name': 'Mercado Envios Full',
+                'badge': 'FULL',
+                'badge_color': '#00a650',
+                'description': 'Fulfillment completo — seu estoque fica no CD do ML, despacho automático em horas.',
+                'benefit': '+30–40% conversão, frete grátis automático, posicionamento premium no buscador.',
+                'cost': 'Taxa por unidade operada (R$ 5–25 conforme dimensões + categoria)',
+                'action': 'Ativar Full',
+                'action_url': 'https://www.mercadolivre.com.br/fulfillment',
+                'highlight': True,
+            },
+            {
+                'id': 'flex', 'icon': '⚡',
+                'name': 'Mercado Envios Flex',
+                'badge': 'FLEX',
+                'badge_color': '#3483fa',
+                'description': 'Você despacha no mesmo dia usando etiqueta do ML. Sem estoque terceirizado.',
+                'benefit': '+15% conversão, selo Flex, entrega mesmo dia em capitais.',
+                'cost': 'Grátis (você cobre o custo do envio)',
+                'action': 'Ativar Flex',
+                'action_url': 'https://www.mercadolivre.com.br/flex',
+                'highlight': False,
+            },
+            {
+                'id': 'free_shipping', 'icon': '🚚',
+                'name': 'Frete Grátis',
+                'badge': 'FRETE GRÁTIS',
+                'badge_color': '#00a650',
+                'description': 'Você absorve o custo do frete — ML destaca seu anúncio com o badge no resultado de busca.',
+                'benefit': '+12–18% conversão. Consumidores filtram por frete grátis em 60% das buscas.',
+                'cost': 'Custo do frete absorvido na sua margem',
+                'action': 'Ativar no anúncio',
+                'action_url': 'https://vendedores.mercadolivre.com.br/nota/como-oferecer-frete-gratis',
+                'highlight': False,
+            },
+        ]
+
+        # ── Ads programs ──────────────────────────────────────────────────
+        result['ads_programs'] = [
+            {
+                'id': 'product_ads', 'icon': '📢',
+                'name': 'Product Ads',
+                'subtitle': 'CPC — Aparecer no topo',
+                'description': 'Seus produtos aparecem destacados no topo da busca e em páginas de concorrentes. Você só paga por clique.',
+                'benefit': 'ROAS médio 3–5x no ML. Acelerár as primeiras vendas de um novo produto.',
+                'cost': 'CPC médio: R$ 0,80 – R$ 3,50 (varia por categoria)',
+                'cta': 'Criar campanha',
+                'cta_url': 'https://adsmanager.mercadolivre.com.br',
+                'color': '#3483fa',
+            },
+            {
+                'id': 'promoted_listings', 'icon': '⭐',
+                'name': 'Promoted Listings',
+                'subtitle': 'CPS — Pago por venda',
+                'description': 'Promova anúncios existentes. Cobrado apenas quando há conversão — sem risco de gastar sem retorno.',
+                'benefit': 'Ideal para produtos já vendendo. Aumenta posicionamento sem risco.',
+                'cost': 'Taxa sobre a venda (3–10% adicional na categoria)',
+                'cta': 'Ativar promoção',
+                'cta_url': 'https://adsmanager.mercadolivre.com.br',
+                'color': '#ff7733',
+            },
+            {
+                'id': 'brand_ads', 'icon': '🎨',
+                'name': 'Brand Ads',
+                'subtitle': 'CPM — Display e Branding',
+                'description': 'Banners na home, categoria e busca do ML. Fortalece a marca e gera remarketing.',
+                'benefit': 'Recall de marca +40%. Remarketing automático para visitantes do seu anuncio.',
+                'cost': 'CPM a partir de R$ 12. Mínimo R$ 500/mês.',
+                'cta': 'Contratar',
+                'cta_url': 'https://adsmanager.mercadolivre.com.br',
+                'color': '#9333ea',
+            },
+        ]
+
+        return jsonify(result)
+
+    except Exception as e:
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()})
+
 @app.route('/api/force-sync')
 def force_sync():
     """Force a full re-sync (bypasses staleness check)."""
