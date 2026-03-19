@@ -816,6 +816,67 @@ def marketplace_offers():
         import traceback
         return jsonify({'error': str(e), 'trace': traceback.format_exc()})
 
+
+@app.route('/api/debug/ml-promos')
+def debug_ml_promos():
+    """Probe all available ML promotion APIs for this seller."""
+    import urllib.request as ur
+    from sync_base import get_valid_token
+    org_id = 1
+    result = {}
+
+    token = get_valid_token(org_id, 'mercado_livre')
+    if not token:
+        return jsonify({'error': 'no_token'})
+
+    ML = 'https://api.mercadolibre.com'
+    h = {'Authorization': f'Bearer {token}'}
+
+    # Get user_id
+    me_req = ur.Request(f'{ML}/users/me', headers=h)
+    me = json.loads(ur.urlopen(me_req, timeout=10).read())
+    user_id = str(me.get('id', ''))
+    result['user_id'] = user_id
+    result['nickname'] = me.get('nickname', '')
+    result['api_tests'] = []
+
+    # Test multiple promo endpoints
+    endpoints = [
+        f'{ML}/seller-promotions/users/{user_id}/promotions?status=candidate&limit=20',
+        f'{ML}/seller-promotions/users/{user_id}/promotions?status=published&limit=20',
+        f'{ML}/users/{user_id}/classifieds_promotion_packs',
+        f'{ML}/promotions?seller_id={user_id}&status=candidate&limit=10',
+        f'{ML}/users/{user_id}/promotions?status=candidate',
+        f'{ML}/deals/users/{user_id}',
+    ]
+    for ep in endpoints:
+        test = {'url': ep.replace(user_id, '{uid}')}
+        try:
+            req_ep = ur.Request(ep, headers=h)
+            raw = ur.urlopen(req_ep, timeout=10).read()
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                test['type'] = 'list'
+                test['count'] = len(parsed)
+                test['sample'] = parsed[:1]
+            elif isinstance(parsed, dict):
+                test['type'] = 'dict'
+                test['keys'] = list(parsed.keys())[:10]
+                test['count'] = len(parsed.get('results', parsed.get('promotions', parsed.get('promotion_packs', []))))
+                results_key = next((k for k in ['results','promotions','promotion_packs','deals'] if k in parsed), None)
+                if results_key:
+                    test['sample'] = parsed[results_key][:1]
+                else:
+                    test['sample'] = {k: v for k, v in list(parsed.items())[:5]}
+            test['status'] = 'ok'
+        except Exception as e:
+            test['status'] = 'error'
+            test['error'] = str(e)[:120]
+        result['api_tests'].append(test)
+
+    return jsonify(result)
+
+
 @app.route('/api/force-sync')
 def force_sync():
     """Force a full re-sync (bypasses staleness check)."""
