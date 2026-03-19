@@ -817,6 +817,80 @@ def marketplace_offers():
         return jsonify({'error': str(e), 'trace': traceback.format_exc()})
 
 
+
+@app.route('/api/debug/ml-promos2')
+def debug_ml_promos2():
+    """Probe item-level promo data and additional ML endpoints."""
+    import urllib.request as ur
+    from sync_base import get_valid_token
+    from database import get_db
+    org_id = 1
+    result = {}
+
+    token = get_valid_token(org_id, 'mercado_livre')
+    if not token:
+        return jsonify({'error': 'no_token'})
+
+    ML = 'https://api.mercadolibre.com'
+    h = {'Authorization': f'Bearer {token}'}
+
+    me_req = ur.Request(f'{ML}/users/me', headers=h)
+    me = json.loads(ur.urlopen(me_req, timeout=10).read())
+    user_id = str(me.get('id', ''))
+
+    # Get our item IDs
+    db = get_db()
+    items = db.execute(
+        "SELECT external_id, title, price, listing_type FROM mp_products WHERE org_id=? AND platform='mercado_livre' AND status='active' LIMIT 5",
+        (org_id,)
+    ).fetchall()
+    db.close()
+    item_ids = [dict(r)['external_id'] for r in items if dict(r).get('external_id')]
+    result['item_ids'] = item_ids
+
+    result['api_tests'] = []
+
+    endpoints = []
+
+    # Per-item promo endpoints
+    if item_ids:
+        iid = item_ids[0]
+        endpoints += [
+            (f'{ML}/items/{iid}/promotions', 'item promotions'),
+            (f'{ML}/items/{iid}?attributes=id,promotions,deal_ids,listing_type_id,buying_mode', 'item deal_ids'),
+        ]
+
+    # Listing type details
+    endpoints += [
+        (f'{ML}/sites/MLB/listing_types/gold_pro', 'listing type gold_pro'),
+        (f'{ML}/sites/MLB/listing_types/gold_premium', 'listing type gold_premium'),
+        (f'{ML}/sites/MLB/listing_fees?price=200&listing_type_id=gold_pro&category_id=MLB1196', 'listing fees MLB1196 gold_pro'),
+        (f'{ML}/users/{user_id}/available_listing_types?category_id=MLB1196', 'available listing types'),
+        (f'{ML}/sites/MLB/promotions_types', 'promo types'),
+        (f'{ML}/seller-promotions/users/{user_id}', 'seller-promotions root'),
+        (f'https://api.mercadolibre.com/v2/promotions?user_id={user_id}&limit=5', 'v2 promotions'),
+    ]
+
+    for ep, label in endpoints:
+        test = {'label': label, 'url': ep.replace(user_id, '{uid}').replace(item_ids[0] if item_ids else 'NOID', '{iid}')}
+        try:
+            req_ep = ur.Request(ep, headers=h)
+            raw = ur.urlopen(req_ep, timeout=10).read()
+            parsed = json.loads(raw)
+            test['status'] = 'ok'
+            if isinstance(parsed, list):
+                test['type'] = 'list'; test['count'] = len(parsed)
+                test['sample'] = parsed[:2]
+            elif isinstance(parsed, dict):
+                test['type'] = 'dict'; test['keys'] = list(parsed.keys())[:12]
+                test['sample'] = {k: v for k, v in list(parsed.items())[:6]}
+        except Exception as e:
+            test['status'] = 'error'; test['error'] = str(e)[:150]
+        result['api_tests'].append(test)
+
+    return jsonify(result)
+
+
 @app.route('/api/debug/ml-promos')
 def debug_ml_promos():
     """Probe all available ML promotion APIs for this seller."""
