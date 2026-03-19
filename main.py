@@ -1217,6 +1217,16 @@ def _integrations_inner():
                           'last_sync':    conn.get('last_sync', '')})
     return render_template('integrations_hub.html', platforms=platforms)
 
+@app.route('/api/debug/integrations')
+@login_required
+def debug_integrations():
+    from database import get_db as _gdb
+    org_id = session.get('org_id', 1)
+    db = _gdb()
+    rows = db.execute('SELECT id, org_id, platform, status, account_id, account_name, last_sync FROM api_integrations WHERE org_id=?', (org_id,)).fetchall()
+    db.close()
+    return jsonify({'org_id': org_id, 'integrations': [dict(r) for r in rows]})
+
 @app.route('/integrations/connect/<platform>')
 @login_required
 def connect_integration(platform):
