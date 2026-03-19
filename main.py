@@ -730,7 +730,7 @@ def marketplace_offers():
                 'lt_fee':       LT_FEE.get(lt, 16),
                 'available_lt': avail_sorted,
                 'available_lt_labels': [LT_LABEL.get(x, x) for x in avail_sorted],
-                'best_upgrade': next((x for x in reversed(avail_sorted) if LT_ORDER.index(x) if x in LT_ORDER else 0 > LT_ORDER.index(lt) if lt in LT_ORDER else 0), None),
+                'best_upgrade': next((x for x in reversed(avail_sorted) if (LT_ORDER.index(x) if x in LT_ORDER else 0) > (LT_ORDER.index(lt) if lt in LT_ORDER else 0)), None),
                 'deal_ids':     item_deal_ids,
             })
 
