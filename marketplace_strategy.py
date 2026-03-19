@@ -126,6 +126,34 @@ def compute_marketplace_scores(org_id):
                 WHERE org_id=? AND platform=?
             """, (org_id, platform)).fetchone()
 
+            # If no competitor or product data, use platform estimates
+            my_check = db.execute(
+                "SELECT COUNT(*) FROM mp_products WHERE org_id=? AND platform=?",
+                (org_id, platform)
+            ).fetchone()[0]
+            if (not comp or comp['total'] == 0) and my_check == 0:
+                db.close()
+                meta = PLATFORM_META.get(platform, {'name': platform, 'icon': '🛍️', 'color': '#6b7280'})
+                est = PLATFORM_ESTIMATES.get(platform, {})
+                results.append({
+                    'platform': platform, 'name': meta['name'], 'icon': meta['icon'],
+                    'color': est.get('rec_color', meta['color']),
+                    'score': est.get('score', 0),
+                    'competition_score': est.get('competition_score', 0),
+                    'price_score': est.get('price_score', 0),
+                    'demand_score': est.get('demand_score', 0),
+                    'margin_score': est.get('margin_score', 0),
+                    'recommendation': est.get('recommendation', 'Aguardar'),
+                    'rec_color': est.get('rec_color', meta['color']),
+                    'rec_icon': est.get('rec_icon', '⏳'),
+                    'reason': est.get('reason', 'Conectado — aguardando dados'),
+                    'num_competitors': 0, 'avg_comp_price': 0, 'min_comp_price': 0,
+                    'max_comp_price': 0, 'our_price': 0, 'our_sales': 0, 'market_sales': 0,
+                    'total_products': 0, 'platinum_count': 0, 'gold_count': 0, 'full_sellers': 0,
+                    'is_estimate': True,
+                })
+                continue
+
             # ── Our product stats ──────────────────────────────────────────
             my = db.execute("""
                 SELECT
@@ -267,15 +295,23 @@ def compute_marketplace_scores(org_id):
 
         except Exception as e:
             meta = PLATFORM_META.get(platform, {'name': platform, 'icon': '🛍️', 'color': '#6b7280'})
+            est = PLATFORM_ESTIMATES.get(platform, {})
             results.append({
                 'platform': platform, 'name': meta['name'], 'icon': meta['icon'],
-                'color': '#6b7280', 'score': 0, 'error': str(e),
-                'recommendation': 'Sem dados', 'rec_color': '#6b7280', 'rec_icon': '⚪',
-                'reason': 'Aguardando sincronização',
-                'competition_score': 0, 'price_score': 0, 'demand_score': 0, 'margin_score': 0,
+                'color': est.get('rec_color', meta['color']),
+                'score': est.get('score', 0),
+                'competition_score': est.get('competition_score', 0),
+                'price_score': est.get('price_score', 0),
+                'demand_score': est.get('demand_score', 0),
+                'margin_score': est.get('margin_score', 0),
+                'recommendation': est.get('recommendation', 'Aguardar'),
+                'rec_color': est.get('rec_color', meta['color']),
+                'rec_icon': est.get('rec_icon', '⏳'),
+                'reason': est.get('reason', 'Conectado — aguardando sincronização'),
                 'num_competitors': 0, 'avg_comp_price': 0, 'min_comp_price': 0,
                 'max_comp_price': 0, 'our_price': 0, 'our_sales': 0, 'market_sales': 0,
                 'total_products': 0, 'platinum_count': 0, 'gold_count': 0, 'full_sellers': 0,
+                'is_estimate': True,
             })
 
     results.sort(key=lambda x: x['score'], reverse=True)
