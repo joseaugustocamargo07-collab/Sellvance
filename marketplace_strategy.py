@@ -32,16 +32,41 @@ PLATFORM_META = {
 }
 
 
+# Estimated scores for platforms with no real data yet
+PLATFORM_ESTIMATES = {
+    'amazon':      {'score': 62, 'competition_score': 55, 'price_score': 72, 'demand_score': 80, 'margin_score': 85,
+                    'num_competitors': 0, 'platinum_count': 0, 'full_sellers': 0,
+                    'avg_comp_price': 0, 'our_price': 0, 'market_sales': 0,
+                    'reason': 'Maior base de clientes · Taxa competitiva',
+                    'recommendation': 'Expandir', 'rec_icon': '📈', 'rec_color': '#ff9900',
+                    'is_estimate': True},
+    'tiktok_shop': {'score': 55, 'competition_score': 75, 'price_score': 60, 'demand_score': 65, 'margin_score': 95,
+                    'num_competitors': 0, 'platinum_count': 0, 'full_sellers': 0,
+                    'avg_comp_price': 0, 'our_price': 0, 'market_sales': 0,
+                    'reason': 'Taxa baixa (5%) · Mercado em crescimento',
+                    'recommendation': 'Testar', 'rec_icon': '🧪', 'rec_color': '#ff0050',
+                    'is_estimate': True},
+    'shopee':      {'score': 58, 'competition_score': 60, 'price_score': 65, 'demand_score': 70, 'margin_score': 86,
+                    'num_competitors': 0, 'platinum_count': 0, 'full_sellers': 0,
+                    'avg_comp_price': 0, 'our_price': 0, 'market_sales': 0,
+                    'reason': 'Alto tráfego · Frete subsidiado',
+                    'recommendation': 'Avaliar', 'rec_icon': '🔍', 'rec_color': '#f05d23',
+                    'is_estimate': True},
+}
+
+
 def compute_marketplace_scores(org_id):
     """
     Calcula score estratégico (0-100) por marketplace conectado.
+    Plataformas com dados reais: score calculado com dados de mp_products/mp_competitors.
+    Plataformas conectadas sem dados: score estimado baseado em benchmarks do setor.
     Retorna lista ordenada por score decrescente.
     """
     from database import get_db
 
     results = []
 
-    # Only score platforms that have competitor data (i.e., are synced)
+    # Platforms with real sync data (competitors or products in DB)
     try:
         db = get_db()
         active_platforms = [
@@ -63,6 +88,21 @@ def compute_marketplace_scores(org_id):
             if 'mercado_livre' not in active_platforms:
                 active_platforms.insert(0, 'mercado_livre')
         db.close()
+    except Exception:
+        pass
+
+    # Also include platforms that are connected (api_integrations) but not yet synced
+    try:
+        db = get_db()
+        connected_rows = db.execute(
+            "SELECT platform FROM api_integrations WHERE org_id=? AND status='connected'",
+            (org_id,)
+        ).fetchall()
+        db.close()
+        for row in connected_rows:
+            plat = row[0]
+            if plat not in active_platforms and plat in PLATFORM_ESTIMATES:
+                active_platforms.append(plat)
     except Exception:
         pass
 
