@@ -1244,7 +1244,11 @@ def connect_integration(platform):
                                color=cat.get('color', '#6c63ff'),
                                text_color=cat.get('text_color', '#fff'),
                                steps=cat.get('steps', []))
-    # Re-fetch all platforms so the grid doesn't disappear
+    # Amazon and Shopee get the friendly guided wizard
+    if platform in ('amazon', 'shopee'):
+        return redirect(f'/integrations/connect/{platform}/wizard?step=1')
+
+    # Other API key platforms: Re-fetch all platforms so the grid doesn't disappear
     from oauth_manager import get_all_integrations, is_app_configured as isc
     org_id = session.get('org_id', 1)
     connected_map = get_all_integrations(org_id)
@@ -1318,6 +1322,78 @@ def oauth_callback(platform):
                                account_name=account_name)
     except Exception as e:
         return render_template('settings.html', success=False, msg=f'Erro ao conectar: {str(e)}')
+
+@app.route('/integrations/connect/<platform>/wizard')
+@login_required
+def connect_wizard(platform):
+    """Guided wizard for Amazon and Shopee — user-friendly step-by-step."""
+    step = int(request.args.get('step', 1))
+    color = '#ff9900' if platform == 'amazon' else '#ee4d2d'
+    icon  = '📦' if platform == 'amazon' else '🧡'
+
+    if platform == 'amazon':
+        config = {
+            'platform_name': 'Amazon Seller',
+            'subtitle': 'Conecte sua loja Amazon Seller Central ao Sellvance em 2 passos',
+            'icon': icon, 'color': color,
+            'steps': ['O que você precisa', 'Conectar'],
+            'what_you_need': [
+                {'icon': '📧', 'label': 'E-mail da conta Amazon Seller',
+                 'desc': 'O e-mail que você usa para acessar o Seller Central.',
+                 'link': 'https://sellercentral.amazon.com.br'},
+                {'icon': '🪪', 'label': 'ID do Vendedor (Seller ID)',
+                 'desc': 'Um código como "A1B2C3D4E5F6G7". Encontre em: Seller Central → Configurações → Informações da conta → ID do Vendedor.',
+                 'link': 'https://sellercentral.amazon.com.br/sw/AccountInfo/MerchantToken/step/MerchantToken'},
+            ],
+            'fields': [
+                {'key': 'account_email', 'label': 'E-mail da conta Amazon Seller',
+                 'type': 'email', 'placeholder': 'Ex: vendedor@minhaloja.com.br',
+                 'required': True, 'help': 'Usado apenas para identificar sua conta no Sellvance.', 'help_link': None},
+                {'key': 'seller_id', 'label': 'ID do Vendedor (Seller ID)',
+                 'type': 'text', 'placeholder': 'Ex: A1B2C3D4E5F6G7',
+                 'required': True,
+                 'help': 'Encontre em: Configurações → Informações da conta → ID do Vendedor.',
+                 'help_link': 'https://sellercentral.amazon.com.br/sw/AccountInfo/MerchantToken/step/MerchantToken'},
+            ],
+            'hidden_fields': [
+                {'key': 'marketplace_id', 'value': 'A2Q3Y263D00KWC'},
+            ],
+        }
+
+    elif platform == 'shopee':
+        config = {
+            'platform_name': 'Shopee',
+            'subtitle': 'Conecte sua loja Shopee ao Sellvance em 2 passos simples',
+            'icon': icon, 'color': color,
+            'steps': ['O que você precisa', 'Conectar'],
+            'what_you_need': [
+                {'icon': '📧', 'label': 'E-mail da conta Shopee',
+                 'desc': 'O e-mail que você usa para acessar o Painel do Vendedor Shopee.',
+                 'link': 'https://seller.shopee.com.br'},
+                {'icon': '🪪', 'label': 'Shop ID',
+                 'desc': 'Um número de 6-9 dígitos. Encontre em: Painel Shopee → Minha Conta → Configurações da Loja → ID da Loja.',
+                 'link': 'https://seller.shopee.com.br/portal/shop/profile/shopinfo'},
+            ],
+            'fields': [
+                {'key': 'account_email', 'label': 'E-mail da conta Shopee',
+                 'type': 'email', 'placeholder': 'Ex: vendedor@minhaloja.com.br',
+                 'required': True, 'help': 'Usado apenas para identificar sua conta no Sellvance.', 'help_link': None},
+                {'key': 'shop_id', 'label': 'Shop ID',
+                 'type': 'text', 'placeholder': 'Ex: 123456789',
+                 'required': True,
+                 'help': 'Encontre em: Painel Shopee → Minha Conta → Configurações → ID da Loja.',
+                 'help_link': 'https://seller.shopee.com.br/portal/shop/profile/shopinfo'},
+            ],
+            'hidden_fields': [],
+        }
+    else:
+        return redirect('/integrations')
+
+    return render_template('connect_wizard.html',
+        current_step=step,
+        platform_key=platform,
+        **config)
+
 
 @app.route('/integrations/save-keys/<platform>', methods=['POST'])
 @login_required
