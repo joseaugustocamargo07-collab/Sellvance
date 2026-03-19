@@ -215,13 +215,20 @@ def _marketplaces_inner():
     tab = request.args.get('tab', 'overview')
     date_start = request.args.get('date_start', '')
     date_end = request.args.get('date_end', '')
-    all_mp = [
+    org_id = session.get('org_id', 1)
+    # Build all_mp with live connection status for each platform
+    _all_mp_raw = [
         {'id': 'mercado_livre', 'name': 'Mercado Livre', 'icon': '\U0001f6d2', 'color': '#ffe600'},
         {'id': 'amazon',        'name': 'Amazon',        'icon': '\U0001f4e6', 'color': '#ff9900'},
         {'id': 'tiktok_shop',   'name': 'TikTok Shop',   'icon': '\U0001f3b5', 'color': '#ff0050'},
     ]
+    all_mp = []
+    for _m in _all_mp_raw:
+        _integ = get_integration(org_id, _m['id'])
+        _m['is_connected'] = bool(_integ and _integ.get('status') == 'connected')
+        _m['account_name'] = _integ.get('account_name','') if _integ else ''
+        all_mp.append(_m)
     # Check if platform is connected and trigger sync if needed
-    org_id = session.get('org_id', 1)
     integration = get_integration(org_id, mp)
     is_connected = integration and integration.get('status') == 'connected'
     sync_info = None
