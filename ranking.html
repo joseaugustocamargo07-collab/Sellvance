@@ -6,6 +6,51 @@
 {% set plat_icons = {'meta':'📘','google':'🔴','tiktok':'🎵'} %}
 {% set plat_names = {'meta':'Meta Ads','google':'Google Ads','tiktok':'TikTok Ads'} %}
 
+<!-- DATA STATUS BANNER -->
+{% if not has_real_data %}
+<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+  <div style="display:flex;align-items:center;gap:10px">
+    <span style="font-size:20px">⚠️</span>
+    <div>
+      <div style="font-weight:700;font-size:13px;color:#fcd34d">Exibindo dados demo</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:2px">
+        {% if meta_connected %}
+          Meta Ads conectado — sincronize para carregar suas campanhas reais
+        {% else %}
+          Conecte Meta Ads, Google Ads ou TikTok Ads para ver seus dados reais
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px">
+    {% if meta_connected %}
+    <button id="btn-sync" class="btn btn-primary" onclick="syncNow()">
+      🔄 Sincronizar Meta Ads Agora
+    </button>
+    {% else %}
+    <a href="/integrations" class="btn btn-primary" style="text-decoration:none">
+      🔗 Conectar Plataformas
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+  <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
+    <span style="color:var(--green);font-weight:700">● Dados reais</span>
+    {% if meta_connected %}<span>· Meta Ads</span>{% endif %}
+    {% if google_connected %}<span>· Google Ads</span>{% endif %}
+    {% if tiktok_connected %}<span>· TikTok Ads</span>{% endif %}
+    {% if last_sync_meta %}<span style="color:var(--text3)">· Última sync: {{ last_sync_meta }}</span>{% endif %}
+  </div>
+  {% if meta_connected %}
+  <button id="btn-sync" class="btn btn-ghost btn-sm" onclick="syncNow()" style="font-size:11px">
+    🔄 Atualizar dados
+  </button>
+  {% endif %}
+</div>
+{% endif %}
+
 <!-- HEADER ACTIONS -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
   <div>
@@ -372,6 +417,25 @@ function showToast(msg, type) {
   t.setAttribute('style', (s[type]||s.warn) + ';position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999');
   t.textContent = msg;
   setTimeout(function(){ t.style.display='none'; }, 3000);
+}
+
+async function syncNow() {
+  const btn = document.getElementById('btn-sync');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sincronizando...'; }
+  try {
+    const res  = await fetch('/api/sync/meta_ads', { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      showToast('✅ ' + (data.records || 0) + ' campanhas sincronizadas!', 'success');
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast('⚠️ ' + (data.msg || 'Erro ao sincronizar'), 'warn');
+      if (btn) { btn.disabled = false; btn.textContent = '🔄 Sincronizar Meta Ads Agora'; }
+    }
+  } catch(e) {
+    showToast('Erro de conexão ao sincronizar', 'warn');
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Sincronizar Meta Ads Agora'; }
+  }
 }
 </script>
 {% endblock %}
