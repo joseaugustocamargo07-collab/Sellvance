@@ -291,7 +291,7 @@ def save_api_key_integration(org_id, platform, fields):
         (org_id, platform)
     ).fetchone()
 
-    account_id   = fields.get('seller_id') or fields.get('shop_id') or fields.get('api_key', '')[:8]
+    account_id   = fields.get('seller_id') or fields.get('shop_id') or fields.get('account_email') or fields.get('api_key', '')[:8]
     account_name = fields.get('account_name', '')
 
     if existing:
