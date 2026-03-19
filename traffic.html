@@ -134,15 +134,15 @@
         <div style="font-size:11px;color:var(--text3);width:60px;text-align:right">Máximo</div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)">
-        <span>R$ {{ comp_analysis.min_price_32l }}</span>
+        <span>R$ {{ comp_analysis.min_price_32l|round(2) }}</span>
         <span style="color:{{ mp_color }};font-weight:700">Você: R$ {{ my.price_32l }}</span>
-        <span>R$ {{ comp_analysis.max_price_32l }}</span>
+        <span>R$ {{ comp_analysis.max_price_32l|round(2) }}</span>
       </div>
       <div style="margin-top:8px;padding:6px 10px;border-radius:7px;font-size:12px;
         {% if comp_analysis.price_position == 'acima' %}background:rgba(239,68,68,.1);color:#fca5a5
         {% elif comp_analysis.price_position == 'abaixo' %}background:rgba(16,185,129,.1);color:var(--green)
         {% else %}background:rgba(108,99,255,.1);color:var(--accent){% endif %}">
-        Preço {{ comp_analysis.price_position }} da média (R$ {{ comp_analysis.avg_price_32l }})
+        Preço {% if comp_analysis.price_position == 'na_media' %}na média{% elif comp_analysis.price_position == 'acima' %}acima{% elif comp_analysis.price_position == 'abaixo' %}abaixo{% else %}{{ comp_analysis.price_position }}{% endif %} da média (R$ {{ comp_analysis.avg_price_32l|round(2) }})
       </div>
     </div>
 
