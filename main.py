@@ -136,9 +136,37 @@ def crm():
 @app.route('/ranking')
 @login_required
 def ranking():
-    db             = get_db()
-    org_id         = session.get('org_id', 1)
-    campaigns_raw  = db.execute('SELECT * FROM ad_campaigns WHERE org_id = ?', (org_id,)).fetchall()
+    import re as _re
+    db     = get_db()
+    org_id = session.get('org_id', 1)
+
+    # Check which platforms are connected (have a valid access_token)
+    integrations = db.execute(
+        "SELECT platform, status, updated_at FROM api_integrations WHERE org_id=?", (org_id,)
+    ).fetchall()
+    connected_platforms = {r['platform'] for r in integrations if r['status'] in ('active','connected')}
+    meta_connected   = 'meta_ads'   in connected_platforms
+    google_connected = 'google_ads' in connected_platforms
+    tiktok_connected = 'tiktok_ads' in connected_platforms
+
+    # Demo external_campaign_id pattern: meta_N, goog_N, tik_N (seeded at init)
+    _DEMO_RE = _re.compile(r'^(meta|goog|tik)_\d+$')
+
+    all_camps = db.execute('SELECT * FROM ad_campaigns WHERE org_id = ?', (org_id,)).fetchall()
+    real_camps = [c for c in all_camps if not _DEMO_RE.match(dict(c).get('external_campaign_id') or '')]
+    has_real_data = len(real_camps) > 0
+
+    campaigns_raw = real_camps if has_real_data else all_camps
+
+    # Last sync time for Meta
+    last_sync_meta = None
+    try:
+        from sync_base import get_last_sync_info
+        info = get_last_sync_info(org_id, 'meta_ads')
+        last_sync_meta = info.get('last_sync') if info else None
+    except Exception:
+        pass
+
     campaigns      = []
     revenue_wasted = 0
     for c in campaigns_raw:
@@ -154,7 +182,14 @@ def ranking():
             revenue_wasted += c_dict.get('spend', 0)
         campaigns.append({**c_dict, **m, **s, 'action': action})
     campaigns.sort(key=lambda x: x['score'], reverse=True)
-    return render_template('ranking.html', campaigns=campaigns, revenue_wasted=revenue_wasted)
+    return render_template('ranking.html',
+                           campaigns=campaigns,
+                           revenue_wasted=revenue_wasted,
+                           has_real_data=has_real_data,
+                           meta_connected=meta_connected,
+                           google_connected=google_connected,
+                           tiktok_connected=tiktok_connected,
+                           last_sync_meta=last_sync_meta)
 
 @app.route('/marketplaces')
 @login_required
