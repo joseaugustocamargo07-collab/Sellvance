@@ -216,18 +216,42 @@ def _marketplaces_inner():
     date_start = request.args.get('date_start', '')
     date_end = request.args.get('date_end', '')
     org_id = session.get('org_id', 1)
-    # Build all_mp with live connection status for each platform
-    _all_mp_raw = [
-        {'id': 'mercado_livre', 'name': 'Mercado Livre', 'icon': '\U0001f6d2', 'color': '#ffe600'},
-        {'id': 'amazon',        'name': 'Amazon',        'icon': '\U0001f4e6', 'color': '#ff9900'},
-        {'id': 'tiktok_shop',   'name': 'TikTok Shop',   'icon': '\U0001f3b5', 'color': '#ff0050'},
-    ]
+    # All known platforms catalog
+    _MP_CATALOG = {
+        'mercado_livre': {'name': 'Mercado Livre', 'icon': '\U0001f6d2', 'color': '#ffe600'},
+        'amazon':        {'name': 'Amazon',        'icon': '\U0001f4e6', 'color': '#ff9900'},
+        'tiktok_shop':   {'name': 'TikTok Shop',   'icon': '\U0001f3b5', 'color': '#ff0050'},
+        'shopee':        {'name': 'Shopee',         'icon': '\U0001f9e1', 'color': '#ee4d2d'},
+    }
+    # Default order (connected ones will always show, disconnected hidden unless already selected)
+    _default_order = ['mercado_livre', 'amazon', 'tiktok_shop', 'shopee']
+    # Get all integrations for this org
+    from oauth_manager import get_all_integrations as _get_all_integ
+    _all_integ = _get_all_integ(org_id)  # dict keyed by platform
     all_mp = []
-    for _m in _all_mp_raw:
-        _integ = get_integration(org_id, _m['id'])
-        _m['is_connected'] = bool(_integ and _integ.get('status') == 'connected')
-        _m['account_name'] = _integ.get('account_name','') if _integ else ''
-        all_mp.append(_m)
+    for _pid in _default_order:
+        _info = _MP_CATALOG.get(_pid, {})
+        _conn = _all_integ.get(_pid, {})
+        _is_connected = _conn.get('status') == 'connected'
+        # Include platform if: it's one of the main 3 OR it's connected
+        if _pid in ('mercado_livre', 'amazon', 'tiktok_shop') or _is_connected:
+            all_mp.append({
+                'id': _pid,
+                'name': _info['name'],
+                'icon': _info['icon'],
+                'color': _info['color'],
+                'is_connected': _is_connected,
+                'account_name': _conn.get('account_name', ''),
+            })
+    # Also add any connected platform not in default list
+    for _pid, _conn in _all_integ.items():
+        if _conn.get('status') == 'connected' and _pid not in _default_order:
+            _info = _MP_CATALOG.get(_pid, {'name': _pid.title(), 'icon': '\U0001f6cd', 'color': '#6b7280'})
+            all_mp.append({
+                'id': _pid, 'name': _info['name'], 'icon': _info['icon'],
+                'color': _info['color'], 'is_connected': True,
+                'account_name': _conn.get('account_name', ''),
+            })
     # Check if platform is connected and trigger sync if needed
     integration = get_integration(org_id, mp)
     is_connected = integration and integration.get('status') == 'connected'
