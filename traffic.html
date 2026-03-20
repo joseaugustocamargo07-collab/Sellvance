@@ -567,57 +567,106 @@
 
   {% if strategy_scores %}
     {% for s in strategy_scores %}
-    <div class="card" style="border-top:4px solid {{ s.rec_color }};padding:20px;position:relative">
+    {# -- Score label -- #}
+    {% if s.score >= 75 %}{% set _grade = 'Ótimo canal' %}{% set _grade_color = '#10b981' %}
+    {% elif s.score >= 55 %}{% set _grade = 'Bom potencial' %}{% set _grade_color = '#f59e0b' %}
+    {% else %}{% set _grade = 'Avaliar antes' %}{% set _grade_color = '#ef4444' %}{% endif %}
 
-      {# Header #}
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+    <div class="card" style="border-top:4px solid {{ _grade_color }};padding:20px;position:relative">
+
+      {# ── Header ── #}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
         <div>
-          <div style="font-size:17px;font-weight:700">{{ s.icon }} {{ s.name }}</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:3px">
-            {{ s.num_competitors }} concorrentes
-            {% if s.full_sellers > 0 %} · {{ s.full_sellers }} c/ fulfillment{% endif %}
-            {% if s.platinum_count > 0 %} · {{ s.platinum_count }} Platinum{% endif %}
+          <div style="font-size:16px;font-weight:700">{{ s.icon }} {{ s.name }}</div>
+          {% if s.num_competitors > 0 %}
+          <div style="font-size:11px;color:var(--text2);margin-top:3px">{{ s.num_competitors }} concorrente{{ 's' if s.num_competitors != 1 }} mapeado{{ 's' if s.num_competitors != 1 }}</div>
+          {% else %}
+          <div style="font-size:11px;color:var(--text2);margin-top:3px">Estimativa do setor</div>
+          {% endif %}
+        </div>
+        {# Big grade badge #}
+        <div style="text-align:center;background:{{ _grade_color }}18;border:1px solid {{ _grade_color }}40;border-radius:10px;padding:6px 12px">
+          <div style="font-size:26px;font-weight:900;line-height:1;color:{{ _grade_color }}">{{ s.score }}</div>
+          <div style="font-size:9px;font-weight:700;color:{{ _grade_color }};text-transform:uppercase;letter-spacing:.5px;margin-top:1px">{{ _grade }}</div>
+        </div>
+      </div>
+
+      {# ── 4 metric rows with status tags ── #}
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+
+        {# Concorrência #}
+        {% if s.competition_score >= 70 %}
+          {% set _cv = '🟢' %}{% set _cl = 'Baixa' %}{% set _cd = 'Fácil competir' %}{% set _cc = '#10b981' %}
+        {% elif s.competition_score >= 45 %}
+          {% set _cv = '🟡' %}{% set _cl = 'Média' %}{% set _cd = 'Concorrência moderada' %}{% set _cc = '#f59e0b' %}
+        {% else %}
+          {% set _cv = '🔴' %}{% set _cl = 'Alta' %}{% set _cd = 'Mercado saturado' %}{% set _cc = '#ef4444' %}
+        {% endif %}
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text1)">🏁 Concorrência</div>
+            <div style="font-size:10px;color:var(--text2);margin-top:1px">{{ _cd }}</div>
           </div>
+          <span style="background:{{ _cc }}18;color:{{ _cc }};font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap">{{ _cv }} {{ _cl }}</span>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:38px;font-weight:900;line-height:1;color:{{ s.rec_color }}">{{ s.score }}</div>
-          <div style="font-size:10px;color:var(--text2);font-weight:600">/ 100</div>
+
+        {# Preço #}
+        {% if s.price_score >= 70 %}
+          {% set _pv = '🟢' %}{% set _pl = 'Competitivo' %}{% set _pd = 'Seu preço está bom' %}{% set _pc = '#10b981' %}
+        {% elif s.price_score >= 45 %}
+          {% set _pv = '🟡' %}{% set _pl = 'Atenção' %}{% set _pd = 'Reveja seu preço' %}{% set _pc = '#f59e0b' %}
+        {% else %}
+          {% set _pv = '🔴' %}{% set _pl = 'Caro' %}{% set _pd = 'Acima do mercado' %}{% set _pc = '#ef4444' %}
+        {% endif %}
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text1)">💰 Posição de Preço</div>
+            <div style="font-size:10px;color:var(--text2);margin-top:1px">{{ _pd }}{% if s.avg_comp_price > 0 and s.our_price > 0 %} · Seu R$ {{ "%.0f"|format(s.our_price) }} vs média R$ {{ "%.0f"|format(s.avg_comp_price) }}{% endif %}</div>
+          </div>
+          <span style="background:{{ _pc }}18;color:{{ _pc }};font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap">{{ _pv }} {{ _pl }}</span>
         </div>
+
+        {# Demanda #}
+        {% if s.demand_score >= 70 %}
+          {% set _dv = '🟢' %}{% set _dl = 'Alta' %}{% set _dd = 'Mercado bem ativo' %}{% set _dc = '#10b981' %}
+        {% elif s.demand_score >= 45 %}
+          {% set _dv = '🟡' %}{% set _dl = 'Média' %}{% set _dd = 'Demanda moderada' %}{% set _dc = '#f59e0b' %}
+        {% else %}
+          {% set _dv = '🔴' %}{% set _dl = 'Baixa' %}{% set _dd = 'Pouca movimentação' %}{% set _dc = '#ef4444' %}
+        {% endif %}
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text1)">📈 Demanda</div>
+            <div style="font-size:10px;color:var(--text2);margin-top:1px">{{ _dd }}{% if s.market_sales > 0 %} · {{ s.market_sales }} vendas no mercado{% endif %}</div>
+          </div>
+          <span style="background:{{ _dc }}18;color:{{ _dc }};font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap">{{ _dv }} {{ _dl }}</span>
+        </div>
+
+        {# Margem #}
+        {% if s.margin_score >= 70 %}
+          {% set _mv = '🟢' %}{% set _ml = 'Boa' %}{% set _md = 'Comissão baixa' %}{% set _mc = '#10b981' %}
+        {% elif s.margin_score >= 45 %}
+          {% set _mv = '🟡' %}{% set _ml = 'Regular' %}{% set _md = 'Margem apertada' %}{% set _mc = '#f59e0b' %}
+        {% else %}
+          {% set _mv = '🔴' %}{% set _ml = 'Baixa' %}{% set _md = 'Custo alto do canal' %}{% set _mc = '#ef4444' %}
+        {% endif %}
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:8px 10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:var(--text1)">🏷️ Margem no Canal</div>
+            <div style="font-size:10px;color:var(--text2);margin-top:1px">{{ _md }}</div>
+          </div>
+          <span style="background:{{ _mc }}18;color:{{ _mc }};font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap">{{ _mv }} {{ _ml }}</span>
+        </div>
+
       </div>
 
-      {# Dimension bars #}
-      {% for label, val, tip in [
-          ('Concorrência', s.competition_score, 'Menor pressão competitiva = melhor'),
-          ('Preço',        s.price_score,       'Sua posição vs média do mercado'),
-          ('Demanda',       s.demand_score,      'Atividade e volume do mercado'),
-          ('Margem est.',   s.margin_score,      'Após comissão estimada do marketplace')
-      ] %}
-      <div style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="font-size:11px;color:var(--text2)">{{ label }}</span>
-          <span style="font-size:11px;font-weight:700;color:{% if val >= 70 %}var(--green){% elif val >= 45 %}var(--yellow){% else %}var(--red){% endif %}">{{ val }}%</span>
-        </div>
-        <div class="prog">
-          <div class="prog-fill" style="width:{{ val }}%;background:{% if val >= 70 %}var(--green){% elif val >= 45 %}var(--yellow){% else %}var(--red){% endif %};transition:width .6s ease"></div>
-        </div>
-      </div>
-      {% endfor %}
-
-      {# Footer #}
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
+      {# ── Footer action ── #}
+      <div style="padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
         <span style="font-size:11px;color:var(--text2);flex:1">{{ s.reason }}</span>
-        <span style="background:{{ s.rec_color }}22;color:{{ s.rec_color }};font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;white-space:nowrap">
+        <span style="background:{{ _grade_color }}22;color:{{ _grade_color }};font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;white-space:nowrap">
           {{ s.rec_icon }} {{ s.recommendation }}
         </span>
       </div>
-
-      {% if s.avg_comp_price > 0 %}
-      <div style="margin-top:10px;font-size:11px;color:var(--text2);background:var(--surface2);padding:8px 10px;border-radius:6px">
-        Média concorrentes: <strong>R$ {{ "%.2f"|format(s.avg_comp_price) }}</strong>
-        {% if s.our_price > 0 %} &nbsp;·&nbsp; Seu preço médio: <strong>R$ {{ "%.2f"|format(s.our_price) }}</strong>{% endif %}
-        {% if s.market_sales > 0 %} &nbsp;·&nbsp; Vendas no mercado: <strong>{{ s.market_sales }}</strong>{% endif %}
-      </div>
-      {% endif %}
 
     </div>
     {% endfor %}
