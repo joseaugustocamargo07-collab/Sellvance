@@ -428,14 +428,14 @@
     <div class="card-title">📊 Taxa de Devolução</div>
     <div class="kpi-val" style="color:{% if returns.get('return_rate', 0) < 4 %}var(--green){% elif returns.get('return_rate', 0) < 7 %}var(--yellow){% else %}var(--red){% endif %}">{{ returns.get('return_rate', 0) }}%</div>
     <div style="font-size:12px;color:var(--text2)">Benchmark: &lt; 5%
-      {% if returns.trend == 'down' %}<span style="color:var(--green)"> ↓ Melhorando</span>
-      {% elif returns.trend == 'up' %}<span style="color:var(--red)"> ↑ Piorando</span>
+      {% if returns.get('trend', '') == 'down' %}<span style="color:var(--green)"> ↓ Melhorando</span>
+      {% elif returns.get('trend', '') == 'up' %}<span style="color:var(--red)"> ↑ Piorando</span>
       {% else %}<span style="color:var(--text2)"> → Estável</span>{% endif %}
     </div>
   </div>
   <div class="card">
     <div class="card-title">📦 Total de Pedidos</div>
-    <div class="kpi-val">{{ returns.total_orders }}</div>
+    <div class="kpi-val">{{ returns.get('total_orders', 0) }}</div>
   </div>
   <div class="card">
     <div class="card-title">↩️ Total Devolvido</div>
@@ -443,15 +443,15 @@
   </div>
   <div class="card">
     <div class="card-title">💸 Receita Perdida</div>
-    <div class="kpi-val" style="color:var(--red)">R$ {{ "{:,.0f}".format(returns.refunded_revenue) }}</div>
-    <div style="font-size:12px;color:var(--text2)">{{ returns.avg_resolution_days }} dias médio de resolução</div>
+    <div class="kpi-val" style="color:var(--red)">R$ {{ "{:,.0f}".format(returns.get('refunded_revenue', 0)) }}</div>
+    <div style="font-size:12px;color:var(--text2)">{{ returns.get('avg_resolution_days', 0) }} dias médio de resolução</div>
   </div>
 </div>
 
 <div class="grid g2">
   <div class="card">
     <div class="sec-title">📋 Motivos de Devolução</div>
-    {% for r in returns.reasons %}
+    {% for r in returns.get('reasons', []) %}
     <div style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
         <span>{{ r.reason }}</span>
@@ -467,7 +467,7 @@
   <div class="card">
     <div class="sec-title">🤖 Plano de Ação para Reduzir Devoluções</div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      {% if returns.reasons[0].reason == 'Produto diferente do anunciado' %}
+      {% if returns.get('reasons', [])[0].reason == 'Produto diferente do anunciado' %}
       <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:12px">
         <div style="font-size:12px;font-weight:700;color:#fca5a5;margin-bottom:6px">⚠️ Principal causa: Expectativa vs Realidade</div>
         <div style="font-size:12px;color:var(--text2);line-height:1.7">→ Adicionar vídeo de 360° mostrando dimensões reais<br>→ Incluir foto com objeto de referência (garrafa, pessoa)<br>→ Revisar título para não criar expectativas incorretas</div>
@@ -482,7 +482,7 @@
       <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:12px">
         <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">📈 Meta: Reduzir para {{ [returns.get('return_rate', 0) - 1.5, 2.0]|max|round(1) }}%</div>
         <div style="font-size:12px;color:var(--text2)">
-          Isso representa economia de R$ {{ "{:,.0f}".format(returns.refunded_revenue * 0.30) }} por mês e melhora o score da conta.
+          Isso representa economia de R$ {{ "{:,.0f}".format(returns.get('refunded_revenue', 0) * 0.30) }} por mês e melhora o score da conta.
         </div>
       </div>
     </div>
