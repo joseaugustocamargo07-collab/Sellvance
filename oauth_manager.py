@@ -12,6 +12,29 @@ import urllib.parse
 import urllib.error
 from database import get_db
 
+# Criptografia de tokens em repouso
+def _get_fernet():
+    try:
+        from cryptography.fernet import Fernet
+        k = os.environ.get("FERNET_KEY", "")
+        if k: return Fernet(k.encode() if isinstance(k, str) else k)
+    except ImportError: pass
+    return None
+
+def _encrypt(txt):
+    f = _get_fernet()
+    if f and txt:
+        return f.encrypt(txt.encode()).decode()
+    return txt
+
+def _decrypt(txt):
+    f = _get_fernet()
+    if f and txt:
+        try: return f.decrypt(txt.encode()).decode()
+        except Exception: return txt
+    return txt
+
+
 # ── CONFIGURAÇÕES DOS APPS (você configura 1x no servidor) ────────────────────
 # Em produção, use variáveis de ambiente. Em dev, valores de fallback para teste.
 
