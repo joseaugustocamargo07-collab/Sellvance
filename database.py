@@ -128,13 +128,7 @@ def init_db():
     db.execute('INSERT INTO users (org_id, org_name, name, email, password_hash) VALUES (?, ?, ?, ?, ?)',
                (org_id, _org, _name, _mail, hash_password(_pwd)))
     print('[SELLVANCE] Admin: ' + _mail)
-    org_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
-    # ── Usuário admin ─────────────────────────────────────────
-    db.execute('''
-        INSERT INTO users (org_id, org_name, name, email, password_hash)
-        VALUES (?, 'Primeplas Coolers', 'José Augusto', 'admin@sellvance.com', ?)
-    ''', (org_id, hash_password('sellvance123')))
 
     # ── Contatos demo ─────────────────────────────────────────
     contacts_data = [
