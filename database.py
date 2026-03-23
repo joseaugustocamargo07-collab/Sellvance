@@ -1,12 +1,15 @@
 import sqlite3
 import os
 from auth import hash_password
+from db_pg import connect_pg, is_pg
 
 # Railway usa /data como volume persistente; localmente usa o diretório atual
 DATA_DIR = os.environ.get('RAILWAY_VOLUME_MOUNT_PATH', os.path.dirname(os.path.abspath(__file__)))
 DB_PATH  = os.path.join(DATA_DIR, 'sellvance.db')
 
 def get_db():
+    if is_pg():
+        return connect_pg()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA journal_mode=WAL')
@@ -14,7 +17,16 @@ def get_db():
 
 def init_db():
     print(f"[init_db] Checking DB_PATH={DB_PATH}, exists={os.path.exists(DB_PATH)}")
-    if os.path.exists(DB_PATH):
+    if is_pg():
+        # PostgreSQL: check if tables already exist
+        _chk = get_db()
+        _tables = [r[0] for r in _chk.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+        _chk.close()
+        if 'users' in _tables:
+            print(f"[init_db] PostgreSQL: tables already exist. Skipping init.")
+            return
+    elif os.path.exists(DB_PATH):
         print(f"[init_db] DB already exists, size={os.path.getsize(DB_PATH)} bytes. Skipping init.")
         return  # já inicializado
     print(f"[init_db] DB does not exist. Creating fresh database...")
@@ -235,7 +247,8 @@ def init_db():
 def migrate_db():
     """Adiciona tabelas novas sem recriar o banco."""
     db = get_db()
-    existing = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+    existing = [r[0] for r in db.execute(
+        "SELECT name FROM sqlite_master WHERE type=\'table\'").fetchall()]
     db.close()
     print(f"[migrate_db] Existing tables: {existing}")
 
@@ -510,6 +523,29 @@ def migrate_db():
     else:
         print('✅ Banco já migrado.')
     db.close()
+
+    # ── Performance indexes (idempotent) ──────────────────────────────────
+    _idx_db = get_db()
+    _indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_contacts_org    ON contacts(org_id)",
+        "CREATE INDEX IF NOT EXISTS idx_contacts_rfm    ON contacts(org_id, rfm_segment)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_org      ON orders(org_id)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_date     ON orders(ordered_at)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_org_mp   ON orders(org_id, marketplace)",
+        "CREATE INDEX IF NOT EXISTS idx_adcamp_org      ON ad_campaigns(org_id)",
+        "CREATE INDEX IF NOT EXISTS idx_camdaily_org    ON campaign_daily(org_id)",
+        "CREATE INDEX IF NOT EXISTS idx_mp_prod_org     ON mp_products(org_id, platform)",
+        "CREATE INDEX IF NOT EXISTS idx_mp_comp_org     ON mp_competitors(org_id, platform)",
+        "CREATE INDEX IF NOT EXISTS idx_api_integ_org   ON api_integrations(org_id)",
+    ]
+    for _idx_sql in _indexes:
+        try:
+            _idx_db.execute(_idx_sql)
+            _idx_db.commit()
+        except Exception as _e:
+            pass  # index already exists
+    _idx_db.close()
+    print("[migrate_db] Indexes ensured.")
 
     if 'mp_competitors' not in existing:
         db = get_db()
