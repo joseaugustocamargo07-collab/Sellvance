@@ -116,7 +116,18 @@ def init_db():
     ''')
 
     # ── Organização demo ──────────────────────────────────────
-    db.execute("INSERT INTO organizations (name, plan) VALUES ('Primeplas Coolers', 'growth')")
+    _org  = os.environ.get('ADMIN_ORG_NAME', 'Minha Empresa')
+    _mail = os.environ.get('ADMIN_EMAIL', 'admin@sellvance.com.br')
+    _name = os.environ.get('ADMIN_NAME', 'Administrador')
+    _pwd  = os.environ.get('ADMIN_PASSWORD', '')
+    if not _pwd:
+        import secrets as _s; _pwd = _s.token_urlsafe(16)
+        print('[SELLVANCE] Senha gerada: ' + _pwd + ' (salve agora)')
+    db.execute('INSERT INTO organizations (name, plan) VALUES (?, ?)', (_org, 'growth'))
+    org_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    db.execute('INSERT INTO users (org_id, org_name, name, email, password_hash) VALUES (?, ?, ?, ?, ?)',
+               (org_id, _org, _name, _mail, hash_password(_pwd)))
+    print('[SELLVANCE] Admin: ' + _mail)
     org_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
     # ── Usuário admin ─────────────────────────────────────────
