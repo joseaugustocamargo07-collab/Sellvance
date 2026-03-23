@@ -7,7 +7,24 @@ import os
 import json
 
 app = Flask(__name__, template_folder='.')
-app.secret_key = os.environ.get('SECRET_KEY', 'sellvance-secret-2026-change-in-prod')
+
+# SECRET_KEY obrigatorio via variavel de ambiente (sem fallback)
+_secret = os.environ.get('SECRET_KEY')
+if not _secret:
+    raise RuntimeError('[SELLVANCE] SECRET_KEY nao configurada. Defina a variavel de ambiente no Railway.')
+app.secret_key = _secret
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # sessao expira em 24h
+
+# Rate limiting — protege contra brute force
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    _limiter = Limiter(app=app, key_func=get_remote_address,
+                       default_limits=[], storage_uri='memory://')
+    _limiter_ok = True
+except ImportError:
+    _limiter_ok = False
+    _limiter = None
 
 _db_ready = False
 
@@ -89,18 +106,29 @@ def dashboard():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # Rate limit: 10 tentativas por minuto por IP
+    if _limiter_ok and request.method == 'POST':
+        try:
+            _limiter.limit('10 per minute')(lambda: None)()
+        except Exception:
+            return render_template('login.html',
+                error='Muitas tentativas. Aguarde 1 minuto e tente novamente.')
     if request.method == 'POST':
-        email    = request.form.get('email', '')
+        email    = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
-        db       = get_db()
-        user     = db.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+        if not email or not password:
+            return render_template('login.html', error='Preencha email e senha')
+        db   = get_db()
+        user = db.execute('SELECT * FROM users WHERE LOWER(email) = ?', (email,)).fetchone()
+        db.close()
         if user and verify_password(password, user['password_hash']):
+            session.permanent = True
             session['user_id']   = user['id']
             session['user_name'] = user['name']
             session['org_id']    = user['org_id']
             session['org_name']  = user['org_name']
             return redirect(url_for('dashboard'))
-        return render_template('login.html', error='Email ou senha inválidos')
+        return render_template('login.html', error='Email ou senha invalidos')
     return render_template('login.html')
 
 @app.route('/logout')
