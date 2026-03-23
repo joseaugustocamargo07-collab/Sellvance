@@ -245,7 +245,7 @@ def save_integration(org_id, platform, token_data, account_info=None):
     """Salva/atualiza os tokens de uma integração no banco."""
     db = get_db()
 
-    config = json.dumps({
+    _raw_config = json.dumps({
         'access_token':  token_data.get('access_token', ''),
         'refresh_token': token_data.get('refresh_token', ''),
         'token_type':    token_data.get('token_type', 'Bearer'),
@@ -255,6 +255,7 @@ def save_integration(org_id, platform, token_data, account_info=None):
         'user_id':       token_data.get('user_id', ''),
         'seller_id':     token_data.get('seller_id', account_info.get('seller_id', '') if account_info else ''),
     })
+    config = _encrypt(_raw_config)  # criptografado em repouso
 
     account_id   = (account_info or {}).get('id', token_data.get('user_id', ''))
     # Prioriza custom_label definido pelo usuario na tela pre-OAuth
@@ -284,7 +285,7 @@ def save_integration(org_id, platform, token_data, account_info=None):
 def save_api_key_integration(org_id, platform, fields):
     """Salva integração baseada em API Key/tokens manuais."""
     db = get_db()
-    config = json.dumps(fields)
+    config = _encrypt(json.dumps(fields))  # criptografado em repouso
 
     existing = db.execute(
         'SELECT id FROM api_integrations WHERE org_id=? AND platform=?',
@@ -322,7 +323,7 @@ def get_integration(org_id, platform):
         return None
     result = dict(row)
     try:
-        result['config'] = json.loads(result.get('config_json', '{}'))
+        result['config'] = json.loads(_decrypt(result.get('config_json', '{}')))
     except Exception:
         result['config'] = {}
     return result
@@ -340,7 +341,7 @@ def get_all_integrations(org_id):
     for row in rows:
         r = dict(row)
         try:
-            r['config'] = json.loads(r.get('config_json', '{}'))
+            r['config'] = json.loads(_decrypt(r.get('config_json', '{}')))
         except Exception:
             r['config'] = {}
         result[r['platform']] = r
