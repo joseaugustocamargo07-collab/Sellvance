@@ -4,3 +4,4 @@ openpyxl==3.1.2
 reportlab==4.1.0
 cryptography==42.0.8
 flask-limiter==3.7.0
+psycopg2-binary>=2.9.9
