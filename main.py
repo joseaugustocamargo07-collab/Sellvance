@@ -1285,8 +1285,8 @@ def connect_integration(platform):
                                color=cat.get('color', '#6c63ff'),
                                text_color=cat.get('text_color', '#fff'),
                                steps=cat.get('steps', []))
-    # Amazon and Shopee get the friendly guided wizard
-    if platform in ('amazon', 'shopee'):
+    # Amazon, Shopee and TikTok Shop use the friendly guided wizard
+    if platform in ('amazon', 'shopee', 'tiktok_shop'):
         return redirect(f'/integrations/connect/{platform}/wizard?step=1')
 
     # Other API key platforms: Re-fetch all platforms so the grid doesn't disappear
