@@ -136,22 +136,50 @@ def logout():
 def crm():
     db     = get_db()
     org_id = session.get('org_id', 1)
-    contacts        = db.execute('SELECT * FROM contacts WHERE org_id = ? ORDER BY ltv DESC', (org_id,)).fetchall()
-    total_contacts  = len(contacts)
-    total_ltv       = sum(c['ltv'] for c in contacts)
-    repeat_buyers   = sum(1 for c in contacts if c['total_orders'] > 1)
-    recompra_rate   = round(repeat_buyers / max(total_contacts, 1) * 100, 1)
-    rfm = {}
-    for c in contacts:
-        seg      = c['rfm_segment']
-        rfm[seg] = rfm.get(seg, 0) + 1
-    search      = request.args.get('search', '')
-    page        = request.args.get('page', 1, type=int)
-    per_page    = 50
+    # Aggregate stats via SQL (efficient — no full-table load)
+    stats = db.execute('''
+        SELECT COUNT(*) as total_contacts,
+               COALESCE(SUM(ltv), 0) as total_ltv,
+               SUM(CASE WHEN total_orders > 1 THEN 1 ELSE 0 END) as repeat_buyers
+        FROM contacts WHERE org_id = ?
+    ''', (org_id,)).fetchone()
+    total_contacts = stats['total_contacts'] or 0
+    total_ltv      = stats['total_ltv']      or 0
+    repeat_buyers  = stats['repeat_buyers']  or 0
+    recompra_rate  = round(repeat_buyers / max(total_contacts, 1) * 100, 1)
+    # RFM distribution
+    rfm_rows = db.execute('''
+        SELECT rfm_segment, COUNT(*) as cnt
+        FROM contacts WHERE org_id = ? GROUP BY rfm_segment
+    ''', (org_id,)).fetchall()
+    rfm = {r['rfm_segment']: r['cnt'] for r in rfm_rows}
+    search   = request.args.get('search', '').strip()
+    page     = request.args.get('page', 1, type=int)
+    per_page = 50
+    # With search: re-count filtered results
+    if search:
+        count_row = db.execute(
+            '''SELECT COUNT(*) as cnt FROM contacts
+               WHERE org_id=? AND (name LIKE ? OR email LIKE ? OR phone LIKE ?)''',
+            (org_id, f'%{search}%', f'%{search}%', f'%{search}%')).fetchone()
+        total_contacts = count_row['cnt'] or 0
     total_pages = max(1, (total_contacts + per_page - 1) // per_page)
     page        = max(1, min(page, total_pages))
-    start       = (page - 1) * per_page
-    paged       = contacts[start:start + per_page]
+    offset      = (page - 1) * per_page
+    # Fetch only the current page — SQL LIMIT/OFFSET
+    if search:
+        paged = db.execute(
+            '''SELECT * FROM contacts
+               WHERE org_id=? AND (name LIKE ? OR email LIKE ? OR phone LIKE ?)
+               ORDER BY ltv DESC LIMIT ? OFFSET ?''',
+            (org_id, f'%{search}%', f'%{search}%', f'%{search}%',
+             per_page, offset)).fetchall()
+    else:
+        paged = db.execute(
+            '''SELECT * FROM contacts WHERE org_id=?
+               ORDER BY ltv DESC LIMIT ? OFFSET ?''',
+            (org_id, per_page, offset)).fetchall()
+    db.close()
     return render_template('crm.html', contacts=paged, total_contacts=total_contacts,
                            total_ltv=total_ltv, recompra_rate=recompra_rate, rfm=rfm,
                            search=search, cur_page=page, total_pages=total_pages)
