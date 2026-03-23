@@ -1425,6 +1425,33 @@ def connect_wizard(platform):
             ],
             'hidden_fields': [],
         }
+
+    elif platform == 'tiktok_shop':
+        config = {
+            'platform_name': 'TikTok Shop',
+            'subtitle': 'Conecte sua loja TikTok Shop ao Sellvance em 2 passos simples',
+            'icon': '🎵', 'color': '#ff0050',
+            'steps': ['O que voce precisa', 'Conectar'],
+            'what_you_need': [
+                {'icon': '📧', 'label': 'E-mail da conta TikTok Shop',
+                 'desc': 'O e-mail que voce usa para entrar no TikTok Shop Seller Center.',
+                 'link': 'https://seller-br.tiktok.com'},
+                {'icon': '🔑', 'label': 'Senha da conta TikTok Shop',
+                 'desc': 'A mesma senha que voce usa para acessar o Seller Center.',
+                 'link': None},
+            ],
+            'fields': [
+                {'key': 'account_email', 'label': 'E-mail da conta TikTok Shop',
+                 'type': 'email', 'placeholder': 'Ex: vendedor@minhaloja.com.br',
+                 'required': True, 'help': 'O mesmo e-mail que voce usa no Seller Center.', 'help_link': None},
+                {'key': 'account_password', 'label': 'Senha da conta TikTok Shop',
+                 'type': 'password', 'placeholder': '                ',
+                 'required': True,
+                 'help': 'A mesma senha do Seller Center. Armazenada de forma segura.', 'help_link': None},
+            ],
+            'hidden_fields': [],
+        }
+
     else:
         return redirect('/integrations')
 
