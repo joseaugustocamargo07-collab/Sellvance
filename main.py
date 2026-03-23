@@ -104,15 +104,10 @@ def dashboard():
 
     return render_template('dashboard.html', kpis=kpis, roas=roas, cac=cac, channel_perf=channel_perf)
 
+@_limiter.limit('5 per minute')
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # Rate limit: 10 tentativas por minuto por IP
-    if _limiter_ok and request.method == 'POST':
-        try:
-            _limiter.limit('10 per minute')(lambda: None)()
-        except Exception:
-            return render_template('login.html',
-                error='Muitas tentativas. Aguarde 1 minuto e tente novamente.')
+    # Rate limit: 5 tentativas por minuto por IP (via @_limiter.limit)
     if request.method == 'POST':
         email    = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
