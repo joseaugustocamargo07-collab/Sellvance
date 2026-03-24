@@ -345,13 +345,25 @@ def _marketplaces_inner():
                 _h_row = _db_chk.execute(
                     "SELECT metrics_json FROM mp_account_health "
                     "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+                _hm = json.loads(_h_row['metrics_json'] if _h_row else '{}') or {}
+                _hm.setdefault('fulfillment_type', 'FBA')
+                _hm.setdefault('order_defect_rate', '0.2%')
+                _hm.setdefault('late_shipment_rate', '98%')
+                _hm.setdefault('cancel_rate', '0.5%')
+                _hm.setdefault('valid_tracking_rate', '97%')
+                _hm.setdefault('a_to_z_rate', '0.1%')
+                _hm['fulfillment_type'] = 'FBA'
                 if _h_row:
-                    _hm = json.loads(_h_row['metrics_json'] or '{}')
-                    _hm['fulfillment_type'] = 'FBA'
                     _db_chk.execute(
-                        "UPDATE mp_account_health SET metrics_json=? "
+                        "UPDATE mp_account_health SET metrics_json=?, score=? "
                         "WHERE org_id=? AND platform='amazon'",
-                        (json.dumps(_hm), org_id))
+                        (json.dumps(_hm), 92, org_id))
+                else:
+                    _db_chk.execute(
+                        "INSERT INTO mp_account_health "
+                        "(org_id,platform,score,level,metrics_json,alerts_json) "
+                        "VALUES (?,'amazon',92,'Good',?,'[]')",
+                        (org_id, json.dumps(_hm)))
                 _db_chk.commit()
                 print('[auto-seed] 4 Amazon FBA products seeded')
             _db_chk.close()
