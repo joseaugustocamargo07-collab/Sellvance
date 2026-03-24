@@ -366,6 +366,28 @@ def _marketplaces_inner():
                         (org_id, json.dumps(_hm)))
                 _db_chk.commit()
                 print('[auto-seed] 4 Amazon FBA products seeded')
+            else:
+                # Products exist, but check if health metrics are sparse
+                _h2 = _db_chk.execute(
+                    "SELECT metrics_json FROM mp_account_health "
+                    "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+                if _h2:
+                    _hm2 = json.loads(_h2['metrics_json'] or '{}')
+                    if len(_hm2) < 3:
+                        print('[auto-seed] Enriching sparse Amazon health metrics...')
+                        _hm2.setdefault('fulfillment_type', 'FBA')
+                        _hm2.setdefault('order_defect_rate', '0.2%')
+                        _hm2.setdefault('late_shipment_rate', '98%')
+                        _hm2.setdefault('cancel_rate', '0.5%')
+                        _hm2.setdefault('valid_tracking_rate', '97%')
+                        _hm2.setdefault('a_to_z_rate', '0.1%')
+                        _hm2['fulfillment_type'] = 'FBA'
+                        _db_chk.execute(
+                            "UPDATE mp_account_health SET metrics_json=?, score=92 "
+                            "WHERE org_id=? AND platform='amazon'",
+                            (json.dumps(_hm2), org_id))
+                        _db_chk.commit()
+                        print('[auto-seed] Health metrics enriched')
             _db_chk.close()
         except Exception as _e:
             print(f'[auto-seed] Error: {_e}')
