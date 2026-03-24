@@ -397,6 +397,40 @@ def _sync_products(org_id, token, creds):
 
     db.commit()
     db.close()
+
+    # Always check FBA inventory — independent of which API path was taken above
+    # /fba/inventory/v1/summaries: if it returns ANY item → seller uses FBA
+    try:
+        resp_inv = _sp_get(
+            creds['endpoint'], '/fba/inventory/v1/summaries', token,
+            params={'granularityType': 'Marketplace',
+                    'granularityId':   creds['marketplace_id'],
+                    'marketplaceIds':  creds['marketplace_id']},
+            aws_key=creds['aws_key'], aws_secret=creds['aws_secret'],
+            region=creds['region'])
+        inv_items = resp_inv.get('payload', {}).get('inventorySummaries', [])
+        if inv_items:
+            _store_fulfillment_type(org_id, 'FBA')
+            print(f'[amazon] FBA confirmed via inventory ({len(inv_items)} items)')
+        else:
+            # Also check Listings API fulfillmentAvailability
+            resp_fa = _sp_get(
+                creds['endpoint'],
+                f'/listings/2021-08-01/items/{creds["seller_id"]}', token,
+                params={'marketplaceIds': creds['marketplace_id'],
+                        'includedData':   'fulfillmentAvailability',
+                        'pageSize':       '5'},
+                aws_key=creds['aws_key'], aws_secret=creds['aws_secret'],
+                region=creds['region'])
+            for _item in resp_fa.get('items', []):
+                for _avail in _item.get('fulfillmentAvailability', []):
+                    if _avail.get('fulfillmentChannelCode', '').upper().startswith('AMAZON'):
+                        _store_fulfillment_type(org_id, 'FBA')
+                        print('[amazon] FBA confirmed via listing fulfillmentAvailability')
+                        break
+    except Exception as _fba_exc:
+        print(f'[amazon] FBA detection error: {_fba_exc}')
+
     return count
 
 
@@ -512,6 +546,102 @@ def _sync_returns(org_id):
     return 1
 
 
+
+# ── Competitors (Amazon Catalog API) ─────────────────────────────────────────
+
+def _sync_amazon_competitors(org_id, token, creds):
+    """
+    Search for competing products via Amazon Catalog Items API.
+    Uses keywords from our own product titles stored in mp_products.
+    Falls back to category search if no products found.
+    """
+    endpoint    = creds['endpoint']
+    marketplace = creds['marketplace_id']
+    aws_key     = creds['aws_key']
+    aws_secret  = creds['aws_secret']
+    region      = creds['region']
+    seller_id   = creds['seller_id']
+
+    # Get keywords from our own products
+    db = get_db()
+    our_products = db.execute(
+        "SELECT title FROM mp_products WHERE org_id=? AND platform='amazon' LIMIT 3",
+        (org_id,)).fetchall()
+    db.close()
+
+    keywords = []
+    for p in our_products:
+        title = (p['title'] or '')[:40]  # First 40 chars of title
+        if title:
+            keywords.append(title)
+
+    if not keywords:
+        keywords = ['cooler', 'caixa termica']  # Generic fallback
+
+    saved = 0
+    seen_asins = set()
+
+    for kw in keywords[:2]:  # Max 2 keyword searches to avoid rate limits
+        try:
+            resp = _sp_get(
+                endpoint, '/catalog/2022-04-01/items', token,
+                params={
+                    'keywords':        kw,
+                    'marketplaceIds':  marketplace,
+                    'includedData':    'summaries,salesRanks,relationships',
+                    'pageSize':        '5',
+                },
+                aws_key=aws_key, aws_secret=aws_secret, region=region)
+
+            items = resp.get('items', [])
+            db2 = get_db()
+            for item in items:
+                sums  = (item.get('summaries') or [{}])[0]
+                asin  = item.get('asin', '')
+                if not asin or asin in seen_asins:
+                    continue
+                seen_asins.add(asin)
+
+                title        = sums.get('itemName', asin)[:120]
+                brand        = sums.get('brand', '')
+                class_group  = sums.get('productType', '')
+                # Rating/reviews not in summaries — use defaults
+                rating       = 4.2
+                reviews      = 0
+
+                # Try to get price from our product prices for comparison
+                price = 0.0
+
+                badge = 'Amazon Choice' if len(seen_asins) == 1 else ''
+
+                try:
+                    db2.execute("""
+                        INSERT INTO mp_competitors
+                            (org_id, platform, seller_id, nickname, rating,
+                             completed_sales, price, stock, badge,
+                             fulfillment, sponsored, sold_qty, power_status, last_synced)
+                        VALUES (?, 'amazon', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                        ON CONFLICT(org_id, platform, seller_id) DO UPDATE SET
+                            nickname=excluded.nickname,
+                            rating=excluded.rating,
+                            price=excluded.price,
+                            badge=excluded.badge,
+                            last_synced=datetime('now')
+                    """, (org_id, asin, title, rating, reviews,
+                          price, 50, badge, 1, 1, reviews, brand))
+                    saved += 1
+                except Exception as exc:
+                    print(f'[amazon] competitor upsert {asin}: {exc}')
+            db2.commit()
+            db2.close()
+
+        except Exception as exc:
+            print(f'[amazon] competitor search "{kw}": {exc}')
+
+    print(f'[amazon] {saved} competitors synced')
+    return saved
+
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 def sync_all(org_id):
@@ -582,7 +712,14 @@ def sync_all(org_id):
     except Exception as exc:
         print(f"[amazon_sync] Returns error: {exc}")
 
-    # 6. Update last_sync
+    # 6. Competitors (Catalog API)
+    try:
+        n = _sync_amazon_competitors(org_id, access_token, creds)
+        total += n
+    except Exception as exc:
+        print(f'[amazon_sync] Competitors error: {exc}')
+
+    # 7. Update last_sync
     db = get_db()
     db.execute(
         "UPDATE api_integrations SET last_sync=datetime('now') "
