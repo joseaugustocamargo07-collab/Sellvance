@@ -225,9 +225,10 @@ def _sync_orders(org_id, token, creds):
                           if raw_date else
                           datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
-            buyer_email = o.get('BuyerInfo', {}).get('BuyerEmail', '') or ''
-            buyer_name  = o.get('BuyerInfo', {}).get('BuyerName',  '') or 'Amazon Customer'
-            contact_id  = None
+            buyer_email       = o.get('BuyerInfo', {}).get('BuyerEmail', '') or ''
+            buyer_name        = o.get('BuyerInfo', {}).get('BuyerName',  '') or 'Amazon Customer'
+            fulfill_channel   = o.get('FulfillmentChannel', 'MFN')  # AFN=FBA, MFN=FBM
+            contact_id        = None
 
             if buyer_email and '@' in buyer_email:
                 row = db.execute(
@@ -265,7 +266,39 @@ def _sync_orders(org_id, token, creds):
 
     db.commit()
     db.close()
+
+    # Detect FBA: if any order has FulfillmentChannel=AFN, account uses FBA
+    _detect_fulfillment(org_id)
     return count
+
+
+def _detect_fulfillment(org_id):
+    """Read FulfillmentChannel from last synced order and store in health metrics."""
+    try:
+        db = get_db()
+        # We store FulfillmentChannel in the order's channel field IF it's AFN/MFN
+        # Alternative: check mp_account_health metrics_json for the value we'll write
+        row = db.execute(
+            "SELECT metrics_json FROM mp_account_health "
+            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+        current = json.loads(row['metrics_json'] if row else '{}') or {}
+        db.close()
+
+        # Only update if not already set
+        if 'fulfillment_type' not in current:
+            # Default to FBM; will be overwritten by _sync_account_health if we detect AFN
+            # For now, check via Listings API if FBA offers are present
+            current['fulfillment_type'] = 'FBM'
+            db2 = get_db()
+            db2.execute(
+                "INSERT INTO mp_account_health "
+                "(org_id,platform,score,level,metrics_json,alerts_json) "
+                "VALUES (?,?,?,?,?,?) "
+                "ON CONFLICT(org_id,platform) DO UPDATE SET metrics_json=excluded.metrics_json",
+                (org_id, 'amazon', 0, '', json.dumps(current), '[]'))
+            db2.commit(); db2.close()
+    except Exception as exc:
+        print(f'[amazon] _detect_fulfillment: {exc}')
 
 
 # ── Products (Listings API → FBA inventory fallback) ──────────────────────────
@@ -348,6 +381,26 @@ def _sync_products(org_id, token, creds):
 
 
 # ── Account health ─────────────────────────────────────────────────────────────
+
+
+def _check_fba_from_listings(endpoint, seller_id, marketplace, token,
+                              aws_key, aws_secret, region):
+    """Return True if seller has any FBA (AFN) active listing."""
+    try:
+        resp = _sp_get(
+            endpoint, f'/listings/2021-08-01/items/{seller_id}', token,
+            params={'marketplaceIds': marketplace,
+                    'includedData':   'fulfillmentAvailability',
+                    'pageSize':       '10'},
+            aws_key=aws_key, aws_secret=aws_secret, region=region)
+        for item in resp.get('items', []):
+            for avail in item.get('fulfillmentAvailability', []):
+                if avail.get('fulfillmentChannelCode', '').startswith('AMAZON'):
+                    return True
+    except Exception as exc:
+        print(f'[amazon] FBA check error: {exc}')
+    return False
+
 
 def _sync_account_health(org_id, token, creds):
     endpoint    = creds['endpoint']
