@@ -1175,7 +1175,7 @@
         <div style="font-size:11px;color:var(--text2)">
           R$ {{ "%.2f"|format(rec.price) }}
           {% if rec.get("sold_qty", 0) > 0 %} &nbsp;·&nbsp; {{ rec.get("sold_qty", 0) }} vendas{% endif %}
-          {% if rec.get("stock", "ok")_qty > 0 %} &nbsp;·&nbsp; {{ rec.get("stock", "ok")_qty }} em estoque{% endif %}
+          {% if rec.get("stock_qty", 0) > 0 %} &nbsp;·&nbsp; {{ rec.get("stock_qty", 0) }} em estoque{% endif %}
         </div>
       </td>
       <td>
