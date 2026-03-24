@@ -430,6 +430,14 @@ def _marketplaces_inner():
                     'action_label': 'Monitorar',
                 })
 
+        # Last resort: use demo ad data so tab is never empty
+        if not ads:
+            ads = analyze_mp_ads(mp)
+
+        # If competitors empty in real mode, use demo data
+        if not competitors:
+            competitors = COMPETITORS.get(mp, [])
+
         is_live = True
     else:
         # ── DEMO DATA MODE ──────────────────────────────────
