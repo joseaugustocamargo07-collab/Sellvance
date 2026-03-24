@@ -278,10 +278,25 @@ def _sync_orders(org_id, token, creds):
 def _store_fulfillment_type(org_id, fulfillment_type):
     """
     Store fulfillment_type in mp_account_health metrics_json.
-    fulfillment_type: 'FBA', 'FBM', or None (None = don't overwrite existing value).
+    fulfillment_type: 'FBA', 'FBM', or None.
+    None = only write FBM if nothing is stored yet (default).
+    'FBA' / 'FBM' = always overwrite with the given value.
     """
-    if fulfillment_type is None:
-        return  # No AFN orders found; don't overwrite existing value
+    try:
+        db = get_db()
+        row = db.execute(
+            "SELECT metrics_json FROM mp_account_health "
+            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+        db.close()
+        current = json.loads(row['metrics_json'] if row else '{}') or {}
+        existing = current.get('fulfillment_type')
+        if fulfillment_type is None:
+            if existing:  # Already have a value — don't overwrite
+                return
+            fulfillment_type = 'FBM'  # Default when no evidence either way
+    except Exception:
+        if fulfillment_type is None:
+            fulfillment_type = 'FBM'
     try:
         db = get_db()
         row = db.execute(
@@ -326,14 +341,17 @@ def _sync_products(org_id, token, creds):
     items = resp.get('items', [])
 
     if not items:
-        # Fallback: FBA Inventory
+        # Fallback: FBA Inventory — if this returns items, seller IS on FBA
         resp2 = _sp_get(
             endpoint, '/fba/inventory/v1/summaries', token,
             params={'granularityType': 'Marketplace',
                     'granularityId':   marketplace,
                     'marketplaceIds':  marketplace},
             aws_key=aws_key, aws_secret=aws_secret, region=region)
-        for item in resp2.get('payload', {}).get('inventorySummaries', []):
+        fba_inv_items = resp2.get('payload', {}).get('inventorySummaries', [])
+        if fba_inv_items:
+            _store_fulfillment_type(org_id, 'FBA')  # Confirmed FBA via inventory
+        for item in fba_inv_items:
             asin = item.get('asin', '')
             if not asin:
                 continue
