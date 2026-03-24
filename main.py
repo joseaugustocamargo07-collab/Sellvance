@@ -572,7 +572,7 @@ def _marketplaces_inner():
         strategy_scores = []
         rebid_recs = []
 
-    # Always override comp_analysis with REAL DB prices (never demo data)
+    # Override comp_analysis with DB prices, falling back to competitor list prices
     try:
         _db2 = get_db()
         _my_row = _db2.execute(
@@ -588,13 +588,25 @@ def _marketplaces_inner():
         _avg_p = round(float(_cp_row['avg_p'] or 0), 2) if _cp_row and _cp_row['avg_p'] else 0
         _min_p = round(float(_cp_row['min_p'] or 0), 2) if _cp_row and _cp_row['min_p'] else 0
         _max_p = round(float(_cp_row['max_p'] or 0), 2) if _cp_row and _cp_row['max_p'] else 0
+
+        # If mp_competitors is empty, use prices from the competitors list (demo or synced)
+        if _avg_p == 0 and competitors:
+            _comp_prices = [c.get('price_32l', 0) for c in competitors if c.get('price_32l', 0) > 0]
+            if _comp_prices:
+                _avg_p = round(sum(_comp_prices) / len(_comp_prices), 2)
+                _min_p = round(min(_comp_prices), 2)
+                _max_p = round(max(_comp_prices), 2)
+
         if _my_p > 0:
             _use_avg = _avg_p if _avg_p > 0 else _my_p
+            # Include my price in range for better visualization
+            _eff_min = min(_min_p, _my_p) if _min_p > 0 else _my_p * 0.7
+            _eff_max = max(_max_p, _my_p) if _max_p > 0 else _my_p * 1.5
             _pos = 'acima' if _my_p > _use_avg * 1.1 else 'abaixo' if _my_p < _use_avg * 0.9 else 'na_media'
             analysis = {
                 'avg_price_32l': _use_avg,
-                'min_price_32l': _min_p,
-                'max_price_32l': _max_p,
+                'min_price_32l': _eff_min,
+                'max_price_32l': _eff_max,
                 'avg_price': _use_avg,
                 'my_price': _my_p,
                 'price_position': _pos,
