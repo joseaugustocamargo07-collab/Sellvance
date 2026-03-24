@@ -57,6 +57,9 @@ INTEGRATIONS_CATALOG = {
             {'key': 'refresh_token', 'label': 'Refresh Token',
              'placeholder': 'Atexxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', 'type': 'password',
              'help': 'Gerado ao autorizar o app via SP-API OAuth. Começa com Ate'},
+            {'key': 'is_fba', 'label': 'Conta FBA (Logística da Amazon)',
+             'type': 'checkbox',
+             'help': 'Marque se seus produtos usam FBA — Fulfillment by Amazon (recomendado)'},
         ],
         'optional_fields': [],
         'steps': [
