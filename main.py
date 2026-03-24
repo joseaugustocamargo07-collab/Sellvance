@@ -615,6 +615,19 @@ def _marketplaces_inner():
     except Exception as _e:
         print(f"[comp_analysis override] {_e}")
 
+    # Ensure all template variables have safe defaults
+    _default_product = {'price_32l': 0, 'price_20l': 0, 'rating': 0, 'reviews': 0,
+                        'stock_32l': 0, 'stock_20l': 0, 'badge': None, 'fulfillment': False}
+    _default_analysis = {'max_price_32l': 0, 'min_price_32l': 0, 'avg_price_32l': 0,
+                         'price_position': 'na_media', 'opportunities': []}
+    for _k, _v in _default_product.items():
+        my_product.setdefault(_k, _v)
+    if not isinstance(analysis, dict):
+        analysis = _default_analysis
+    else:
+        for _k, _v in _default_analysis.items():
+            analysis.setdefault(_k, _v)
+
     return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info, account_name=account_name,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
