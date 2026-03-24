@@ -1039,15 +1039,13 @@ def debug_ml_promos():
 
 
 
+
 @app.route('/api/amazon/set-fba', methods=['POST'])
 @login_required
 def amazon_set_fba():
-    """
-    Manual FBA override endpoint.
-    Called from integration settings when user confirms their account is FBA.
-    Also sets is_fba=True in the integration config.
-    """
+    """Set FBA status. Uses oauth_manager encrypt for config_json."""
     try:
+        from oauth_manager import get_integration, _encrypt, _decrypt
         data    = request.get_json() or {}
         org_id  = session.get('org_id', 1)
         is_fba  = bool(data.get('is_fba', True))
@@ -1055,70 +1053,67 @@ def amazon_set_fba():
 
         db = get_db()
 
-        # Update mp_account_health metrics_json
+        # 1. Update fulfillment_type in mp_account_health.metrics_json
         row = db.execute(
             "SELECT metrics_json FROM mp_account_health "
             "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-        current = json.loads(row['metrics_json'] if row else '{}') or {}
-        current['fulfillment_type'] = ftype
-        db.execute(
-            "INSERT INTO mp_account_health "
-            "(org_id,platform,score,level,metrics_json,alerts_json) "
-            "VALUES (?,?,?,?,?,?) "
-            "ON CONFLICT(org_id,platform) DO UPDATE SET "
-            "metrics_json=excluded.metrics_json",
-            (org_id, 'amazon', current.get('score', 0),
-             current.get('level', ''), json.dumps(current), '[]'))
+        if row:
+            current = json.loads(row['metrics_json'] or '{}')
+            current['fulfillment_type'] = ftype
+            db.execute(
+                "UPDATE mp_account_health SET metrics_json=? "
+                "WHERE org_id=? AND platform='amazon'",
+                (json.dumps(current), org_id))
+        else:
+            db.execute(
+                "INSERT INTO mp_account_health "
+                "(org_id,platform,score,level,metrics_json,alerts_json) "
+                "VALUES (?,?,74,'Good',?,'[]')",
+                (org_id, 'amazon', json.dumps({'fulfillment_type': ftype})))
 
-        # Also update integration config with is_fba flag (persists across syncs)
+        # 2. Update is_fba in integration config (ENCRYPTED with Fernet)
         integ_row = db.execute(
             "SELECT config_json FROM api_integrations "
             "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-        if integ_row:
-            cfg = json.loads(integ_row['config_json'] if integ_row['config_json'] else '{}') or {}
+        if integ_row and integ_row['config_json']:
+            raw = integ_row['config_json']
+            try:
+                cfg = json.loads(_decrypt(raw))
+            except Exception:
+                cfg = {}
             cfg['is_fba'] = is_fba
             db.execute(
                 "UPDATE api_integrations SET config_json=? "
                 "WHERE org_id=? AND platform='amazon'",
-                (json.dumps(cfg), org_id))
+                (_encrypt(json.dumps(cfg)), org_id))
 
         db.commit()
         db.close()
         return jsonify({'status': 'ok', 'fulfillment_type': ftype})
-
     except Exception as e:
         import traceback
-        return jsonify({'status': 'error', 'error': str(e),
-                        'trace': traceback.format_exc()}), 500
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'error': str(e)}), 500
 
 
 
 @app.route('/api/amazon/seed-products', methods=['POST'])
 @login_required
 def amazon_seed_products():
-    """
-    Pre-populate Amazon products from known data (from Seller Central screenshot).
-    Called once to ensure Anúncios tab shows data even before sync completes.
-    Also sets FBA=True and syncs the integration config.
-    """
+    """Pre-populate Amazon products + set FBA=True. Uses encrypt for config."""
     try:
+        from oauth_manager import get_integration, _encrypt, _decrypt
         org_id = session.get('org_id', 1)
-        data   = request.get_json() or {}
 
-        # Known products from Seller Central (user-confirmed)
-        known_products = data.get('products') or [
-            {'asin': 'B0FRVW35FV', 'sku': '30-PQN6-O033',
-             'title': 'Caixa Térmica Grande 32 Litros FBA',
-             'price': 77.00, 'stock_qty': 728, 'status': 'active'},
-            {'asin': 'B0FRW5F547', 'sku': 'LG-J5Q0-BB64',
-             'title': 'Caixa Térmica Média 20 Litros FBA',
-             'price': 57.00, 'stock_qty': 228, 'status': 'active'},
-            {'asin': 'B0GSGYM1K7', 'sku': 'GI-H4MU-WW7Y',
-             'title': 'Caixa Térmica 26 Latas Compacta FBA',
-             'price': 57.00, 'stock_qty': 99, 'status': 'active'},
-            {'asin': 'B0GSGYSV7Y', 'sku': 'C4-BKOJ-BUUT',
-             'title': 'Caixa Térmica 45 Latas Max 36L FBA',
-             'price': 77.00, 'stock_qty': 177, 'status': 'active'},
+        known_products = [
+            {'asin': 'B0FRVW35FV', 'title': 'Caixa Térmica Grande 32 Litros',
+             'price': 77.00, 'stock_qty': 728},
+            {'asin': 'B0FRW5F547', 'title': 'Caixa Térmica Média 20 Litros',
+             'price': 57.00, 'stock_qty': 228},
+            {'asin': 'B0GSGYM1K7', 'title': 'Caixa Térmica 26 Latas Compacta',
+             'price': 57.00, 'stock_qty': 99},
+            {'asin': 'B0GSGYSV7Y', 'title': 'Caixa Térmica 45 Latas Max 36L',
+             'price': 77.00, 'stock_qty': 177},
         ]
 
         db = get_db()
@@ -1127,58 +1122,57 @@ def amazon_seed_products():
             try:
                 db.execute(
                     "INSERT INTO mp_products "
-                    "(org_id, platform, external_id, title, price, stock_qty, status, listing_type) "
-                    "VALUES (?, 'amazon', ?, ?, ?, ?, ?, 'sponsored') "
-                    "ON CONFLICT(org_id, platform, external_id) DO UPDATE SET "
+                    "(org_id,platform,external_id,title,price,stock_qty,status) "
+                    "VALUES (?,'amazon',?,?,?,?,'active') "
+                    "ON CONFLICT(org_id,platform,external_id) DO UPDATE SET "
                     "title=excluded.title, price=excluded.price, "
-                    "stock_qty=excluded.stock_qty, status=excluded.status, "
-                    "listing_type='sponsored', last_synced=datetime('now')",
-                    (org_id, p['asin'], p['title'], p['price'], p['stock_qty'], p['status']))
+                    "stock_qty=excluded.stock_qty, status='active', "
+                    "last_synced=datetime('now')",
+                    (org_id, p['asin'], p['title'], p['price'], p['stock_qty']))
                 seeded += 1
             except Exception as e:
                 print(f"[seed] {p['asin']}: {e}")
 
-        # Set FBA=True in health metrics
+        # Set FBA in health metrics
         row = db.execute(
             "SELECT metrics_json FROM mp_account_health "
             "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-        current = json.loads(row['metrics_json'] if row else '{}') or {}
-        current['fulfillment_type'] = 'FBA'
-        db.execute(
-            "INSERT INTO mp_account_health "
-            "(org_id, platform, score, level, metrics_json, alerts_json) "
-            "VALUES (?, 'amazon', ?, ?, ?, '[]') "
-            "ON CONFLICT(org_id, platform) DO UPDATE SET "
-            "score=excluded.score, level=excluded.level, "
-            "metrics_json=excluded.metrics_json",
-            (org_id, current.get('score', 74), current.get('level', 'Good'),
-             json.dumps(current)))
+        if row:
+            current = json.loads(row['metrics_json'] or '{}')
+            current['fulfillment_type'] = 'FBA'
+            db.execute(
+                "UPDATE mp_account_health SET metrics_json=? "
+                "WHERE org_id=? AND platform='amazon'",
+                (json.dumps(current), org_id))
+        else:
+            db.execute(
+                "INSERT INTO mp_account_health "
+                "(org_id,platform,score,level,metrics_json,alerts_json) "
+                "VALUES (?,?,74,'Good',?,'[]')",
+                (org_id, 'amazon', json.dumps({'fulfillment_type': 'FBA'})))
 
-        # Also persist is_fba=True in integration config
+        # Set is_fba in integration config (ENCRYPTED)
         integ_row = db.execute(
             "SELECT config_json FROM api_integrations "
             "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-        if integ_row:
-            cfg = json.loads(integ_row['config_json'] or '{}') or {}
+        if integ_row and integ_row['config_json']:
+            try:
+                cfg = json.loads(_decrypt(integ_row['config_json']))
+            except Exception:
+                cfg = {}
             cfg['is_fba'] = True
             db.execute(
                 "UPDATE api_integrations SET config_json=? "
                 "WHERE org_id=? AND platform='amazon'",
-                (json.dumps(cfg), org_id))
+                (_encrypt(json.dumps(cfg)), org_id))
 
         db.commit()
         db.close()
-        return jsonify({
-            'status': 'ok',
-            'seeded': seeded,
-            'fulfillment_type': 'FBA',
-            'message': f'{seeded} produtos Amazon pré-carregados com FBA confirmado'
-        })
-
+        return jsonify({'status': 'ok', 'seeded': seeded, 'fulfillment_type': 'FBA'})
     except Exception as e:
         import traceback
-        return jsonify({'status': 'error', 'error': str(e),
-                        'trace': traceback.format_exc()}), 500
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'error': str(e)}), 500
 
 
 @app.route('/api/force-sync')
