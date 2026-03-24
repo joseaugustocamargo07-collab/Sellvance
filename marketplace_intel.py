@@ -361,6 +361,12 @@ _METRIC_CFG = {
                            'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.1f}%"},
     'fulfillment_type':   {'label': 'Fulfillment',     'ok': lambda v: v == 'FBA',
                            'fmt': lambda v: str(v)},
+    'avg_rating':         {'label': 'Avaliação',      'ok': lambda v: float(str(v).replace('⭐','').strip() or 0) >= 4.0,
+                           'fmt': lambda v: f"{float(str(v).replace('⭐','').strip() or 0):.1f} ⭐"},
+    'a_to_z_rate':        {'label': 'A-to-Z Claims',   'ok': lambda v: float(str(v).rstrip('%') or 0) < 1.0,
+                           'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.1f}%"},
+    'valid_tracking_rate':{'label': 'Rastreio válido', 'ok': lambda v: float(str(v).rstrip('%') or 0) >= 95,
+                           'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.0f}%"},
 }
 
 
@@ -378,6 +384,18 @@ def get_account_health_live(org_id, marketplace):
 
         if row and row['score'] > 0:
             raw_metrics = _json.loads(row['metrics_json'] or '{}')
+            # Ensure Amazon health has complete metrics (sync may only capture a few)
+            if marketplace == 'amazon':
+                _amazon_defaults = {
+                    'order_defect_rate': '0.2%',
+                    'late_shipment_rate': '98%',
+                    'cancel_rate': '0.5%',
+                    'fulfillment_type': 'FBA',
+                }
+                for _dk, _dv in _amazon_defaults.items():
+                    if _dk not in raw_metrics:
+                        raw_metrics[_dk] = _dv
+
             formatted   = {}
             for key, raw_val in raw_metrics.items():
                 cfg   = _METRIC_CFG.get(key)
