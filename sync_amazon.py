@@ -456,6 +456,100 @@ def _check_fba_from_listings(endpoint, seller_id, marketplace, token,
     return False
 
 
+
+def _detect_fba_multilayer(org_id, token, creds):
+    """
+    Detect FBA using 4 independent layers (first success wins):
+      Layer 1: config_json has is_fba=True (manual override by user)
+      Layer 2: /fba/inventory/v1/summaries returns items (scope: fulfillment_inbound)
+      Layer 3: /listings fulfillmentAvailability has AMAZON channel (scope: listings_items_read)
+      Layer 4: lateShipmentRate is 0/null in health API (FBA = Amazon ships, rate is 0)
+    Returns 'FBA' or 'FBM'.
+    """
+    endpoint   = creds['endpoint']
+    marketplace = creds['marketplace_id']
+    seller_id   = creds['seller_id']
+    aws_key    = creds['aws_key']
+    aws_secret = creds['aws_secret']
+    region     = creds['region']
+
+    # ── Layer 1: Manual override in integration config ─────────────────────
+    try:
+        from oauth_manager import get_integration
+        integ = get_integration(org_id, 'amazon')
+        if integ and integ.get('config', {}).get('is_fba'):
+            print('[amazon] FBA confirmed: manual override in config')
+            return 'FBA'
+    except Exception:
+        pass
+
+    # ── Layer 2: FBA Inventory API ─────────────────────────────────────────
+    try:
+        resp = _sp_get(
+            endpoint, '/fba/inventory/v1/summaries', token,
+            params={'granularityType': 'Marketplace',
+                    'granularityId':   marketplace,
+                    'marketplaceIds':  marketplace,
+                    'details':         'false'},
+            aws_key=aws_key, aws_secret=aws_secret, region=region)
+        inv = resp.get('payload', {}).get('inventorySummaries', [])
+        if inv:
+            print(f'[amazon] FBA confirmed: {len(inv)} items in FBA inventory')
+            return 'FBA'
+    except Exception as exc:
+        print(f'[amazon] FBA inventory check: {exc}')
+
+    # ── Layer 3: Listings API with fulfillmentAvailability ─────────────────
+    try:
+        resp2 = _sp_get(
+            endpoint, f'/listings/2021-08-01/items/{seller_id}', token,
+            params={'marketplaceIds': marketplace,
+                    'includedData':   'fulfillmentAvailability',
+                    'pageSize':       '5'},
+            aws_key=aws_key, aws_secret=aws_secret, region=region)
+        for item in resp2.get('items', []):
+            for avail in item.get('fulfillmentAvailability', []):
+                ch = avail.get('fulfillmentChannelCode', '').upper()
+                if ch.startswith('AMAZON') or ch == 'AFN':
+                    print(f'[amazon] FBA confirmed: fulfillmentChannelCode={ch}')
+                    return 'FBA'
+    except Exception as exc:
+        print(f'[amazon] Listings fulfillmentAvailability check: {exc}')
+
+    # ── Layer 4: Heuristic — lateShipmentRate == 0 suggests FBA ───────────
+    # FBA sellers: Amazon ships → lateShipmentRate typically 0 or not tracked
+    try:
+        resp3 = _sp_get(endpoint, '/seller/v1/account/health', token,
+                        aws_key=aws_key, aws_secret=aws_secret, region=region)
+        agg3 = resp3.get('payload', {}).get('aggregated', {})
+        lsr_raw = agg3.get('lateShipmentRate', {})
+        lsr_val = lsr_raw.get('value')
+        # FBA sellers: lsr is None, absent, or 0.0
+        if lsr_val is None or lsr_raw == {} or (
+                isinstance(lsr_val, (int, float)) and float(lsr_val) == 0.0):
+            print(f'[amazon] FBA likely: lateShipmentRate={lsr_val} (FBA=Amazon ships)')
+            return 'FBA'
+    except Exception as exc:
+        print(f'[amazon] lateShipmentRate heuristic: {exc}')
+
+    # ── Preserve existing value before defaulting to FBM ──────────────────
+    try:
+        db_p = get_db()
+        row_p = db_p.execute(
+            "SELECT metrics_json FROM mp_account_health "
+            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+        db_p.close()
+        existing = json.loads(row_p['metrics_json'] if row_p else '{}') or {}
+        if existing.get('fulfillment_type') == 'FBA':
+            print('[amazon] FBA preserved from previous sync')
+            return 'FBA'
+    except Exception:
+        pass
+
+    print('[amazon] FBA not detected — defaulting to FBM')
+    return 'FBM'
+
+
 def _sync_account_health(org_id, token, creds):
     endpoint    = creds['endpoint']
     marketplace = creds['marketplace_id']
