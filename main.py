@@ -1038,6 +1038,60 @@ def debug_ml_promos():
     return jsonify(result)
 
 
+
+@app.route('/api/amazon/set-fba', methods=['POST'])
+@login_required
+def amazon_set_fba():
+    """
+    Manual FBA override endpoint.
+    Called from integration settings when user confirms their account is FBA.
+    Also sets is_fba=True in the integration config.
+    """
+    try:
+        data    = request.get_json() or {}
+        org_id  = session.get('org_id', 1)
+        is_fba  = bool(data.get('is_fba', True))
+        ftype   = 'FBA' if is_fba else 'FBM'
+
+        db = get_db()
+
+        # Update mp_account_health metrics_json
+        row = db.execute(
+            "SELECT metrics_json FROM mp_account_health "
+            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+        current = json.loads(row['metrics_json'] if row else '{}') or {}
+        current['fulfillment_type'] = ftype
+        db.execute(
+            "INSERT INTO mp_account_health "
+            "(org_id,platform,score,level,metrics_json,alerts_json) "
+            "VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(org_id,platform) DO UPDATE SET "
+            "metrics_json=excluded.metrics_json",
+            (org_id, 'amazon', current.get('score', 0),
+             current.get('level', ''), json.dumps(current), '[]'))
+
+        # Also update integration config with is_fba flag (persists across syncs)
+        integ_row = db.execute(
+            "SELECT config_json FROM api_integrations "
+            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+        if integ_row:
+            cfg = json.loads(integ_row['config_json'] if integ_row['config_json'] else '{}') or {}
+            cfg['is_fba'] = is_fba
+            db.execute(
+                "UPDATE api_integrations SET config_json=? "
+                "WHERE org_id=? AND platform='amazon'",
+                (json.dumps(cfg), org_id))
+
+        db.commit()
+        db.close()
+        return jsonify({'status': 'ok', 'fulfillment_type': ftype})
+
+    except Exception as e:
+        import traceback
+        return jsonify({'status': 'error', 'error': str(e),
+                        'trace': traceback.format_exc()}), 500
+
+
 @app.route('/api/force-sync')
 def force_sync():
     """Force a full re-sync (bypasses staleness check)."""
