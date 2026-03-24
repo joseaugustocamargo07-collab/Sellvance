@@ -164,9 +164,9 @@ def analyze_competitive_position(marketplace):
     my_20l = my.get('price_20l', 0)
 
     # Concorrentes com estoque crítico = oportunidade
-    critical = [c for c in comp if c['stock'] in ('critical', 'out')]
+    critical = [c for c in comp if c.get('stock', '') in ('critical', 'out')]
     if critical:
-        names = ', '.join(c['name'] for c in critical)
+        names = ', '.join(c.get('name', '?') for c in critical)
         opportunities.append({
             'type': 'stock_gap',
             'icon': '📦',
@@ -177,7 +177,7 @@ def analyze_competitive_position(marketplace):
         })
 
     # Análise de preço
-    prices_32l = [c['price_32l'] for c in comp]
+    prices_32l = [c.get('price_32l', 0) for c in comp if c.get('price_32l', 0) > 0]
     avg_price  = sum(prices_32l) / len(prices_32l) if prices_32l else my_32l
     min_price  = min(prices_32l) if prices_32l else my_32l
     max_price  = max(prices_32l) if prices_32l else my_32l
@@ -202,8 +202,8 @@ def analyze_competitive_position(marketplace):
     # Análise de avaliações
     my_rating   = my.get('rating', 0)
     my_reviews  = my.get('reviews', 0)
-    best_rating = max((c['rating'] for c in comp), default=0)
-    most_reviews = max((c['reviews'] for c in comp), default=0)
+    best_rating = max((c.get('rating', 0) for c in comp), default=0)
+    most_reviews = max((c.get('reviews', 0) for c in comp), default=0)
 
     if my_rating >= best_rating:
         opportunities.append({
@@ -216,7 +216,7 @@ def analyze_competitive_position(marketplace):
         })
 
     # Concorrentes sem fulfillment = desvantagem deles
-    no_fulfillment = [c for c in comp if not c['fulfillment'] and my.get('fulfillment')]
+    no_fulfillment = [c for c in comp if not c.get('fulfillment', False) and my.get('fulfillment')]
     if no_fulfillment and marketplace == 'mercado_livre':
         opportunities.append({
             'type': 'fulfillment',
