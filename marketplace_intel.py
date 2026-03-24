@@ -301,6 +301,19 @@ def get_my_products_live(org_id, marketplace):
             avg_rating = sum(p['rating'] or 0 for p in products) / len(products) if products else 0
             total_reviews = sum(p['reviews'] or 0 for p in products)
 
+            # Check FBA status from account health metrics
+            is_fba = False
+            try:
+                import json as _jj
+                h_row = db.execute(
+                    "SELECT metrics_json FROM mp_account_health "
+                    "WHERE org_id=? AND platform=?",
+                    (org_id, marketplace)).fetchone()
+                if h_row:
+                    h_m = _jj.loads(h_row['metrics_json'] or '{}')
+                    is_fba = h_m.get('fulfillment_type', 'FBM') == 'FBA'
+            except Exception:
+                pass
             return {
                 'price_32l': products[0]['price'] if len(products) > 0 else 0,
                 'price_20l': products[1]['price'] if len(products) > 1 else 0,
@@ -309,7 +322,7 @@ def get_my_products_live(org_id, marketplace):
                 'stock_32l': products[0]['stock_qty'] if len(products) > 0 else 0,
                 'stock_20l': products[1]['stock_qty'] if len(products) > 1 else 0,
                 'badge': None,
-                'fulfillment': False,
+                'fulfillment': is_fba,
                 '_live': True,
                 '_products': [dict(p) for p in products],
                 '_total_stock': total_stock,
@@ -319,6 +332,36 @@ def get_my_products_live(org_id, marketplace):
         print(f"[marketplace_intel] DB error for products: {e}")
 
     return MY_PRODUCTS.get(marketplace, {})
+
+
+def _parse_pct(v):
+    """Parse a percentage value to float. '2.8%' → 2.8, 0.028 → 2.8."""
+    try:
+        s = str(v).replace('%', '').strip()
+        f = float(s)
+        return f * 100 if f < 1 else f
+    except (ValueError, TypeError):
+        return 0.0
+
+
+# Metric definitions per platform
+_METRIC_CFG = {
+    # Mercado Livre
+    'reputacao':       {'label': 'Reputação',          'ok': lambda v: _parse_pct(v) >= 80},
+    'vendas_completas':{'label': 'Vendas completas',   'ok': lambda v: True},
+    'reclamacoes':     {'label': 'Reclamações',        'ok': lambda v: _parse_pct(v) <= 3},
+    'atrasos':         {'label': 'Envio no prazo',     'ok': lambda v: _parse_pct(v) <= 5},
+    'cancelamentos':   {'label': 'Cancelamentos',      'ok': lambda v: _parse_pct(v) <= 3},
+    # Amazon SP-API
+    'order_defect_rate':  {'label': 'ODR (Defeito)',   'ok': lambda v: float(str(v).rstrip('%') or 0) < 1.0,
+                           'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.1f}%"},
+    'late_shipment_rate': {'label': 'Envio no prazo',  'ok': lambda v: float(str(v).rstrip('%') or 0) >= 97,
+                           'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.0f}%"},
+    'cancel_rate':        {'label': 'Cancelamentos',   'ok': lambda v: float(str(v).rstrip('%') or 0) < 2.5,
+                           'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.1f}%"},
+    'fulfillment_type':   {'label': 'Fulfillment',     'ok': lambda v: v == 'FBA',
+                           'fmt': lambda v: str(v)},
+}
 
 
 def get_account_health_live(org_id, marketplace):
@@ -333,38 +376,40 @@ def get_account_health_live(org_id, marketplace):
         ).fetchone()
         db.close()
 
-        if row:
+        if row and row['score'] > 0:
             raw_metrics = _json.loads(row['metrics_json'] or '{}')
-            # Convert to template format: {"label": {"ok": bool, "val": str}}
-            formatted = {}
-            thresholds = {
-                'reputacao': lambda v: _parse_pct(v) >= 80,
-                'vendas_completas': lambda v: True,
-                'reclamacoes': lambda v: _parse_pct(v) <= 3,
-                'atrasos': lambda v: _parse_pct(v) <= 5,
-                'cancelamentos': lambda v: _parse_pct(v) <= 3,
-            }
-            label_map = {
-                'reputacao': 'Reputação',
-                'vendas_completas': 'Vendas completas',
-                'reclamacoes': 'Reclamações',
-                'atrasos': 'Envio no prazo',
-                'cancelamentos': 'Cancelamentos',
-            }
-            for key, val in raw_metrics.items():
-                check = thresholds.get(key, lambda v: True)
+            formatted   = {}
+            for key, raw_val in raw_metrics.items():
+                cfg   = _METRIC_CFG.get(key)
+                label = cfg['label'] if cfg else key.replace('_', ' ').title()
+                fmt   = cfg.get('fmt', str) if cfg else str
                 try:
-                    ok = check(val)
+                    ok  = cfg['ok'](raw_val) if cfg else True
+                    val = fmt(raw_val)
                 except Exception:
-                    ok = True
-                formatted[label_map.get(key, key)] = {'ok': ok, 'val': str(val)}
+                    ok  = True
+                    val = str(raw_val)
+                formatted[label] = {'ok': ok, 'val': val}
+
+            # Build contextual alerts from metrics
+            alerts = _json.loads(row['alerts_json'] or '[]')
+            if not alerts:
+                if 'order_defect_rate' in raw_metrics:
+                    odr = float(str(raw_metrics['order_defect_rate']).rstrip('%') or 0)
+                    if odr >= 1.0:
+                        alerts.append('⚠️ ODR acima de 1% — risco de suspensão da conta')
+                if raw_metrics.get('fulfillment_type', 'FBA') != 'FBA':
+                    alerts.append('💡 Habilitar FBA pode melhorar conversão em ~30% e aumentar visibilidade')
+                cr = float(str(raw_metrics.get('cancel_rate', '0')).rstrip('%') or 0)
+                if cr >= 2.5:
+                    alerts.append('⚠️ Taxa de cancelamento alta — revisar estoque disponível')
 
             return {
-                'score': row['score'],
-                'level': row['level'],
+                'score':   row['score'],
+                'level':   row['level'] or 'Seller Standard',
                 'metrics': formatted,
-                'alerts': _json.loads(row['alerts_json'] or '[]'),
-                '_live': True,
+                'alerts':  alerts,
+                '_live':   True,
             }
     except Exception as e:
         print(f"[marketplace_intel] DB error for health: {e}")
