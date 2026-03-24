@@ -354,8 +354,8 @@
 
 {% if ads %}
 <div style="margin-bottom:16px">
-  <div class="sec-title">🎯 Anúncios Promovidos — {{ mp_name }}</div>
-  <div style="font-size:12px;color:var(--text2)">Listagens com destaque pago no marketplace</div>
+  <div class="sec-title">{% if mp == 'amazon' %}📦 Produtos FBA — Inventário Amazon{% else %}🎯 Anúncios Promovidos — {{ mp_name }}{% endif %}</div>
+  <div style="font-size:12px;color:var(--text2)">{% if mp == 'amazon' %}Seus produtos com logística FBA (Fulfillment by Amazon){% else %}Listagens com destaque pago no marketplace{% endif %}</div>
 </div>
 
 {% set total_spend = ads | sum(attribute='spend') %}
@@ -365,7 +365,7 @@
 
 <div class="grid g4" style="margin-bottom:20px">
   <div class="card">
-    <div class="card-title">📦 Anúncios Ativos</div>
+    <div class="card-title">{% if mp == 'amazon' %}📦 Produtos FBA{% else %}📦 Anúncios Ativos{% endif %}</div>
     <div class="kpi-val" style="color:var(--accent)">{{ ads|length }}</div>
   </div>
   <div class="card">
@@ -404,7 +404,7 @@
     {% endif %}
     <div style="flex:1;min-width:0">
       <div style="font-weight:700;font-size:13px;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ad.name }}</div>
-      <div style="font-size:11px;color:var(--text3)">{{ ad.type }} · {{ ad.action_label }}</div>
+      <div style="font-size:11px;color:var(--text3)">{% if mp == 'amazon' %}<span style="background:rgba(255,153,0,0.15);color:#ff9900;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700">FBA</span> {{ ad.type }}{% else %}{{ ad.type }} · {{ ad.action_label }}{% endif %}</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;text-align:center;flex-shrink:0">
       <div>
@@ -417,7 +417,7 @@
       </div>
       <div>
         <div style="font-size:14px;font-weight:800;color:var(--text)">{{ ad.stock or 0 }}</div>
-        <div style="font-size:10px;color:var(--text3)">Estoque</div>
+        <div style="font-size:10px;color:var(--text3)">{% if mp == 'amazon' %}Inv. FBA{% else %}Estoque{% endif %}</div>
       </div>
       <div>
         <div style="font-size:14px;font-weight:800;color:var(--green)">R$ {{ "{:,.0f}".format(ad.revenue) }}</div>
@@ -433,7 +433,7 @@
 <div class="card" style="padding:50px;text-align:center;color:var(--text2)">
   <div style="font-size:40px;margin-bottom:12px">📊</div>
   <div style="font-size:18px;font-weight:700;margin-bottom:8px">Nenhum anúncio promovido encontrado</div>
-  <div style="font-size:13px;max-width:400px;margin:0 auto">Quando você criar anúncios promovidos no Mercado Livre, os dados de performance aparecerão aqui automaticamente.</div>
+  <div style="font-size:13px;max-width:400px;margin:0 auto">{% if mp == 'amazon' %}Seus produtos FBA aparecerão aqui após a sincronização com a Amazon.{% else %}Quando você criar anúncios promovidos no Mercado Livre, os dados de performance aparecerão aqui automaticamente.{% endif %}</div>
 </div>
 {% endif %}
 
