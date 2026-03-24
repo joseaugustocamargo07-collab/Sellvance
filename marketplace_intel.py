@@ -730,13 +730,16 @@ def search_ml_competitors(org_id, marketplace, token=None):
                 'shipping': 'gratis' if r.get('fulfillment') else 'pago',
             })
 
+        # Fall back to demo data if no real competitors found
+        if not competitors:
+            return COMPETITORS.get(marketplace, [])
         return competitors
 
     except Exception as e:
         print(f"[marketplace_intel] Error reading competitors from DB: {e}")
         import traceback
         traceback.print_exc()
-        return []
+        return COMPETITORS.get(marketplace, [])
 
 
 def compute_health_score(metrics):
