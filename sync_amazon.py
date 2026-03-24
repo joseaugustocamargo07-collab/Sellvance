@@ -434,6 +434,12 @@ def _sync_account_health(org_id, token, creds):
         metrics['late_shipment_rate'] = agg.get('lateShipmentRate', {}).get('value', 0)
         metrics['cancel_rate']        = agg.get('canceledRate',     {}).get('value', 0)
 
+    # Detect FBA: check if seller has any FBA (AFN) active listing
+    is_fba = _check_fba_from_listings(
+        endpoint, creds['seller_id'], creds['marketplace_id'],
+        token, aws_key, aws_secret, region)
+    metrics['fulfillment_type'] = 'FBA' if is_fba else 'FBM'
+
     db = get_db()
     try:
         db.execute(
