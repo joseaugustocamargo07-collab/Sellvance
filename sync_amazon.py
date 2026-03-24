@@ -190,9 +190,10 @@ def _sync_orders(org_id, token, creds):
         'CreatedAfter':      since,
         'MaxResultsPerPage': '100',
     }
-    db       = get_db()
-    count    = 0
-    next_tok = None
+    db           = get_db()
+    count        = 0
+    next_tok     = None
+    has_fba_order = False  # True if any order shipped by Amazon (AFN)
 
     while True:
         resp    = _sp_get(
@@ -228,6 +229,8 @@ def _sync_orders(org_id, token, creds):
             buyer_email       = o.get('BuyerInfo', {}).get('BuyerEmail', '') or ''
             buyer_name        = o.get('BuyerInfo', {}).get('BuyerName',  '') or 'Amazon Customer'
             fulfill_channel   = o.get('FulfillmentChannel', 'MFN')  # AFN=FBA, MFN=FBM
+            if fulfill_channel == 'AFN':
+                has_fba_order = True
             contact_id        = None
 
             if buyer_email and '@' in buyer_email:
@@ -267,38 +270,37 @@ def _sync_orders(org_id, token, creds):
     db.commit()
     db.close()
 
-    # Detect FBA: if any order has FulfillmentChannel=AFN, account uses FBA
-    _detect_fulfillment(org_id)
+    # Write fulfillment_type to health table based on real order data
+    _store_fulfillment_type(org_id, 'FBA' if has_fba_order else None)
     return count
 
 
-def _detect_fulfillment(org_id):
-    """Read FulfillmentChannel from last synced order and store in health metrics."""
+def _store_fulfillment_type(org_id, fulfillment_type):
+    """
+    Store fulfillment_type in mp_account_health metrics_json.
+    fulfillment_type: 'FBA', 'FBM', or None (None = don't overwrite existing value).
+    """
+    if fulfillment_type is None:
+        return  # No AFN orders found; don't overwrite existing value
     try:
         db = get_db()
-        # We store FulfillmentChannel in the order's channel field IF it's AFN/MFN
-        # Alternative: check mp_account_health metrics_json for the value we'll write
         row = db.execute(
             "SELECT metrics_json FROM mp_account_health "
             "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
         current = json.loads(row['metrics_json'] if row else '{}') or {}
+        current['fulfillment_type'] = fulfillment_type
+        db.execute(
+            "INSERT INTO mp_account_health "
+            "(org_id,platform,score,level,metrics_json,alerts_json) "
+            "VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(org_id,platform) DO UPDATE SET "
+            "metrics_json=excluded.metrics_json",
+            (org_id, 'amazon', current.get('score', 0), '', json.dumps(current), '[]'))
+        db.commit()
         db.close()
-
-        # Only update if not already set
-        if 'fulfillment_type' not in current:
-            # Default to FBM; will be overwritten by _sync_account_health if we detect AFN
-            # For now, check via Listings API if FBA offers are present
-            current['fulfillment_type'] = 'FBM'
-            db2 = get_db()
-            db2.execute(
-                "INSERT INTO mp_account_health "
-                "(org_id,platform,score,level,metrics_json,alerts_json) "
-                "VALUES (?,?,?,?,?,?) "
-                "ON CONFLICT(org_id,platform) DO UPDATE SET metrics_json=excluded.metrics_json",
-                (org_id, 'amazon', 0, '', json.dumps(current), '[]'))
-            db2.commit(); db2.close()
+        print(f'[amazon] fulfillment_type stored: {fulfillment_type}')
     except Exception as exc:
-        print(f'[amazon] _detect_fulfillment: {exc}')
+        print(f'[amazon] _store_fulfillment_type: {exc}')
 
 
 # ── Products (Listings API → FBA inventory fallback) ──────────────────────────
@@ -434,11 +436,14 @@ def _sync_account_health(org_id, token, creds):
         metrics['late_shipment_rate'] = agg.get('lateShipmentRate', {}).get('value', 0)
         metrics['cancel_rate']        = agg.get('canceledRate',     {}).get('value', 0)
 
-    # Detect FBA: check if seller has any FBA (AFN) active listing
-    is_fba = _check_fba_from_listings(
-        endpoint, creds['seller_id'], creds['marketplace_id'],
-        token, aws_key, aws_secret, region)
-    metrics['fulfillment_type'] = 'FBA' if is_fba else 'FBM'
+    # Preserve fulfillment_type set by _sync_orders (AFN order detection)
+    db_chk = get_db()
+    chk = db_chk.execute(
+        "SELECT metrics_json FROM mp_account_health "
+        "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+    db_chk.close()
+    existing = json.loads(chk['metrics_json'] if chk else '{}') or {}
+    metrics['fulfillment_type'] = existing.get('fulfillment_type', 'FBM')
 
     db = get_db()
     try:
