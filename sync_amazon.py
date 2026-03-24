@@ -582,14 +582,8 @@ def _sync_account_health(org_id, token, creds):
         metrics['late_shipment_rate'] = agg.get('lateShipmentRate', {}).get('value', 0)
         metrics['cancel_rate']        = agg.get('canceledRate',     {}).get('value', 0)
 
-    # Preserve fulfillment_type set by _sync_orders (AFN order detection)
-    db_chk = get_db()
-    chk = db_chk.execute(
-        "SELECT metrics_json FROM mp_account_health "
-        "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-    db_chk.close()
-    existing = json.loads(chk['metrics_json'] if chk else '{}') or {}
-    metrics['fulfillment_type'] = existing.get('fulfillment_type', 'FBM')
+    # ── FBA Detection: 4 independent layers
+    metrics['fulfillment_type'] = _detect_fba_multilayer(org_id, token, creds)
 
     db = get_db()
     try:
