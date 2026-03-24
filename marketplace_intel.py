@@ -511,12 +511,21 @@ def get_ads_live(org_id, marketplace):
             }
 
         # Fallback: get promoted products from mp_products
-        promoted_types = ('gold_pro', 'gold_special', 'gold_premium')
-        placeholders = ','.join('?' for _ in promoted_types)
-        rows = db.execute(
-            f"SELECT * FROM mp_products WHERE org_id=? AND platform=? AND listing_type IN ({placeholders}) ORDER BY sold_qty DESC",
-            (org_id, marketplace) + promoted_types
-        ).fetchall()
+        # Amazon: all active listings are potentially Sponsored — no ML-style listing types
+        if marketplace == 'amazon':
+            rows = db.execute(
+                "SELECT * FROM mp_products WHERE org_id=? AND platform=? "
+                "AND status='active' ORDER BY sold_qty DESC LIMIT 20",
+                (org_id, marketplace)
+            ).fetchall()
+        else:
+            promoted_types = ('gold_pro', 'gold_special', 'gold_premium')
+            placeholders = ','.join('?' for _ in promoted_types)
+            rows = db.execute(
+                f"SELECT * FROM mp_products WHERE org_id=? AND platform=? "
+                f"AND listing_type IN ({placeholders}) ORDER BY sold_qty DESC",
+                (org_id, marketplace) + promoted_types
+            ).fetchall()
         db.close()
 
         if rows:
@@ -525,10 +534,12 @@ def get_ads_live(org_id, marketplace):
                 p = dict(r)
                 revenue = (p.get('price', 0) or 0) * (p.get('sold_qty', 0) or 0)
                 listing_label = {
-                    'gold_pro': 'Premium',
-                    'gold_special': 'Clássico',
-                    'gold_premium': 'Premium',
-                }.get(p.get('listing_type', ''), 'Promovido')
+                    'gold_pro':      'Premium',
+                    'gold_special':  'Clássico',
+                    'gold_premium':  'Premium',
+                    'sponsored':     'Sponsored Product',
+                }.get(p.get('listing_type', ''),
+                      'Sponsored Product' if marketplace == 'amazon' else 'Promovido')
                 ads_list.append(p | {'_revenue_estimated': revenue, '_listing_label': listing_label})
 
             return {
