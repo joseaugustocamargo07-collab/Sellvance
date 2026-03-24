@@ -198,17 +198,25 @@
 <!-- Top Anúncios do MP -->
 {% if ads %}
 <div class="card">
-  <div class="sec-title">🎯 Anúncios Promovidos — {{ mp_name }}</div>
+  <div class="sec-title">📦 {% if mp == 'amazon' %}Produtos FBA — Inventário Amazon{% else %}🎯 Anúncios Promovidos — {{ mp_name }}{% endif %}</div>
   <table class="tbl">
-    <thead><tr><th>Anúncio</th><th>Tipo</th><th>Preço</th><th>Vendas</th><th>Estoque</th><th>Receita Est.</th><th>Status</th></tr></thead>
+    <thead><tr>
+      <th>{% if mp == 'amazon' %}Produto{% else %}Anúncio{% endif %}</th>
+      <th>{% if mp == 'amazon' %}Fulfillment{% else %}Tipo{% endif %}</th>
+      <th>Preço</th>
+      <th>Vendas</th>
+      <th>{% if mp == 'amazon' %}Inv. FBA{% else %}Estoque{% endif %}</th>
+      <th>Receita Est.</th>
+      <th>Status</th>
+    </tr></thead>
     <tbody>
-    {% for ad in ads[:4] %}
+    {% for ad in ads[:8] %}
     <tr>
-      <td style="font-weight:600;font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ad.name }}</td>
-      <td><span class="badge b-purple" style="font-size:10px">{{ ad.type }}</span></td>
+      <td style="font-weight:600;font-size:12px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ad.name }}</td>
+      <td>{% if mp == 'amazon' %}<span class="badge" style="font-size:10px;background:rgba(255,153,0,0.15);color:#ff9900;border:1px solid rgba(255,153,0,0.3)">FBA</span>{% else %}<span class="badge b-purple" style="font-size:10px">{{ ad.type }}</span>{% endif %}</td>
       <td style="font-weight:700;color:var(--green)">R$ {{ "{:,.2f}".format(ad.price or 0) }}</td>
       <td style="color:var(--accent);font-weight:700">{{ ad.conversions }}</td>
-      <td style="color:{% if (ad.stock or 0) > 20 %}var(--green){% elif (ad.stock or 0) > 5 %}var(--yellow){% else %}var(--red){% endif %};font-weight:700">{{ ad.stock or 0 }}</td>
+      <td style="font-weight:700;color:{% if (ad.stock or 0) > 50 %}var(--green){% elif (ad.stock or 0) > 10 %}var(--yellow){% else %}var(--red){% endif %}">{{ ad.stock or 0 }}{% if mp == 'amazon' %} un{% endif %}</td>
       <td style="color:var(--green);font-weight:700">R$ {{ "{:,.0f}".format(ad.revenue) }}</td>
       <td><span class="badge {% if ad.status == 'active' %}b-green{% else %}b-yellow{% endif %}" style="font-size:10px">{{ ad.status or 'ativo' }}</span></td>
     </tr>
