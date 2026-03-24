@@ -1498,14 +1498,10 @@ async function triggerCompetitorSync() {
 }
 </script>
 
-{% endblock %}
-
 <script>
 function confirmFBA() {
   var btn = document.getElementById('btnConfirmFba');
   if (btn) { btn.textContent = '⏳ Salvando...'; btn.disabled = true; }
-
-  // Step 1: Set FBA in health metrics + integration config
   fetch('/api/amazon/set-fba', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -1515,8 +1511,6 @@ function confirmFBA() {
   .then(function(r) { return r.json(); })
   .then(function(d) {
     if (d.status !== 'ok') throw new Error(d.error || 'Erro ao salvar FBA');
-
-    // Step 2: Also seed products if they don't exist yet
     return fetch('/api/amazon/seed-products', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -1525,13 +1519,14 @@ function confirmFBA() {
     }).then(function(r2) { return r2.json(); });
   })
   .then(function(d2) {
-    // Success — reload page
     window.location.reload();
   })
   .catch(function(err) {
-    if (btn) { btn.textContent = '❌ Erro — tente novamente'; btn.disabled = false; }
+    if (btn) { btn.textContent = '❌ Erro'; btn.disabled = false; }
     console.error('FBA confirm error:', err);
     alert('Erro: ' + err.message);
   });
 }
 </script>
+
+{% endblock %}
