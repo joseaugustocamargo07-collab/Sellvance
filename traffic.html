@@ -135,34 +135,34 @@
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <div style="font-size:11px;color:var(--text3);width:60px">Mínimo</div>
         <div style="flex:1;height:6px;background:var(--border);border-radius:3px;position:relative">
-          {% set range = comp_analysis.max_price_32l - comp_analysis.min_price_32l %}
-          {% set my_pos = ((my.price_32l - comp_analysis.min_price_32l) / (range or 1) * 100)|int %}
+          {% set range = (comp_analysis.get("max_price_32l", 0) or 0) - (comp_analysis.get("min_price_32l", 0) or 0) %}
+          {% set my_pos = (((my.get("price_32l", 0) or 0) - (comp_analysis.get("min_price_32l", 0) or 0)) / (range or 1) * 100)|int %}
           <div style="position:absolute;left:{{ my_pos }}%;top:-4px;width:14px;height:14px;border-radius:50%;background:{{ mp_color }};border:2px solid #fff;transform:translateX(-50%)"></div>
           <div style="width:100%;height:100%;background:linear-gradient(90deg,var(--green),var(--yellow),var(--red));border-radius:3px"></div>
         </div>
         <div style="font-size:11px;color:var(--text3);width:60px;text-align:right">Máximo</div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)">
-        <span>R$ {{ comp_analysis.min_price_32l|round(2) }}</span>
-        <span style="color:{{ mp_color }};font-weight:700">Você: R$ {{ my.price_32l }}</span>
-        <span>R$ {{ comp_analysis.max_price_32l|round(2) }}</span>
+        <span>R$ {{ (comp_analysis.get("min_price_32l", 0) or 0)|round(2) }}</span>
+        <span style="color:{{ mp_color }};font-weight:700">Você: R$ {{ my.get("price_32l", 0) or 0 }}</span>
+        <span>R$ {{ (comp_analysis.get("max_price_32l", 0) or 0)|round(2) }}</span>
       </div>
       <div style="margin-top:8px;padding:6px 10px;border-radius:7px;font-size:12px;
-        {% if comp_analysis.price_position == 'acima' %}background:rgba(239,68,68,.1);color:#fca5a5
-        {% elif comp_analysis.price_position == 'abaixo' %}background:rgba(16,185,129,.1);color:var(--green)
+        {% if comp_analysis.get('price_position', 'na_media') == 'acima' %}background:rgba(239,68,68,.1);color:#fca5a5
+        {% elif comp_analysis.get('price_position', 'na_media') == 'abaixo' %}background:rgba(16,185,129,.1);color:var(--green)
         {% else %}background:rgba(108,99,255,.1);color:var(--accent){% endif %}">
-        Preço {% if comp_analysis.price_position == 'na_media' %}na média{% elif comp_analysis.price_position == 'acima' %}acima{% elif comp_analysis.price_position == 'abaixo' %}abaixo{% else %}{{ comp_analysis.price_position }}{% endif %} da média (R$ {{ comp_analysis.avg_price_32l|round(2) }})
+        Preço {% if comp_analysis.get('price_position', 'na_media') == 'na_media' %}na média{% elif comp_analysis.get('price_position', 'na_media') == 'acima' %}acima{% elif comp_analysis.get('price_position', 'na_media') == 'abaixo' %}abaixo{% else %}{{ comp_analysis.get("price_position", "na_media") }}{% endif %} da média (R$ {{ (comp_analysis.get("avg_price_32l", 0) or 0)|round(2) }})
       </div>
     </div>
 
     <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Sua avaliação vs mercado</div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <div style="font-size:26px;font-weight:900;color:var(--yellow)">{{ my.rating }}⭐</div>
-      <div style="font-size:12px;color:var(--text2)">{{ "{:,}".format(my.reviews) }} avaliações</div>
+      <div style="font-size:26px;font-weight:900;color:var(--yellow)">{{ my.get("rating", 0) or 0 }}⭐</div>
+      <div style="font-size:12px;color:var(--text2)">{{ "{:,}".format(my.get("reviews", 0) or 0) }} avaliações</div>
     </div>
 
     <!-- Oportunidades -->
-    {% for opp in comp_analysis.opportunities %}
+    {% for opp in comp_analysis.get("opportunities", []) %}
     <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:10px;margin-bottom:6px">
       <div style="font-size:12px;font-weight:700;color:var(--green)">{{ opp.icon }} {{ opp.title }}</div>
       <div style="font-size:11px;color:var(--text2);margin-top:3px">{{ opp.text }}</div>
@@ -813,8 +813,8 @@
         </div>
         <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
           <div style="font-size:10px;color:var(--text2);margin-bottom:2px">Preço vs Mercado</div>
-          <div style="font-size:13px;font-weight:700;color:{% if comp_analysis.price_position == 'abaixo' %}var(--green){% elif comp_analysis.price_position == 'na_media' %}var(--yellow){% else %}var(--red){% endif %}">
-            {% if comp_analysis.price_position == 'abaixo' %}Abaixo{% elif comp_analysis.price_position == 'na_media' %}Na média{% else %}Acima{% endif %}
+          <div style="font-size:13px;font-weight:700;color:{% if comp_analysis.get('price_position', 'na_media') == 'abaixo' %}var(--green){% elif comp_analysis.get('price_position', 'na_media') == 'na_media' %}var(--yellow){% else %}var(--red){% endif %}">
+            {% if comp_analysis.get('price_position', 'na_media') == 'abaixo' %}Abaixo{% elif comp_analysis.get('price_position', 'na_media') == 'na_media' %}Na média{% else %}Acima{% endif %}
           </div>
           {% if comp_analysis.avg_price_32l > 0 %}<div style="font-size:10px;color:var(--text2)">média R$ {{ "%.2f"|format(comp_analysis.avg_price_32l) }}</div>{% endif %}
         </div>
@@ -1082,12 +1082,12 @@
           {{ best.num_competitors }} concorrentes mapeados
         </span>
         <span style="background:rgba(245,158,11,.12);color:var(--yellow);font-size:11px;padding:3px 10px;border-radius:12px">
-          Preço {% if comp_analysis.price_position == 'abaixo' %}abaixo{% elif comp_analysis.price_position == 'na_media' %}na média{% else %}acima{% endif %} do mercado
+          Preço {% if comp_analysis.get('price_position', 'na_media') == 'abaixo' %}abaixo{% elif comp_analysis.get('price_position', 'na_media') == 'na_media' %}na média{% else %}acima{% endif %} do mercado
         </span>
       </div>
       <div style="font-size:12px;color:var(--text2);line-height:1.7">
         <strong>Ações prioritárias:</strong><br>
-        {% if comp_analysis.price_position == 'acima' %}
+        {% if comp_analysis.get('price_position', 'na_media') == 'acima' %}
         {% set _my_p = comp_analysis.my_price if comp_analysis.my_price is defined and comp_analysis.my_price > 0 else (my.price_32l or 0) %}
         {% set _avg_p = comp_analysis.avg_price if comp_analysis.avg_price is defined and comp_analysis.avg_price > 0 else (comp_analysis.avg_price_32l or 0) %}
         {% if _avg_p > 0 and _my_p > 0 %}
