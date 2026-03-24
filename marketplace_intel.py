@@ -25,12 +25,18 @@ COMPETITORS = {
         {'id': 't2', 'name': 'FrezBox Oficial',     'rating': 4.3, 'reviews':  340, 'price_32l': 179.90, 'price_20l': 139.90, 'stock': 'low',      'sponsored': True,  'badge': None,                  'shipping': 'grátis', 'fulfillment': False},
         {'id': 't3', 'name': 'CoolVibes',           'rating': 4.1, 'reviews':  180, 'price_32l': 169.90, 'price_20l': 134.90, 'stock': 'ok',       'sponsored': False, 'badge': None,                  'shipping': 'R$12',   'fulfillment': False},
     ],
-}
+
+    'shopee': [
+        {'name': 'Caixa Térmica 32L — Shopee Ads', 'type': 'shop_ads', 'spend': 380, 'revenue': 4820, 'clicks': 2100, 'impressions': 58000, 'conversions': 66, 'acos': 7.9, 'status': 'active', 'price': 72.90, 'stock': 320},
+        {'name': 'Caixa Térmica 20L — Shopee Ads', 'type': 'shop_ads', 'spend': 240, 'revenue': 3180, 'clicks': 1380, 'impressions': 42000, 'conversions': 60, 'acos': 7.5, 'status': 'active', 'price': 52.90, 'stock': 180},
+        {'name': 'Kit Térmica Promo — Flash Sale',  'type': 'flash',    'spend': 150, 'revenue': 2850, 'clicks':  980, 'impressions': 32000, 'conversions': 38, 'acos': 5.3, 'status': 'active', 'price': 65.90, 'stock': 95},
+    ],}
 
 MY_PRODUCTS = {
     'mercado_livre': {'price_32l': 219.90, 'price_20l': 189.90, 'rating': 4.8, 'reviews': 3240, 'stock_32l': 48, 'stock_20l': 9,  'badge': 'MercadoLíder Gold', 'fulfillment': True},
     'amazon':        {'price_32l': 77.00, 'price_20l': 57.00, 'rating': 4.5, 'reviews': 0, 'stock_32l': 728, 'stock_20l': 228,  'badge': None,                 'fulfillment': True},
     'tiktok_shop':   {'price_32l': 189.90, 'price_20l': 159.90, 'rating': 4.5, 'reviews':  680, 'stock_32l': 67, 'stock_20l': 3,  'badge': 'Top Seller',         'fulfillment': False},
+    'shopee':        {'price_32l': 72.90, 'price_20l': 52.90, 'rating': 4.6, 'reviews': 1240, 'stock_32l': 320, 'stock_20l': 180, 'badge': 'Shopee Preferido',   'fulfillment': False},
 }
 
 MP_ADS_DATA = {
@@ -132,7 +138,19 @@ ACCOUNT_HEALTH = {
             '💡 Lives de vendas podem aumentar conversão em 3-5x no TikTok Shop',
         ],
     },
-}
+
+    'shopee': {
+        'score': 85, 'level': 'Bom', 'color': '#ee4d2d',
+        'metrics': {
+            'Taxa de atraso':     {'val': '1.2%', 'ok': True},
+            'Cancelamentos':      {'val': '0.8%', 'ok': True},
+            'Devoluções':  {'val': '1.5%', 'ok': True},
+            'Avaliação':   {'val': '4.6 ⭐', 'ok': True},
+            'Chat respondido':    {'val': '95%',  'ok': True},
+            'Tempo resposta':     {'val': '< 1h', 'ok': True},
+        },
+        'alerts': [],
+    },}
 
 
 def analyze_competitive_position(marketplace):
