@@ -1092,6 +1092,95 @@ def amazon_set_fba():
                         'trace': traceback.format_exc()}), 500
 
 
+
+@app.route('/api/amazon/seed-products', methods=['POST'])
+@login_required
+def amazon_seed_products():
+    """
+    Pre-populate Amazon products from known data (from Seller Central screenshot).
+    Called once to ensure Anúncios tab shows data even before sync completes.
+    Also sets FBA=True and syncs the integration config.
+    """
+    try:
+        org_id = session.get('org_id', 1)
+        data   = request.get_json() or {}
+
+        # Known products from Seller Central (user-confirmed)
+        known_products = data.get('products') or [
+            {'asin': 'B0FRVW35FV', 'sku': '30-PQN6-O033',
+             'title': 'Caixa Térmica Grande 32 Litros FBA',
+             'price': 77.00, 'stock_qty': 728, 'status': 'active'},
+            {'asin': 'B0FRW5F547', 'sku': 'LG-J5Q0-BB64',
+             'title': 'Caixa Térmica Média 20 Litros FBA',
+             'price': 57.00, 'stock_qty': 228, 'status': 'active'},
+            {'asin': 'B0GSGYM1K7', 'sku': 'GI-H4MU-WW7Y',
+             'title': 'Caixa Térmica 26 Latas Compacta FBA',
+             'price': 57.00, 'stock_qty': 99, 'status': 'active'},
+            {'asin': 'B0GSGYSV7Y', 'sku': 'C4-BKOJ-BUUT',
+             'title': 'Caixa Térmica 45 Latas Max 36L FBA',
+             'price': 77.00, 'stock_qty': 177, 'status': 'active'},
+        ]
+
+        db = get_db()
+        seeded = 0
+        for p in known_products:
+            try:
+                db.execute(
+                    "INSERT INTO mp_products "
+                    "(org_id, platform, external_id, title, price, stock_qty, status, listing_type) "
+                    "VALUES (?, 'amazon', ?, ?, ?, ?, ?, 'sponsored') "
+                    "ON CONFLICT(org_id, platform, external_id) DO UPDATE SET "
+                    "title=excluded.title, price=excluded.price, "
+                    "stock_qty=excluded.stock_qty, status=excluded.status, "
+                    "listing_type='sponsored', last_synced=datetime('now')",
+                    (org_id, p['asin'], p['title'], p['price'], p['stock_qty'], p['status']))
+                seeded += 1
+            except Exception as e:
+                print(f"[seed] {p['asin']}: {e}")
+
+        # Set FBA=True in health metrics
+        row = db.execute(
+            "SELECT metrics_json FROM mp_account_health "
+            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+        current = json.loads(row['metrics_json'] if row else '{}') or {}
+        current['fulfillment_type'] = 'FBA'
+        db.execute(
+            "INSERT INTO mp_account_health "
+            "(org_id, platform, score, level, metrics_json, alerts_json) "
+            "VALUES (?, 'amazon', ?, ?, ?, '[]') "
+            "ON CONFLICT(org_id, platform) DO UPDATE SET "
+            "score=excluded.score, level=excluded.level, "
+            "metrics_json=excluded.metrics_json",
+            (org_id, current.get('score', 74), current.get('level', 'Good'),
+             json.dumps(current)))
+
+        # Also persist is_fba=True in integration config
+        integ_row = db.execute(
+            "SELECT config_json FROM api_integrations "
+            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
+        if integ_row:
+            cfg = json.loads(integ_row['config_json'] or '{}') or {}
+            cfg['is_fba'] = True
+            db.execute(
+                "UPDATE api_integrations SET config_json=? "
+                "WHERE org_id=? AND platform='amazon'",
+                (json.dumps(cfg), org_id))
+
+        db.commit()
+        db.close()
+        return jsonify({
+            'status': 'ok',
+            'seeded': seeded,
+            'fulfillment_type': 'FBA',
+            'message': f'{seeded} produtos Amazon pré-carregados com FBA confirmado'
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({'status': 'error', 'error': str(e),
+                        'trace': traceback.format_exc()}), 500
+
+
 @app.route('/api/force-sync')
 def force_sync():
     """Force a full re-sync (bypasses staleness check)."""
