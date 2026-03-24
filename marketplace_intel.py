@@ -14,10 +14,11 @@ COMPETITORS = {
         {'id': 'c5', 'name': 'AlpineBox',           'rating': 4.6, 'reviews': 1680, 'price_32l': 249.90, 'price_20l': 199.90, 'stock': 'ok',       'sponsored': True,  'badge': 'MercadoLíder Platinum','shipping': 'grátis','fulfillment': True},
     ],
     'amazon': [
-        {'id': 'a1', 'name': 'Coleman Brazil',     'rating': 4.8, 'reviews': 5240, 'price_32l': 259.90, 'price_20l': 199.90, 'stock': 'ok',       'sponsored': True,  'badge': 'Amazon Choice',       'shipping': 'Prime',  'fulfillment': True},
-        {'id': 'a2', 'name': 'IceBreaker',          'rating': 4.4, 'reviews':  980, 'price_32l': 209.90, 'price_20l': 169.90, 'stock': 'ok',       'sponsored': True,  'badge': None,                  'shipping': 'Prime',  'fulfillment': True},
-        {'id': 'a3', 'name': 'ThermoBox BR',        'rating': 4.6, 'reviews': 1890, 'price_32l': 224.90, 'price_20l': 174.90, 'stock': 'low',      'sponsored': False, 'badge': None,                  'shipping': 'grátis', 'fulfillment': False},
-        {'id': 'a4', 'name': 'PolarBox',            'rating': 4.2, 'reviews':  340, 'price_32l': 184.90, 'price_20l': 144.90, 'stock': 'critical', 'sponsored': False, 'badge': None,                  'shipping': 'R$20',   'fulfillment': False},
+        {'id': 'a1', 'name': 'Mor Caixas Térmicas',  'rating': 4.6, 'reviews': 3820, 'price_32l': 89.90,  'price_20l': 69.90,  'stock': 'ok',       'sponsored': True,  'badge': 'Amazon Choice',       'shipping': 'Prime',  'fulfillment': True},
+        {'id': 'a2', 'name': 'Soprano Térmica',      'rating': 4.3, 'reviews': 1450, 'price_32l': 79.90,  'price_20l': 59.90,  'stock': 'ok',       'sponsored': True,  'badge': None,                  'shipping': 'Prime',  'fulfillment': True},
+        {'id': 'a3', 'name': 'Invicta Cooler',             'rating': 4.5, 'reviews': 2100, 'price_32l': 94.90,  'price_20l': 74.90,  'stock': 'ok',       'sponsored': False, 'badge': None,                  'shipping': 'Prime',  'fulfillment': True},
+        {'id': 'a4', 'name': 'BelFix Térmica',       'rating': 4.1, 'reviews':  680, 'price_32l': 67.90,  'price_20l': 49.90,  'stock': 'low',      'sponsored': False, 'badge': None,                  'shipping': 'grátis', 'fulfillment': False},
+        {'id': 'a5', 'name': 'Obba Térmica',         'rating': 4.0, 'reviews':  290, 'price_32l': 72.90,  'price_20l': 54.90,  'stock': 'ok',       'sponsored': False, 'badge': None,                  'shipping': 'R$12',   'fulfillment': False},
     ],
     'tiktok_shop': [
         {'id': 't1', 'name': 'IceCool BR',         'rating': 4.6, 'reviews':  820, 'price_32l': 189.90, 'price_20l': 149.90, 'stock': 'ok',       'sponsored': True,  'badge': 'Top Seller',          'shipping': 'grátis', 'fulfillment': False},
