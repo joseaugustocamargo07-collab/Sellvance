@@ -308,6 +308,11 @@ def _marketplaces_inner():
     is_connected = integration and integration.get('status') == 'connected'
     sync_info = None
 
+    if is_connected and mp == 'amazon':
+        from sync_amazon import sync_all as amazon_sync
+        run_sync_if_needed(org_id, mp, amazon_sync, max_age=60)
+        sync_info = get_last_sync_info(org_id, mp)
+
     if is_connected and mp == 'mercado_livre':
         from sync_mercadolivre import sync_all as ml_sync
         run_sync_if_needed(org_id, mp, ml_sync, max_age=60)
@@ -1035,6 +1040,12 @@ def force_sync():
             from sync_mercadolivre import sync_all
             from sync_base import log_sync
             records = sync_all(org_id)
+            log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
+            return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp})
+        if mp == 'amazon':
+            from sync_amazon import sync_all as amazon_sync_all
+            from sync_base import log_sync
+            records = amazon_sync_all(org_id)
             log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
             return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp})
         return jsonify({'status': 'error', 'error': f'Unknown platform: {mp}'})
