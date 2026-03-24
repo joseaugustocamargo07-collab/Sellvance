@@ -398,8 +398,7 @@ def get_account_health_live(org_id, marketplace):
                     odr = float(str(raw_metrics['order_defect_rate']).rstrip('%') or 0)
                     if odr >= 1.0:
                         alerts.append('⚠️ ODR acima de 1% — risco de suspensão da conta')
-                if raw_metrics.get('fulfillment_type', 'FBA') != 'FBA':
-                    alerts.append('💡 Habilitar FBA pode melhorar conversão em ~30% e aumentar visibilidade')
+                # FBA status is auto-detected or manually confirmed — no misleading alert
                 cr = float(str(raw_metrics.get('cancel_rate', '0')).rstrip('%') or 0)
                 if cr >= 2.5:
                     alerts.append('⚠️ Taxa de cancelamento alta — revisar estoque disponível')
