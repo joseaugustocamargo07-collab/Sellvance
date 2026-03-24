@@ -291,7 +291,6 @@ def get_my_products_live(org_id, marketplace):
             "SELECT * FROM mp_products WHERE org_id=? AND platform=? AND status='active' ORDER BY sold_qty DESC",
             (org_id, marketplace)
         ).fetchall()
-        db.close()
 
         if products and len(products) > 0:
             # Transform to the format templates expect
@@ -314,6 +313,7 @@ def get_my_products_live(org_id, marketplace):
                     is_fba = h_m.get('fulfillment_type', 'FBM') == 'FBA'
             except Exception:
                 pass
+            db.close()
             return {
                 'price_32l': products[0]['price'] if len(products) > 0 else 0,
                 'price_20l': products[1]['price'] if len(products) > 1 else 0,
