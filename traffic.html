@@ -116,6 +116,13 @@
     <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:8px 12px;font-size:12px;color:#fcd34d;margin-bottom:6px">{{ alert }}</div>
     {% endfor %}
     {% endif %}
+    {% if mp == "amazon" and is_live %}
+    <div style="margin-top:10px;padding:8px 12px;background:rgba(255,153,0,0.08);border:1px solid rgba(255,153,0,0.3);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:11px;color:#aaa">⚙️ Fulfillment incorreto?</span>
+      <button onclick="setAmazonFBA(true)" style="padding:4px 14px;background:#ff9900;color:#000;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:11px">✅ Confirmar FBA</button>
+      <button onclick="setAmazonFBA(false)" style="padding:4px 14px;background:transparent;color:#aaa;border:1px solid #444;border-radius:6px;cursor:pointer;font-size:11px">FBM</button>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Minha posição vs concorrentes -->
@@ -1490,3 +1497,24 @@ async function triggerCompetitorSync() {
 </script>
 
 {% endblock %}
+
+<script>
+function setAmazonFBA(isFba) {
+  fetch('/api/amazon/set-fba', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({is_fba: isFba})
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.status === 'ok') {
+      const msg = isFba ? 'FBA confirmado! A página será recarregada.' : 'Definido como FBM.';
+      alert('✅ ' + msg);
+      location.reload();
+    } else {
+      alert('Erro: ' + (d.error || 'Tente novamente'));
+    }
+  })
+  .catch(e => alert('Erro de rede: ' + e));
+}
+</script>
