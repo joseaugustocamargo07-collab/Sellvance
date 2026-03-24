@@ -29,7 +29,7 @@ COMPETITORS = {
 
 MY_PRODUCTS = {
     'mercado_livre': {'price_32l': 219.90, 'price_20l': 189.90, 'rating': 4.8, 'reviews': 3240, 'stock_32l': 48, 'stock_20l': 9,  'badge': 'MercadoLíder Gold', 'fulfillment': True},
-    'amazon':        {'price_32l': 219.90, 'price_20l': 189.90, 'rating': 4.7, 'reviews': 2180, 'stock_32l': 22, 'stock_20l': 0,  'badge': None,                 'fulfillment': False},
+    'amazon':        {'price_32l': 77.00, 'price_20l': 57.00, 'rating': 4.5, 'reviews': 0, 'stock_32l': 728, 'stock_20l': 228,  'badge': None,                 'fulfillment': True},
     'tiktok_shop':   {'price_32l': 189.90, 'price_20l': 159.90, 'rating': 4.5, 'reviews':  680, 'stock_32l': 67, 'stock_20l': 3,  'badge': 'Top Seller',         'fulfillment': False},
 }
 
@@ -106,20 +106,16 @@ ACCOUNT_HEALTH = {
         'alerts': [],
     },
     'amazon': {
-        'score': 74, 'level': 'Seller Standard', 'color': '#ff9900',
+        'score': 92, 'level': 'Good', 'color': '#ff9900',
         'metrics': {
-            'ODR (Defeito)':   {'val': '2.8%', 'ok': False},
-            'Cancelamentos':   {'val': '1.9%', 'ok': False},
-            'Envio no prazo':  {'val': '94%',  'ok': True},
-            'Avaliação média': {'val': '4.7 ⭐','ok': True},
-            'A-to-Z Claims':   {'val': '0.3%', 'ok': True},
-            'Fulfillment':     {'val': 'FBM',   'ok': False},
+            'ODR (Defeito)':   {'val': '0.2%', 'ok': True},
+            'Cancelamentos':   {'val': '0.5%', 'ok': True},
+            'Envio no prazo':  {'val': '98%',  'ok': True},
+            'A-to-Z Claims':   {'val': '0.1%', 'ok': True},
+            'Rastreio válido': {'val': '97%', 'ok': True},
+            'Fulfillment':     {'val': 'FBA',   'ok': True},
         },
-        'alerts': [
-            '⚠️ ODR acima de 1% — risco de suspensão da conta',
-            '⚠️ Habilitar FBA pode melhorar score e conversão em ~30%',
-            '⚠️ Taxa de cancelamento alta — revisar estoque disponível',
-        ],
+        'alerts': [],
     },
     'tiktok_shop': {
         'score': 88, 'level': 'Top Seller', 'color': '#ff0050',
