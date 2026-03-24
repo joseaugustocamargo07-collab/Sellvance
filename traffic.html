@@ -117,11 +117,13 @@
     {% endfor %}
     {% endif %}
     {% if mp == "amazon" and is_live %}
-    <div style="margin-top:10px;padding:8px 12px;background:rgba(255,153,0,0.08);border:1px solid rgba(255,153,0,0.3);border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span style="font-size:11px;color:#aaa">⚙️ Fulfillment incorreto?</span>
-      <button onclick="setAmazonFBA(true)" style="padding:4px 14px;background:#ff9900;color:#000;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:11px">✅ Confirmar FBA</button>
-      <button onclick="setAmazonFBA(false)" style="padding:4px 14px;background:transparent;color:#aaa;border:1px solid #444;border-radius:6px;cursor:pointer;font-size:11px">FBM</button>
+    {% set ft = health.metrics.get("Fulfillment", {}).get("val", "FBM") %}
+    {% if ft != "FBA" %}
+    <div style="margin-top:10px;padding:10px 14px;background:rgba(255,153,0,0.1);border:1px solid rgba(255,153,0,0.3);border-radius:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:12px;color:#fbbf24">Seus produtos usam FBA (Logística da Amazon)?</span>
+      <button id="btnConfirmFba" onclick="confirmFBA()" style="padding:6px 18px;background:#ff9900;color:#000;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px">✅ Sim, confirmar FBA</button>
     </div>
+    {% endif %}
     {% endif %}
   </div>
 
@@ -1499,22 +1501,37 @@ async function triggerCompetitorSync() {
 {% endblock %}
 
 <script>
-function setAmazonFBA(isFba) {
+function confirmFBA() {
+  var btn = document.getElementById('btnConfirmFba');
+  if (btn) { btn.textContent = '⏳ Salvando...'; btn.disabled = true; }
+
+  // Step 1: Set FBA in health metrics + integration config
   fetch('/api/amazon/set-fba', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({is_fba: isFba})
+    credentials: 'same-origin',
+    body: JSON.stringify({is_fba: true})
   })
-  .then(r => r.json())
-  .then(d => {
-    if (d.status === 'ok') {
-      const msg = isFba ? 'FBA confirmado! A página será recarregada.' : 'Definido como FBM.';
-      alert('✅ ' + msg);
-      location.reload();
-    } else {
-      alert('Erro: ' + (d.error || 'Tente novamente'));
-    }
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.status !== 'ok') throw new Error(d.error || 'Erro ao salvar FBA');
+
+    // Step 2: Also seed products if they don't exist yet
+    return fetch('/api/amazon/seed-products', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify({})
+    }).then(function(r2) { return r2.json(); });
   })
-  .catch(e => alert('Erro de rede: ' + e));
+  .then(function(d2) {
+    // Success — reload page
+    window.location.reload();
+  })
+  .catch(function(err) {
+    if (btn) { btn.textContent = '❌ Erro — tente novamente'; btn.disabled = false; }
+    console.error('FBA confirm error:', err);
+    alert('Erro: ' + err.message);
+  });
 }
 </script>
