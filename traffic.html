@@ -247,19 +247,19 @@
     <span style="font-size:22px">{{ mp_icons[mp] }}</span>
     <div>
       <div style="font-weight:900;font-size:15px">{{ account_name or 'Minha Loja' }} <span style="color:{{ mp_color }};font-size:12px">● VOCÊ</span></div>
-      <div style="font-size:11px;color:var(--text2)">{{ my.badge or 'Seller padrão' }} · Fulfillment: {{ 'Sim ✅' if my.fulfillment else 'Não ❌' }}</div>
+      <div style="font-size:11px;color:var(--text2)">{{ my.get("badge", "") or 'Seller padrão' }} · Fulfillment: {{ 'Sim ✅' if my.get("fulfillment", False) else 'Não ❌' }}</div>
     </div>
     <div style="margin-left:auto;display:flex;gap:20px">
-      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--yellow)">{{ my.rating }}⭐</div><div style="font-size:10px;color:var(--text3)">Avaliação</div></div>
-      <div style="text-align:center"><div style="font-size:18px;font-weight:900">{{ "{:,}".format(my.reviews) }}</div><div style="font-size:10px;color:var(--text3)">Reviews</div></div>
-      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_32l }}</div><div style="font-size:10px;color:var(--text3)">Produto 1</div></div>
-      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_20l }}</div><div style="font-size:10px;color:var(--text3)">Produto 2</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--yellow)">{{ my.get("rating", 0) }}⭐</div><div style="font-size:10px;color:var(--text3)">Avaliação</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900">{{ "{:,}".format(my.get("reviews", 0)) }}</div><div style="font-size:10px;color:var(--text3)">Reviews</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.get("price_32l", 0) }}</div><div style="font-size:10px;color:var(--text3)">Produto 1</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.get("price_20l", 0) }}</div><div style="font-size:10px;color:var(--text3)">Produto 2</div></div>
       <div style="text-align:center">
-        <div style="font-size:18px;font-weight:900;color:{% if my.stock_32l > 20 %}var(--green){% elif my.stock_32l > 5 %}var(--yellow){% else %}var(--red){% endif %}">{{ my.stock_32l }}</div>
+        <div style="font-size:18px;font-weight:900;color:{% if my.get("stock_32l", 0) > 20 %}var(--green){% elif my.get("stock_32l", 0) > 5 %}var(--yellow){% else %}var(--red){% endif %}">{{ my.get("stock_32l", 0) }}</div>
         <div style="font-size:10px;color:var(--text3)">Estoque 32L</div>
       </div>
       <div style="text-align:center">
-        <div style="font-size:18px;font-weight:900;color:{% if my.stock_20l > 20 %}var(--green){% elif my.stock_20l > 5 %}var(--yellow){% else %}var(--red){% endif %}">{{ my.stock_20l }}</div>
+        <div style="font-size:18px;font-weight:900;color:{% if my.get("stock_20l", 0) > 20 %}var(--green){% elif my.get("stock_20l", 0) > 5 %}var(--yellow){% else %}var(--red){% endif %}">{{ my.get("stock_20l", 0) }}</div>
         <div style="font-size:10px;color:var(--text3)">Estoque 20L</div>
       </div>
     </div>
@@ -307,35 +307,35 @@
     </tr></thead>
     <tbody>
     {% for c in competitors %}
-    {% set stock_color = '#10b981' if c.stock == 'ok' else '#f59e0b' if c.stock == 'low' else '#ef4444' %}
-    {% set stock_label = '✅ OK' if c.stock == 'ok' else '⚠️ Baixo' if c.stock == 'low' else '🔴 Crítico' if c.stock == 'critical' else '❌ Sem estoque' %}
+    {% set stock_color = '#10b981' if c.get("stock", "ok") == 'ok' else '#f59e0b' if c.get("stock", "ok") == 'low' else '#ef4444' %}
+    {% set stock_label = '✅ OK' if c.get("stock", "ok") == 'ok' else '⚠️ Baixo' if c.get("stock", "ok") == 'low' else '🔴 Crítico' if c.get("stock", "ok") == 'critical' else '❌ Sem estoque' %}
     <tr>
-      <td style="font-weight:700">{{ c.name }}</td>
+      <td style="font-weight:700">{{ c.get("name", "Vendedor") }}</td>
       <td>
-        <span style="color:var(--yellow);font-weight:700">{{ c.rating }}⭐</span>
-        {% if c.rating > my.rating %}<span style="font-size:10px;color:#fca5a5"> ▲</span>
-        {% elif c.rating < my.rating %}<span style="font-size:10px;color:var(--green)"> ▼</span>{% endif %}
+        <span style="color:var(--yellow);font-weight:700">{{ c.get("rating", 0) }}⭐</span>
+        {% if c.get("rating", 0) > my.get("rating", 0) %}<span style="font-size:10px;color:#fca5a5"> ▲</span>
+        {% elif c.get("rating", 0) < my.get("rating", 0) %}<span style="font-size:10px;color:var(--green)"> ▼</span>{% endif %}
       </td>
-      <td style="color:var(--text2)">{{ "{:,}".format(c.reviews) }}</td>
+      <td style="color:var(--text2)">{{ "{:,}".format(c.get("reviews", 0)) }}</td>
       <td>
-        <span style="font-weight:700;color:{% if c.price_32l < my.price_32l %}var(--red){% elif c.price_32l > my.price_32l %}var(--green){% else %}var(--text){% endif %}">
-          R$ {{ c.price_32l }}
+        <span style="font-weight:700;color:{% if c.get("price_32l", 0) < my.get("price_32l", 0) %}var(--red){% elif c.get("price_32l", 0) > my.get("price_32l", 0) %}var(--green){% else %}var(--text){% endif %}">
+          R$ {{ c.get("price_32l", 0) }}
         </span>
-        {% if c.price_32l < my.price_32l %}<span style="font-size:10px;color:#fca5a5"> -R${{ (my.price_32l - c.price_32l)|round(2) }}</span>{% endif %}
+        {% if c.get("price_32l", 0) < my.get("price_32l", 0) %}<span style="font-size:10px;color:#fca5a5"> -R${{ (my.get("price_32l", 0) - c.get("price_32l", 0))|round(2) }}</span>{% endif %}
       </td>
       <td>
-        <span style="color:{% if c.price_20l < my.price_20l %}var(--red){% elif c.price_20l > my.price_20l %}var(--green){% else %}var(--text){% endif %}">
-          R$ {{ c.price_20l }}
+        <span style="color:{% if c.get("price_20l", 0) < my.get("price_20l", 0) %}var(--red){% elif c.get("price_20l", 0) > my.get("price_20l", 0) %}var(--green){% else %}var(--text){% endif %}">
+          R$ {{ c.get("price_20l", 0) }}
         </span>
       </td>
       <td><span style="color:{{ stock_color }};font-weight:600;font-size:12px">{{ stock_label }}</span></td>
-      <td>{% if c.sponsored %}<span class="badge b-purple" style="font-size:10px">Sim</span>{% else %}<span style="color:var(--text3);font-size:11px">Não</span>{% endif %}</td>
-      <td style="font-size:11px;color:var(--yellow)">{{ c.badge or '—' }}</td>
-      <td style="font-size:12px;color:var(--text2)">{{ c.shipping }}</td>
+      <td>{% if c.get("sponsored", False) %}<span class="badge b-purple" style="font-size:10px">Sim</span>{% else %}<span style="color:var(--text3);font-size:11px">Não</span>{% endif %}</td>
+      <td style="font-size:11px;color:var(--yellow)">{{ c.get("badge", "") or '—' }}</td>
+      <td style="font-size:12px;color:var(--text2)">{{ c.get("shipping", "") }}</td>
       <td>
-        {% if c.stock in ('critical', 'out') %}
+        {% if c.get("stock", "ok") in ('critical', 'out') %}
         <span class="badge b-green" style="font-size:10px">📦 Oportunidade!</span>
-        {% elif c.price_32l < my.price_32l and c.rating < my.rating %}
+        {% elif c.get("price_32l", 0) < my.get("price_32l", 0) and c.get("rating", 0) < my.get("rating", 0) %}
         <span class="badge b-purple" style="font-size:10px">⚔️ Ameaça de preço</span>
         {% else %}
         <span style="font-size:10px;color:var(--text3)">Monitorar</span>
@@ -945,10 +945,10 @@
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0">
 
     {# Oferta do Dia #}
-    {% set my_price = my.price_32l or 0 %}
-    {% set my_rating = my.rating or 0 %}
+    {% set my_price = my.get("price_32l", 0) or 0 %}
+    {% set my_rating = my.get("rating", 0) or 0 %}
     {% set avg_price = comp_analysis.avg_price_32l or 0 %}
-    {% set stock_ok = my.stock_32l is defined and my.stock_32l > 10 %}
+    {% set stock_ok = my.get("stock_32l", 0) is defined and my.get("stock_32l", 0) > 10 %}
     {% set rating_ok = my_rating >= 4.0 %}
     {% set eligible_deal = rating_ok and stock_ok %}
 
@@ -1088,7 +1088,7 @@
       <div style="font-size:12px;color:var(--text2);line-height:1.7">
         <strong>Ações prioritárias:</strong><br>
         {% if comp_analysis.get('price_position', 'na_media') == 'acima' %}
-        {% set _my_p = comp_analysis.my_price if comp_analysis.my_price is defined and comp_analysis.my_price > 0 else (my.price_32l or 0) %}
+        {% set _my_p = comp_analysis.my_price if comp_analysis.my_price is defined and comp_analysis.my_price > 0 else (my.get("price_32l", 0) or 0) %}
         {% set _avg_p = comp_analysis.avg_price if comp_analysis.avg_price is defined and comp_analysis.avg_price > 0 else (comp_analysis.avg_price_32l or 0) %}
         {% if _avg_p > 0 and _my_p > 0 %}
         1. Ajuste de preço: seu produto (R$ {{ "%.2f"|format(_my_p) }}) está acima da média dos concorrentes (R$ {{ "%.2f"|format(_avg_p) }}) — desconto de {{ [((_my_p - _avg_p) / _my_p * 100)|int + 2, 5]|max }}% posiciona melhor para Oferta do Dia.<br>
@@ -1174,8 +1174,8 @@
         <div style="font-weight:600;font-size:13px">{{ rec.title }}{% if rec.title|length == 45 %}...{% endif %}</div>
         <div style="font-size:11px;color:var(--text2)">
           R$ {{ "%.2f"|format(rec.price) }}
-          {% if rec.sold_qty > 0 %} &nbsp;·&nbsp; {{ rec.sold_qty }} vendas{% endif %}
-          {% if rec.stock_qty > 0 %} &nbsp;·&nbsp; {{ rec.stock_qty }} em estoque{% endif %}
+          {% if rec.get("sold_qty", 0) > 0 %} &nbsp;·&nbsp; {{ rec.get("sold_qty", 0) }} vendas{% endif %}
+          {% if rec.get("stock", "ok")_qty > 0 %} &nbsp;·&nbsp; {{ rec.get("stock", "ok")_qty }} em estoque{% endif %}
         </div>
       </td>
       <td>
