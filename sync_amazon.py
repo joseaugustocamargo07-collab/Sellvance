@@ -1,0 +1,511 @@
+"""
+Sellvance — Amazon SP-API Sync
+Syncs orders, products and account health from Amazon Seller Central.
+
+Authentication flow:
+  1. Exchange refresh_token for LWA access_token  (per seller)
+  2. Sign each request with AWS Signature v4       (platform-wide IAM creds)
+
+Railway env vars needed (set once, platform-wide):
+  AMAZON_AWS_ACCESS_KEY  — IAM Access Key ID
+  AMAZON_AWS_SECRET_KEY  — IAM Secret Access Key
+
+Per-seller credentials saved in api_integrations.config_json:
+  seller_id       — Seller ID  (e.g. A1B2C3D4E5F6G7)
+  marketplace_id  — Marketplace ID  (A2Q3Y263D00KWC = Brazil)
+  client_id       — LWA Client ID   (amzn1.application-oa2-client.xxx)
+  client_secret   — LWA Client Secret
+  refresh_token   — LWA Refresh Token  (Atexxxx...)
+"""
+
+import json, hashlib, hmac, datetime, urllib.request, urllib.parse, urllib.error, os
+from database import get_db
+from sync_base import AuthError
+
+# ── SP-API region routing ─────────────────────────────────────────────────────
+_ENDPOINT = {
+    'A2Q3Y263D00KWC': 'sellingpartnerapi-na.amazon.com',  # Brazil
+    'ATVPDKIKX0DER':  'sellingpartnerapi-na.amazon.com',  # US
+    'A2EUQ1WTGCTBG2': 'sellingpartnerapi-na.amazon.com',  # Canada
+    'A1AM78C64UM0Y8': 'sellingpartnerapi-na.amazon.com',  # Mexico
+    'A1RKKUPIHCS9HS': 'sellingpartnerapi-eu.amazon.com',  # Spain
+    'A13V1IB3VIYZZH': 'sellingpartnerapi-eu.amazon.com',  # France
+    'A1F83G8C2ARO7P': 'sellingpartnerapi-eu.amazon.com',  # UK
+    'A1PA6795UKMFR9': 'sellingpartnerapi-eu.amazon.com',  # Germany
+    'APJ6JRA9NG5V4':  'sellingpartnerapi-eu.amazon.com',  # Italy
+    'A1VC38T7YXB528': 'sellingpartnerapi-fe.amazon.com',  # Japan
+}
+_DEFAULT_ENDPOINT = 'sellingpartnerapi-na.amazon.com'
+LWA_URL = 'https://api.amazon.com/auth/o2/token'
+
+
+# ── LWA token ─────────────────────────────────────────────────────────────────
+
+def _get_lwa_token(client_id, client_secret, refresh_token):
+    """Exchange refresh_token → LWA access_token."""
+    body = urllib.parse.urlencode({
+        'grant_type':    'refresh_token',
+        'client_id':     client_id,
+        'client_secret': client_secret,
+        'refresh_token': refresh_token,
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        LWA_URL, data=body,
+        headers={'Content-Type': 'application/x-www-form-urlencoded'},
+        method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        token = data.get('access_token', '')
+        if not token:
+            raise AuthError(f"LWA returned no access_token: {data}")
+        return token, data.get('expires_in', 3600)
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode()[:300]
+        print(f"[amazon] LWA error {e.code}: {body_err}")
+        if e.code in (400, 401):
+            raise AuthError(f"LWA auth failed ({e.code}): {body_err}")
+        raise
+
+
+# ── AWS Signature v4 (pure stdlib, no boto3) ──────────────────────────────────
+
+def _sha256hex(data):
+    if isinstance(data, str):
+        data = data.encode('utf-8')
+    return hashlib.sha256(data).hexdigest()
+
+def _hmac256(key, msg):
+    if isinstance(msg, str):
+        msg = msg.encode('utf-8')
+    return hmac.new(key, msg, hashlib.sha256).digest()
+
+def _signing_key(secret, date_str, region, service):
+    kdate    = _hmac256(('AWS4' + secret).encode('utf-8'), date_str)
+    kregion  = _hmac256(kdate,   region)
+    kservice = _hmac256(kregion, service)
+    return     _hmac256(kservice, 'aws4_request')
+
+def _sigv4_headers(method, url, extra_headers, body_bytes,
+                   aws_key, aws_secret, region='us-east-1', service='execute-api'):
+    """Return headers dict with AWS4-HMAC-SHA256 Authorization added."""
+    parsed   = urllib.parse.urlparse(url)
+    now      = datetime.datetime.utcnow()
+    amz_date = now.strftime('%Y%m%dT%H%M%SZ')
+    date_str = now.strftime('%Y%m%d')
+    host     = parsed.netloc
+    path     = parsed.path or '/'
+    query_str = parsed.query or ''
+
+    hdrs = dict(extra_headers)
+    hdrs['x-amz-date'] = amz_date
+    hdrs['host']        = host
+
+    sorted_keys    = sorted(hdrs.keys(), key=str.lower)
+    signed_headers = ';'.join(k.lower() for k in sorted_keys)
+    canonical_hdrs = ''.join(f"{k.lower()}:{hdrs[k].strip()}\n" for k in sorted_keys)
+
+    payload_hash  = _sha256hex(body_bytes)
+    canonical_req = '\n'.join([
+        method.upper(), path, query_str,
+        canonical_hdrs, signed_headers, payload_hash])
+
+    cred_scope  = f"{date_str}/{region}/{service}/aws4_request"
+    string_sign = '\n'.join([
+        'AWS4-HMAC-SHA256', amz_date, cred_scope, _sha256hex(canonical_req)])
+
+    sig = hmac.new(
+        _signing_key(aws_secret, date_str, region, service),
+        string_sign.encode('utf-8'), hashlib.sha256).hexdigest()
+
+    hdrs['Authorization'] = (
+        f"AWS4-HMAC-SHA256 Credential={aws_key}/{cred_scope}, "
+        f"SignedHeaders={signed_headers}, Signature={sig}")
+    hdrs.pop('host', None)
+    return hdrs
+
+
+# ── SP-API HTTP helper ─────────────────────────────────────────────────────────
+
+def _sp_get(endpoint, path, access_token, params=None,
+            aws_key='', aws_secret='', region='us-east-1'):
+    """Signed GET to SP-API. Returns parsed JSON or {}."""
+    qs  = ('?' + urllib.parse.urlencode(params)) if params else ''
+    url = f"https://{endpoint}{path}{qs}"
+
+    base_hdrs = {
+        'x-amz-access-token': access_token,
+        'Content-Type':       'application/json',
+    }
+    if aws_key and aws_secret:
+        base_hdrs = _sigv4_headers('GET', url, base_hdrs, b'',
+                                   aws_key, aws_secret, region)
+
+    req = urllib.request.Request(url, headers=base_hdrs, method='GET')
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode()[:400]
+        print(f"[amazon SP-API] {e.code} {path}: {body_err}")
+        if e.code in (401, 403):
+            raise AuthError(f"SP-API {e.code}: {body_err[:100]}")
+        if e.code == 429:
+            import time; time.sleep(3)
+        return {}
+    except Exception as exc:
+        print(f"[amazon SP-API] {path}: {exc}")
+        return {}
+
+
+# ── Credential loader ──────────────────────────────────────────────────────────
+
+def _load_creds(org_id):
+    from oauth_manager import get_integration
+    integ = get_integration(org_id, 'amazon')
+    if not integ or integ.get('status') != 'connected':
+        return None
+    cfg   = integ.get('config', {})
+    mp_id = cfg.get('marketplace_id', 'A2Q3Y263D00KWC')
+    return {
+        'seller_id':      cfg.get('seller_id', ''),
+        'marketplace_id': mp_id,
+        'client_id':      cfg.get('client_id', ''),
+        'client_secret':  cfg.get('client_secret', ''),
+        'refresh_token':  cfg.get('refresh_token', ''),
+        'aws_key':        os.environ.get('AMAZON_AWS_ACCESS_KEY', ''),
+        'aws_secret':     os.environ.get('AMAZON_AWS_SECRET_KEY', ''),
+        'endpoint':       _ENDPOINT.get(mp_id, _DEFAULT_ENDPOINT),
+        'region':         'us-east-1',
+    }
+
+
+# ── Orders ─────────────────────────────────────────────────────────────────────
+
+def _sync_orders(org_id, token, creds):
+    from datetime import datetime, timedelta, timezone
+    since  = (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    params = {
+        'MarketplaceIds':    creds['marketplace_id'],
+        'CreatedAfter':      since,
+        'MaxResultsPerPage': '100',
+    }
+    db       = get_db()
+    count    = 0
+    next_tok = None
+
+    while True:
+        resp    = _sp_get(
+            creds['endpoint'], '/orders/v0/orders', token,
+            params={'NextToken': next_tok} if next_tok else params,
+            aws_key=creds['aws_key'], aws_secret=creds['aws_secret'],
+            region=creds['region'])
+        payload = resp.get('payload', {})
+        orders  = payload.get('Orders', [])
+
+        for o in orders:
+            ext_id = o.get('AmazonOrderId', '')
+            if not ext_id:
+                continue
+            status_map = {
+                'Shipped': 'delivered', 'Delivered': 'delivered',
+                'Unshipped': 'pending',  'Pending': 'pending',
+                'Canceled': 'cancelled', 'Cancelled': 'cancelled',
+            }
+            status = status_map.get(o.get('OrderStatus', ''), 'delivered')
+            try:
+                gmv = float(o.get('OrderTotal', {}).get('Amount', 0) or 0)
+            except (ValueError, TypeError):
+                gmv = 0.0
+            revenue = round(gmv * 0.85, 2)
+            cost    = round(gmv * 0.40, 2)
+
+            raw_date   = o.get('PurchaseDate', '')
+            ordered_at = (raw_date[:19].replace('T', ' ')
+                          if raw_date else
+                          datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+            buyer_email = o.get('BuyerInfo', {}).get('BuyerEmail', '') or ''
+            buyer_name  = o.get('BuyerInfo', {}).get('BuyerName',  '') or 'Amazon Customer'
+            contact_id  = None
+
+            if buyer_email and '@' in buyer_email:
+                row = db.execute(
+                    'SELECT id FROM contacts WHERE org_id=? AND email=?',
+                    (org_id, buyer_email)).fetchone()
+                if row:
+                    contact_id = row[0]
+                else:
+                    db.execute(
+                        "INSERT INTO contacts "
+                        "(org_id,name,email,source,rfm_segment,wa_opt_in,email_opt_in) "
+                        "VALUES (?,?,?,'amazon','new',0,1)",
+                        (org_id, buyer_name, buyer_email))
+                    contact_id = db.execute(
+                        'SELECT last_insert_rowid()').fetchone()[0]
+                    db.commit()
+
+            try:
+                db.execute(
+                    "INSERT INTO orders "
+                    "(org_id,contact_id,marketplace,external_id,status,gmv,revenue,cost,channel,ordered_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?) "
+                    "ON CONFLICT(org_id,marketplace,external_id) DO UPDATE SET "
+                    "status=excluded.status, gmv=excluded.gmv, "
+                    "revenue=excluded.revenue, cost=excluded.cost",
+                    (org_id, contact_id, 'amazon', ext_id, status,
+                     gmv, revenue, cost, 'organic', ordered_at))
+                count += 1
+            except Exception as exc:
+                print(f"[amazon] Order upsert {ext_id}: {exc}")
+
+        next_tok = payload.get('NextToken')
+        if not next_tok or not orders:
+            break
+
+    db.commit()
+    db.close()
+    return count
+
+
+# ── Products (Listings API → FBA inventory fallback) ──────────────────────────
+
+def _sync_products(org_id, token, creds):
+    endpoint    = creds['endpoint']
+    seller_id   = creds['seller_id']
+    marketplace = creds['marketplace_id']
+    aws_key     = creds['aws_key']
+    aws_secret  = creds['aws_secret']
+    region      = creds['region']
+
+    db    = get_db()
+    count = 0
+
+    # Try Listings Items API first
+    resp  = _sp_get(
+        endpoint, f'/listings/2021-08-01/items/{seller_id}', token,
+        params={'marketplaceIds': marketplace,
+                'includedData':   'summaries,offers',
+                'pageSize':       '20'},
+        aws_key=aws_key, aws_secret=aws_secret, region=region)
+    items = resp.get('items', [])
+
+    if not items:
+        # Fallback: FBA Inventory
+        resp2 = _sp_get(
+            endpoint, '/fba/inventory/v1/summaries', token,
+            params={'granularityType': 'Marketplace',
+                    'granularityId':   marketplace,
+                    'marketplaceIds':  marketplace},
+            aws_key=aws_key, aws_secret=aws_secret, region=region)
+        for item in resp2.get('payload', {}).get('inventorySummaries', []):
+            asin = item.get('asin', '')
+            if not asin:
+                continue
+            try:
+                db.execute(
+                    "INSERT INTO mp_products "
+                    "(org_id,platform,external_id,title,stock_qty,status) "
+                    "VALUES (?,?,?,?,?,?) "
+                    "ON CONFLICT(org_id,platform,external_id) DO UPDATE SET "
+                    "title=excluded.title, stock_qty=excluded.stock_qty, "
+                    "last_synced=datetime('now')",
+                    (org_id, 'amazon', asin,
+                     item.get('productName', asin),
+                     item.get('totalQuantity', 0), 'active'))
+                count += 1
+            except Exception as exc:
+                print(f"[amazon] FBA product {asin}: {exc}")
+    else:
+        for item in items:
+            sums  = (item.get('summaries') or [{}])[0]
+            asin  = sums.get('asin', item.get('sku', ''))
+            title = sums.get('itemName', '')
+            offers = item.get('offers') or []
+            price  = 0.0
+            if offers:
+                try:
+                    price = float(
+                        offers[0].get('listingPrice', {}).get('amount', 0) or 0)
+                except (ValueError, TypeError):
+                    price = 0.0
+            try:
+                db.execute(
+                    "INSERT INTO mp_products "
+                    "(org_id,platform,external_id,title,price,status) "
+                    "VALUES (?,?,?,?,?,?) "
+                    "ON CONFLICT(org_id,platform,external_id) DO UPDATE SET "
+                    "title=excluded.title, price=excluded.price, "
+                    "last_synced=datetime('now')",
+                    (org_id, 'amazon', asin, title, price, 'active'))
+                count += 1
+            except Exception as exc:
+                print(f"[amazon] Listing {asin}: {exc}")
+
+    db.commit()
+    db.close()
+    return count
+
+
+# ── Account health ─────────────────────────────────────────────────────────────
+
+def _sync_account_health(org_id, token, creds):
+    endpoint    = creds['endpoint']
+    marketplace = creds['marketplace_id']
+    aws_key     = creds['aws_key']
+    aws_secret  = creds['aws_secret']
+    region      = creds['region']
+
+    resp    = _sp_get(
+        endpoint, '/seller/v1/account/health/ratings', token,
+        params={'marketplaceIds': marketplace},
+        aws_key=aws_key, aws_secret=aws_secret, region=region)
+    payload = resp.get('payload', {})
+    rating  = payload.get('overallPerformanceRating', 'HEALTHY')
+    issues  = payload.get('issues', [])
+
+    score_map = {'EXCELLENT': 95, 'GOOD': 85, 'FAIR': 65,
+                 'AT_RISK': 40,   'CRITICAL': 20, 'HEALTHY': 90}
+    score  = score_map.get(rating, 80)
+    level  = rating.replace('_', ' ').title()
+    alerts = [{'type': 'warning', 'message': i.get('title', '')}
+              for i in issues if i.get('impact') == 'HIGH']
+
+    # ODR / late shipment metrics
+    metrics = {}
+    resp2   = _sp_get(endpoint, '/seller/v1/account/health', token,
+                      aws_key=aws_key, aws_secret=aws_secret, region=region)
+    agg = resp2.get('payload', {}).get('aggregated', {})
+    if agg:
+        metrics['order_defect_rate']  = agg.get('orderDefectRate',  {}).get('value', 0)
+        metrics['late_shipment_rate'] = agg.get('lateShipmentRate', {}).get('value', 0)
+        metrics['cancel_rate']        = agg.get('canceledRate',     {}).get('value', 0)
+
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO mp_account_health "
+            "(org_id,platform,score,level,metrics_json,alerts_json) "
+            "VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT(org_id,platform) DO UPDATE SET "
+            "score=excluded.score, level=excluded.level, "
+            "metrics_json=excluded.metrics_json, alerts_json=excluded.alerts_json, "
+            "last_synced=datetime('now')",
+            (org_id, 'amazon', score, level,
+             json.dumps(metrics), json.dumps(alerts)))
+        db.commit()
+    finally:
+        db.close()
+    return 1
+
+
+# ── Returns (derived from synced orders) ──────────────────────────────────────
+
+def _sync_returns(org_id):
+    db  = get_db()
+    row = db.execute(
+        "SELECT COUNT(*) AS total, "
+        "SUM(CASE WHEN status IN ('cancelled','returned') THEN 1 ELSE 0 END) AS returns, "
+        "SUM(CASE WHEN status IN ('cancelled','returned') THEN revenue ELSE 0 END) AS ref_rev "
+        "FROM orders WHERE org_id=? AND marketplace='amazon'",
+        (org_id,)).fetchone()
+
+    total   = row['total']   or 0
+    returns = row['returns'] or 0
+    ref_rev = row['ref_rev'] or 0
+    rate    = round(returns / max(total, 1) * 100, 2)
+
+    db.execute(
+        "INSERT INTO mp_returns "
+        "(org_id,platform,total_orders,total_returns,return_rate,refunded_revenue,trend) "
+        "VALUES (?,?,?,?,?,?,?) "
+        "ON CONFLICT(org_id,platform) DO UPDATE SET "
+        "total_orders=excluded.total_orders, total_returns=excluded.total_returns, "
+        "return_rate=excluded.return_rate, refunded_revenue=excluded.refunded_revenue, "
+        "trend=excluded.trend, last_synced=datetime('now')",
+        (org_id, 'amazon', total, returns, rate, ref_rev,
+         'rising' if rate > 5 else 'stable'))
+    db.commit()
+    db.close()
+    return 1
+
+
+# ── Entry point ────────────────────────────────────────────────────────────────
+
+def sync_all(org_id):
+    """Full Amazon SP-API sync. Returns total records synced."""
+    print(f"[amazon_sync] org_id={org_id} — starting")
+
+    creds = _load_creds(org_id)
+    if not creds:
+        print(f"[amazon_sync] No connected Amazon for org_id={org_id}")
+        return 0
+    if not creds['client_id'] or not creds['refresh_token']:
+        print("[amazon_sync] Missing client_id or refresh_token in config")
+        return 0
+
+    if not creds['aws_key']:
+        print("[amazon_sync] WARNING: AMAZON_AWS_ACCESS_KEY not set — "
+              "SP-API SigV4 signing disabled. Add env var for full access.")
+
+    # 1. LWA token
+    try:
+        access_token, _ = _get_lwa_token(
+            creds['client_id'], creds['client_secret'], creds['refresh_token'])
+        print(f"[amazon_sync] LWA token: {access_token[:12]}…")
+    except AuthError as exc:
+        print(f"[amazon_sync] LWA failed: {exc}")
+        db = get_db()
+        db.execute(
+            "UPDATE api_integrations SET status='token_expired' "
+            "WHERE org_id=? AND platform='amazon'", (org_id,))
+        db.commit(); db.close()
+        return 0
+    except Exception as exc:
+        print(f"[amazon_sync] LWA error: {exc}")
+        return 0
+
+    total = 0
+
+    # 2. Orders
+    try:
+        n = _sync_orders(org_id, access_token, creds)
+        print(f"[amazon_sync] {n} orders synced")
+        total += n
+    except AuthError:
+        print("[amazon_sync] Auth error on orders"); return total
+    except Exception as exc:
+        print(f"[amazon_sync] Orders error: {exc}")
+
+    # 3. Products / listings
+    try:
+        n = _sync_products(org_id, access_token, creds)
+        print(f"[amazon_sync] {n} products synced")
+        total += n
+    except Exception as exc:
+        print(f"[amazon_sync] Products error: {exc}")
+
+    # 4. Account health
+    try:
+        _sync_account_health(org_id, access_token, creds)
+        print("[amazon_sync] Account health synced")
+        total += 1
+    except Exception as exc:
+        print(f"[amazon_sync] Health error: {exc}")
+
+    # 5. Returns (computed)
+    try:
+        _sync_returns(org_id)
+        total += 1
+    except Exception as exc:
+        print(f"[amazon_sync] Returns error: {exc}")
+
+    # 6. Update last_sync
+    db = get_db()
+    db.execute(
+        "UPDATE api_integrations SET last_sync=datetime('now') "
+        "WHERE org_id=? AND platform='amazon'", (org_id,))
+    db.commit(); db.close()
+
+    print(f"[amazon_sync] Done — {total} records total")
+    return total
