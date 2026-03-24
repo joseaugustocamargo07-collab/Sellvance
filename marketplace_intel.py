@@ -41,9 +41,10 @@ MP_ADS_DATA = {
         {'name': 'Cooler Verão — Sponsored Brand',  'type': 'sponsored',   'spend':  890, 'revenue': 5340, 'clicks': 2940, 'impressions': 71000, 'conversions': 56, 'acos': 16.7, 'status': 'active'},
     ],
     'amazon': [
-        {'name': 'Cooler 32L — Sponsored Products', 'type': 'sponsored',   'spend':  980, 'revenue': 6860, 'clicks': 2840, 'impressions': 68000, 'conversions': 70, 'acos': 14.3, 'status': 'active'},
-        {'name': 'Cooler 20L — Sponsored Products', 'type': 'sponsored',   'spend':  340, 'revenue':  680, 'clicks':  980, 'impressions': 31000, 'conversions':  7, 'acos': 50.0, 'status': 'active'},
-        {'name': 'Brand Store — Headline Ads',      'type': 'headline',    'spend':  560, 'revenue': 3360, 'clicks': 1680, 'impressions': 45000, 'conversions': 35, 'acos': 16.7, 'status': 'active'},
+        {'name': 'Caixa Térmica 32L — Sponsored Products', 'type': 'sponsored', 'spend': 420, 'revenue': 5390, 'clicks': 1840, 'impressions': 52000, 'conversions': 70, 'acos': 7.8, 'status': 'active', 'price': 77.00, 'stock': 728},
+        {'name': 'Caixa Térmica 20L — Sponsored Products', 'type': 'sponsored', 'spend': 280, 'revenue': 3990, 'clicks': 1420, 'impressions': 38000, 'conversions': 70, 'acos': 7.0, 'status': 'active', 'price': 57.00, 'stock': 228},
+        {'name': 'Caixa Térmica 26 Latas — Sponsored',     'type': 'sponsored', 'spend': 190, 'revenue': 2850, 'clicks':  980, 'impressions': 28000, 'conversions': 50, 'acos': 6.7, 'status': 'active', 'price': 57.00, 'stock': 99},
+        {'name': 'Caixa Térmica 45 Latas Max — Sponsored', 'type': 'sponsored', 'spend': 350, 'revenue': 4620, 'clicks': 1560, 'impressions': 42000, 'conversions': 60, 'acos': 7.6, 'status': 'active', 'price': 77.00, 'stock': 177},
     ],
     'tiktok_shop': [
         {'name': 'Cooler 32L — Shop Ads',           'type': 'shop_ads',    'spend':  780, 'revenue': 5460, 'clicks': 4200, 'impressions': 98000, 'conversions': 57, 'acos': 14.3, 'status': 'active'},
