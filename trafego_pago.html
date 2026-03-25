@@ -251,6 +251,7 @@ function setPreset(days) {
           <th style="padding:10px;text-align:center">ROAS</th>
           <th style="padding:10px;text-align:center">CTR</th>
           <th style="padding:10px;text-align:center">Conv.</th>
+          <th style="padding:10px;text-align:center">Acao IA</th>
         </tr>
       </thead>
       <tbody>
@@ -267,6 +268,15 @@ function setPreset(days) {
           </td>
           <td style="padding:10px;text-align:center">{{ c.ctr }}%</td>
           <td style="padding:10px;text-align:center">{{ c.conv_rate }}%</td>
+          <td style="padding:10px;text-align:center">
+            {% if c.action == 'scale' %}
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(16,185,129,0.15);color:var(--green)">🚀 Escalar</span>
+            {% elif c.action == 'optimize' %}
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(245,158,11,0.15);color:var(--yellow)">⚠️ Otimizar</span>
+            {% else %}
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(239,68,68,0.15);color:var(--red)">⏸ Pausar</span>
+            {% endif %}
+          </td>
         </tr>
       {% endfor %}
       </tbody>
@@ -307,6 +317,7 @@ function setPreset(days) {
           <th style="padding:10px;text-align:center">ROAS</th>
           <th style="padding:10px;text-align:center">CTR</th>
           <th style="padding:10px;text-align:center">Conv.</th>
+          <th style="padding:10px;text-align:center">Acao IA</th>
         </tr>
       </thead>
       <tbody>
@@ -323,6 +334,15 @@ function setPreset(days) {
           </td>
           <td style="padding:10px;text-align:center">{{ c.ctr }}%</td>
           <td style="padding:10px;text-align:center">{{ c.conv_rate }}%</td>
+          <td style="padding:10px;text-align:center">
+            {% if c.action == 'scale' %}
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(16,185,129,0.15);color:var(--green)">🚀 Escalar</span>
+            {% elif c.action == 'optimize' %}
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(245,158,11,0.15);color:var(--yellow)">⚠️ Otimizar</span>
+            {% else %}
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(239,68,68,0.15);color:var(--red)">⏸ Pausar</span>
+            {% endif %}
+          </td>
         </tr>
       {% endfor %}
       </tbody>
