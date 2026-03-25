@@ -1089,10 +1089,57 @@ def force_sync():
 
         if mp == 'mercado_livre':
             from sync_mercadolivre import sync_all
-            from sync_base import log_sync
-            records = sync_all(org_id)
-            log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
-            return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp, 'cleaned': clean})
+            from sync_base import log_sync, get_valid_token
+            import traceback as _tb
+
+            # Step 1: Get token
+            try:
+                token = get_valid_token(org_id, 'mercado_livre')
+                token_ok = True
+                token_len = len(token) if token else 0
+            except Exception as e:
+                token_ok = False
+                token_len = 0
+                return jsonify({'status': 'error', 'step': 'get_token', 'error': str(e), 'trace': _tb.format_exc()})
+
+            # Step 2: Test API
+            try:
+                import requests as _rq
+                test_r = _rq.get('https://api.mercadolibre.com/users/me',
+                                 headers={'Authorization': f'Bearer {token}'})
+                api_ok = test_r.status_code == 200
+                api_data = test_r.json()
+                user_id = api_data.get('id', '')
+                nickname = api_data.get('nickname', '')
+            except Exception as e:
+                api_ok = False
+                api_data = str(e)
+                user_id = ''
+                nickname = ''
+
+            # Step 3: Run sync
+            try:
+                records = sync_all(org_id)
+                log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
+                sync_error = None
+            except Exception as e:
+                records = 0
+                sync_error = str(e)
+                sync_trace = _tb.format_exc()
+
+            return jsonify({
+                'status': 'ok' if not sync_error else 'error',
+                'records_synced': records,
+                'platform': mp,
+                'cleaned': clean,
+                'token_ok': token_ok,
+                'token_len': token_len,
+                'api_ok': api_ok,
+                'user_id': user_id,
+                'nickname': nickname,
+                'api_response_keys': list(api_data.keys()) if isinstance(api_data, dict) else str(api_data)[:200],
+                'sync_error': sync_error,
+            })
         if mp == 'amazon':
             from sync_amazon import sync_all as amazon_sync_all
             from sync_base import log_sync
