@@ -1751,10 +1751,27 @@ def traffic():
 
 # -- AI Apply endpoint for Traffic campaigns --
 
+def _meta_api_call(token, campaign_id, payload):
+    """Faz chamada PUT na Meta Graph API para alterar campanha."""
+    import requests as _req
+    url = f"https://graph.facebook.com/v18.0/{campaign_id}"
+    r = _req.post(url, params={'access_token': token}, json=payload)
+    return r.status_code, r.json()
+
+
+def _get_meta_token(db, org_id):
+    """Busca o token Meta Ads salvo para a org."""
+    row = db.execute(
+        "SELECT access_token FROM api_integrations WHERE org_id=? AND platform='meta_ads' AND status='connected'",
+        (org_id,)
+    ).fetchone()
+    return row['access_token'] if row else None
+
+
 @app.route('/traffic/ai-apply', methods=['POST'])
 @login_required
 def traffic_ai_apply():
-    """Aplica sugestao da IA em uma campanha de trafego pago."""
+    """Aplica sugestao da IA em uma campanha — executa acoes reais na plataforma."""
     import datetime
     try:
         data = request.get_json() or {}
@@ -1769,53 +1786,149 @@ def traffic_ai_apply():
         db = get_db()
         org_id = session.get('org_id', 1)
 
-        # Log the AI action in ai_actions_log table
+        # ── Ensure log table exists ──────────────────────────────
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS ai_actions_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id INTEGER,
+                platform TEXT,
+                campaign_id TEXT,
+                campaign_name TEXT,
+                action_type TEXT,
+                suggestion TEXT,
+                applied_at TEXT,
+                status TEXT DEFAULT 'applied',
+                api_result TEXT
+            )
+        """)
+
+        api_actions_done = []
+        api_errors = []
+
+        # ── Execute real actions on Meta Ads API ─────────────────
+        if platform == 'meta' and campaign_id:
+            token = _get_meta_token(db, org_id)
+            if token:
+                import requests as _req
+
+                if action == 'pause':
+                    # Pausar campanha na Meta
+                    status_code, result = _meta_api_call(token, campaign_id, {'status': 'PAUSED'})
+                    if status_code == 200 and result.get('success'):
+                        api_actions_done.append('Campanha pausada no Meta Ads')
+                        # Update local DB too
+                        db.execute("UPDATE ad_campaigns SET status='paused' WHERE external_campaign_id=? AND org_id=?",
+                                   (campaign_id, org_id))
+                    else:
+                        api_errors.append(f"Erro ao pausar: {result.get('error', {}).get('message', 'Erro desconhecido')}")
+
+                elif action == 'scale':
+                    # Buscar adsets da campanha e aumentar budget em 25%
+                    try:
+                        adsets_r = _req.get(
+                            f"https://graph.facebook.com/v18.0/{campaign_id}/adsets",
+                            params={'access_token': token, 'fields': 'id,name,daily_budget,lifetime_budget,status'}
+                        )
+                        adsets = adsets_r.json().get('data', [])
+                        for adset in adsets:
+                            if adset.get('daily_budget'):
+                                old_budget = int(adset['daily_budget'])
+                                new_budget = int(old_budget * 1.25)
+                                sc, res = _meta_api_call(token, adset['id'], {'daily_budget': str(new_budget)})
+                                if sc == 200 and res.get('success'):
+                                    api_actions_done.append(f"Budget diario de {adset.get('name','')} aumentado de R$ {old_budget/100:.2f} para R$ {new_budget/100:.2f}")
+                                else:
+                                    api_errors.append(f"Erro no adset {adset.get('name','')}: {res.get('error',{}).get('message','')}")
+                            elif adset.get('lifetime_budget'):
+                                old_budget = int(adset['lifetime_budget'])
+                                new_budget = int(old_budget * 1.25)
+                                sc, res = _meta_api_call(token, adset['id'], {'lifetime_budget': str(new_budget)})
+                                if sc == 200 and res.get('success'):
+                                    api_actions_done.append(f"Budget vitalicio de {adset.get('name','')} aumentado em 25%")
+                                else:
+                                    api_errors.append(f"Erro no adset {adset.get('name','')}: {res.get('error',{}).get('message','')}")
+                        if not adsets:
+                            api_errors.append('Nenhum conjunto de anuncios encontrado nesta campanha')
+                    except Exception as e:
+                        api_errors.append(f"Erro ao buscar adsets: {str(e)}")
+
+                elif action == 'optimize':
+                    # Para otimizar: pausar adsets com baixo desempenho
+                    try:
+                        adsets_r = _req.get(
+                            f"https://graph.facebook.com/v18.0/{campaign_id}/adsets",
+                            params={'access_token': token, 'fields': 'id,name,status'}
+                        )
+                        adsets = adsets_r.json().get('data', [])
+                        # Buscar insights de cada adset para identificar os piores
+                        adsets_data = []
+                        for adset in adsets:
+                            insights_r = _req.get(
+                                f"https://graph.facebook.com/v18.0/{adset['id']}/insights",
+                                params={'access_token': token, 'fields': 'spend,actions', 'date_preset': 'last_7d'}
+                            )
+                            ins_data = insights_r.json().get('data', [{}])
+                            spend = float(ins_data[0].get('spend', 0)) if ins_data else 0
+                            conversions = 0
+                            for a in (ins_data[0].get('actions', []) if ins_data else []):
+                                if a.get('action_type') in ('purchase', 'offsite_conversion.fb_pixel_purchase', 'lead'):
+                                    conversions += int(a.get('value', 0))
+                            adsets_data.append({**adset, 'spend': spend, 'conversions': conversions})
+
+                        # Pausar adsets com gasto > 0 mas 0 conversoes
+                        for ad in adsets_data:
+                            if ad['spend'] > 0 and ad['conversions'] == 0 and ad.get('status') == 'ACTIVE':
+                                sc, res = _meta_api_call(token, ad['id'], {'status': 'PAUSED'})
+                                if sc == 200 and res.get('success'):
+                                    api_actions_done.append(f"Adset '{ad.get('name','')}' pausado (R$ {ad['spend']:.2f} gasto sem conversoes)")
+                                else:
+                                    api_errors.append(f"Erro ao pausar adset {ad.get('name','')}")
+
+                        if not api_actions_done and not api_errors:
+                            api_actions_done.append('Todos os conjuntos de anuncios tem desempenho aceitavel — nenhuma mudanca necessaria agora')
+
+                    except Exception as e:
+                        api_errors.append(f"Erro ao otimizar: {str(e)}")
+
+        # ── Log the action ───────────────────────────────────────
+        log_status = 'executed' if api_actions_done else ('error' if api_errors else 'registered')
+        api_result_text = '; '.join(api_actions_done + api_errors)
         try:
             db.execute("""
-                CREATE TABLE IF NOT EXISTS ai_actions_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    org_id INTEGER,
-                    platform TEXT,
-                    campaign_id TEXT,
-                    campaign_name TEXT,
-                    action_type TEXT,
-                    suggestion TEXT,
-                    applied_at TEXT,
-                    status TEXT DEFAULT 'applied'
-                )
-            """)
-            db.execute("""
-                INSERT INTO ai_actions_log (org_id, platform, campaign_id, campaign_name, action_type, suggestion, applied_at, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (org_id, platform, campaign_id, campaign_name, action, suggestion_txt,
-                  datetime.datetime.now().isoformat(), 'applied'))
+                INSERT INTO ai_actions_log (org_id, platform, campaign_id, campaign_name, action_type, suggestion, applied_at, status, api_result)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (org_id, platform, campaign_id, campaign_name, action,
+                  suggestion_txt if isinstance(suggestion_txt, str) else str(suggestion_txt),
+                  datetime.datetime.now().isoformat(), log_status, api_result_text))
             db.commit()
         except Exception:
             pass
 
-        # Build response based on action type
-        action_labels = {
-            'scale':    'Escalar Campanha',
-            'optimize': 'Otimizar Campanha',
-            'pause':    'Pausar Campanha'
-        }
-        action_messages = {
-            'scale': 'A sugestao de escalar foi registrada. Recomendamos aumentar o budget em 20-30%% e monitorar nos proximos 3 dias.',
-            'optimize': 'A sugestao de otimizacao foi registrada. Aplique as mudancas sugeridas no gerenciador de anuncios da plataforma e acompanhe os resultados.',
-            'pause': 'A sugestao de pausa foi registrada. Recomendamos pausar a campanha e revisar a estrategia antes de reativar.'
-        }
-
-        if apply_all:
-            title = 'Todas as sugestoes aplicadas para: ' + campaign_name
-            message = 'Todas as otimizacoes foram registradas no historico. Aplique as mudancas diretamente no gerenciador de anuncios (%s) para que as alteracoes tenham efeito.' % ('Meta Ads' if platform == 'meta' else 'Google Ads')
+        # ── Build response ───────────────────────────────────────
+        if api_actions_done:
+            title = 'Alteracoes aplicadas no Meta Ads' if not apply_all else 'Todas as sugestoes aplicadas no Meta Ads'
+            actions_html = '<br>'.join(['✅ ' + a for a in api_actions_done])
+            if api_errors:
+                actions_html += '<br>' + '<br>'.join(['⚠️ ' + e for e in api_errors])
+            message = actions_html
+        elif api_errors:
+            title = 'Erro ao aplicar no Meta Ads'
+            message = '<br>'.join(['❌ ' + e for e in api_errors])
         else:
+            # No API token or Google Ads (no API yet) — register only
+            action_labels = {'scale': 'Escalar', 'optimize': 'Otimizar', 'pause': 'Pausar'}
             title = action_labels.get(action, 'Acao IA') + ': ' + campaign_name
-            message = action_messages.get(action, 'Sugestao registrada com sucesso.')
+            if platform == 'google':
+                message = 'Sugestao registrada. A integracao com Google Ads API sera adicionada em breve. Por enquanto, aplique manualmente no Google Ads.'
+            else:
+                message = 'Sugestao registrada. Conecte sua conta Meta Ads em Integracoes para que as acoes sejam aplicadas automaticamente.'
 
         return jsonify({
             'status': 'ok',
             'title': title,
-            'message': message
+            'message': message,
+            'actions_done': api_actions_done,
+            'errors': api_errors
         })
 
     except Exception as e:
