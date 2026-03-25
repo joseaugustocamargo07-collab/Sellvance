@@ -501,6 +501,15 @@ def _marketplaces_inner():
         _avg_p = round(float(_cp_row['avg_p'] or 0), 2) if _cp_row and _cp_row['avg_p'] else 0
         _min_p = round(float(_cp_row['min_p'] or 0), 2) if _cp_row and _cp_row['min_p'] else 0
         _max_p = round(float(_cp_row['max_p'] or 0), 2) if _cp_row and _cp_row['max_p'] else 0
+
+        # If no competitors in DB, use prices from the competitor list (demo/seed data)
+        if _avg_p == 0 and competitors:
+            _comp_prices = [c.get('price_32l', 0) for c in competitors if c.get('price_32l', 0) > 0]
+            if _comp_prices:
+                _avg_p = round(sum(_comp_prices) / len(_comp_prices), 2)
+                _min_p = round(min(_comp_prices), 2)
+                _max_p = round(max(_comp_prices), 2)
+
         if _my_p > 0:
             _use_avg = _avg_p if _avg_p > 0 else _my_p
             _pos = 'acima' if _my_p > _use_avg * 1.1 else 'abaixo' if _my_p < _use_avg * 0.9 else 'na_media'
