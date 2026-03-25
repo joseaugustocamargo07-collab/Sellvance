@@ -12,29 +12,6 @@ import urllib.parse
 import urllib.error
 from database import get_db
 
-# Criptografia de tokens em repouso
-def _get_fernet():
-    try:
-        from cryptography.fernet import Fernet
-        k = os.environ.get("FERNET_KEY", "")
-        if k: return Fernet(k.encode() if isinstance(k, str) else k)
-    except ImportError: pass
-    return None
-
-def _encrypt(txt):
-    f = _get_fernet()
-    if f and txt:
-        return f.encrypt(txt.encode()).decode()
-    return txt
-
-def _decrypt(txt):
-    f = _get_fernet()
-    if f and txt:
-        try: return f.decrypt(txt.encode()).decode()
-        except Exception: return txt
-    return txt
-
-
 # ── CONFIGURAÇÕES DOS APPS (você configura 1x no servidor) ────────────────────
 # Em produção, use variáveis de ambiente. Em dev, valores de fallback para teste.
 
@@ -43,7 +20,7 @@ OAUTH_APPS = {
         'name':          'Mercado Livre',
         'client_id':     os.environ.get('ML_APP_ID',       'SEU_APP_ID_AQUI'),
         'client_secret': os.environ.get('ML_APP_SECRET',   'SEU_SECRET_AQUI'),
-        'auth_url':      'https://auth.mercadolibre.com/authorization',
+        'auth_url':      'https://auth.mercadolibre.com.br/authorization',
         'token_url':     'https://api.mercadolibre.com/oauth/token',
         'redirect_path': '/integrations/callback/mercado_livre',
         'scopes':        'read_orders write_orders read_items write_items read_questions write_questions manage_campaigns',
@@ -52,8 +29,8 @@ OAUTH_APPS = {
     },
     'meta_ads': {
         'name':          'Meta Ads',
-        'client_id':     os.environ.get('META_APP_ID',     'SEU_APP_ID_AQUI'),
-        'client_secret': os.environ.get('META_APP_SECRET', 'SEU_SECRET_AQUI'),
+        'client_id':     '957343780123351',
+        'client_secret': '409651d8171c33c1ff417284b81642d7',
         'auth_url':      'https://www.facebook.com/v18.0/dialog/oauth',
         'token_url':     'https://graph.facebook.com/v18.0/oauth/access_token',
         'redirect_path': '/integrations/callback/meta_ads',
@@ -268,7 +245,7 @@ def save_integration(org_id, platform, token_data, account_info=None):
     """Salva/atualiza os tokens de uma integração no banco."""
     db = get_db()
 
-    _raw_config = json.dumps({
+    config = json.dumps({
         'access_token':  token_data.get('access_token', ''),
         'refresh_token': token_data.get('refresh_token', ''),
         'token_type':    token_data.get('token_type', 'Bearer'),
@@ -278,11 +255,11 @@ def save_integration(org_id, platform, token_data, account_info=None):
         'user_id':       token_data.get('user_id', ''),
         'seller_id':     token_data.get('seller_id', account_info.get('seller_id', '') if account_info else ''),
     })
-    config = _encrypt(_raw_config)  # criptografado em repouso
 
     account_id   = (account_info or {}).get('id', token_data.get('user_id', ''))
-    # Prioriza custom_label definido pelo usuario na tela pre-OAuth
-    account_name = (account_info or {}).get('custom_label') or (account_info or {}).get('nickname') or (account_info or {}).get('name') or token_data.get('nickname', '')
+    custom_label = (account_info or {}).get('custom_label', '')
+    api_name     = (account_info or {}).get('name', token_data.get('nickname', ''))
+    account_name = custom_label if custom_label else api_name
 
     existing = db.execute(
         'SELECT id FROM api_integrations WHERE org_id=? AND platform=?',
@@ -308,14 +285,14 @@ def save_integration(org_id, platform, token_data, account_info=None):
 def save_api_key_integration(org_id, platform, fields):
     """Salva integração baseada em API Key/tokens manuais."""
     db = get_db()
-    config = _encrypt(json.dumps(fields))  # criptografado em repouso
+    config = json.dumps(fields)
 
     existing = db.execute(
         'SELECT id FROM api_integrations WHERE org_id=? AND platform=?',
         (org_id, platform)
     ).fetchone()
 
-    account_id   = fields.get('seller_id') or fields.get('shop_id') or fields.get('account_email') or fields.get('api_key', '')[:8]
+    account_id   = fields.get('seller_id') or fields.get('shop_id') or fields.get('api_key', '')[:8]
     account_name = fields.get('account_name', '')
 
     if existing:
@@ -346,7 +323,7 @@ def get_integration(org_id, platform):
         return None
     result = dict(row)
     try:
-        result['config'] = json.loads(_decrypt(result.get('config_json', '{}')))
+        result['config'] = json.loads(result.get('config_json', '{}'))
     except Exception:
         result['config'] = {}
     return result
@@ -364,7 +341,7 @@ def get_all_integrations(org_id):
     for row in rows:
         r = dict(row)
         try:
-            r['config'] = json.loads(_decrypt(r.get('config_json', '{}')))
+            r['config'] = json.loads(r.get('config_json', '{}'))
         except Exception:
             r['config'] = {}
         result[r['platform']] = r
@@ -392,34 +369,34 @@ def is_app_configured(platform):
     return 'SEU_' not in app['client_id']
 
 
-
+# ── REVOGAÇÃO DE GRANT (para forçar re-login no ML) ─────────────────────────
 
 def revoke_ml_grant(org_id):
-    """Revoga o grant OAuth existente do ML para forcar nova autorizacao."""
+    """Revoga o grant da aplicação ML para forçar o usuário a logar novamente.
+    Isso faz com que o ML peça login + autorização ao invés de conectar automaticamente."""
     integration = get_integration(org_id, 'mercado_livre')
-    if not integration:
-        return
+    if not integration or integration.get('status') != 'connected':
+        return  # Nada a revogar
+
     config = integration.get('config', {})
     access_token = config.get('access_token', '')
-    if not access_token:
+    user_id = config.get('user_id', '') or integration.get('account_id', '')
+    app_id = OAUTH_APPS['mercado_livre']['client_id']
+
+    if not access_token or not user_id:
         return
+
     try:
-        app = OAUTH_APPS.get('mercado_livre', {})
-        payload = urllib.parse.urlencode({
-            'client_id': app['client_id'],
-            'client_secret': app['client_secret'],
-            'grant_type': 'revoke',
-            'token': access_token,
-        }).encode()
+        url = f'https://api.mercadolibre.com/users/{user_id}/applications/{app_id}'
         req = urllib.request.Request(
-            'https://api.mercadolibre.com/oauth/token',
-            data=payload,
-            headers={'Content-Type': 'application/x-www-form-urlencoded'},
-            method='POST'
+            url,
+            headers={'Authorization': f'Bearer {access_token}'},
+            method='DELETE'
         )
         urllib.request.urlopen(req, timeout=10)
     except Exception:
-        pass  # Best effort — even if revoke fails, user can still re-auth
+        pass  # Se falhar, segue em frente — o login ainda vai funcionar
+
 
 # ── HELPERS DE FETCH POR PLATAFORMA ──────────────────────────────────────────
 
