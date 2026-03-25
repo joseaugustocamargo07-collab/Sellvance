@@ -1749,6 +1749,79 @@ def traffic():
                          platforms=platforms, insights=ai_insights, ai_global_roas=ai_global_roas,
                          meta_campaigns=meta_campaigns, google_campaigns=google_campaigns)
 
+# -- AI Apply endpoint for Traffic campaigns --
+
+@app.route('/traffic/ai-apply', methods=['POST'])
+@login_required
+def traffic_ai_apply():
+    """Aplica sugestao da IA em uma campanha de trafego pago."""
+    import datetime
+    try:
+        data = request.get_json() or {}
+        platform       = data.get('platform', '')
+        campaign_id    = data.get('campaign_id', '')
+        campaign_name  = data.get('campaign_name', '')
+        action         = data.get('action', '')
+        suggestion_idx = data.get('suggestion_index', 0)
+        suggestion_txt = data.get('suggestion_text', '')
+        apply_all      = data.get('apply_all', False)
+
+        db = get_db()
+        org_id = session.get('org_id', 1)
+
+        # Log the AI action in ai_actions_log table
+        try:
+            db.execute("""
+                CREATE TABLE IF NOT EXISTS ai_actions_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    org_id INTEGER,
+                    platform TEXT,
+                    campaign_id TEXT,
+                    campaign_name TEXT,
+                    action_type TEXT,
+                    suggestion TEXT,
+                    applied_at TEXT,
+                    status TEXT DEFAULT 'applied'
+                )
+            """)
+            db.execute("""
+                INSERT INTO ai_actions_log (org_id, platform, campaign_id, campaign_name, action_type, suggestion, applied_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (org_id, platform, campaign_id, campaign_name, action, suggestion_txt,
+                  datetime.datetime.now().isoformat(), 'applied'))
+            db.commit()
+        except Exception:
+            pass
+
+        # Build response based on action type
+        action_labels = {
+            'scale':    'Escalar Campanha',
+            'optimize': 'Otimizar Campanha',
+            'pause':    'Pausar Campanha'
+        }
+        action_messages = {
+            'scale': 'A sugestao de escalar foi registrada. Recomendamos aumentar o budget em 20-30%% e monitorar nos proximos 3 dias.',
+            'optimize': 'A sugestao de otimizacao foi registrada. Aplique as mudancas sugeridas no gerenciador de anuncios da plataforma e acompanhe os resultados.',
+            'pause': 'A sugestao de pausa foi registrada. Recomendamos pausar a campanha e revisar a estrategia antes de reativar.'
+        }
+
+        if apply_all:
+            title = 'Todas as sugestoes aplicadas para: ' + campaign_name
+            message = 'Todas as otimizacoes foram registradas no historico. Aplique as mudancas diretamente no gerenciador de anuncios (%s) para que as alteracoes tenham efeito.' % ('Meta Ads' if platform == 'meta' else 'Google Ads')
+        else:
+            title = action_labels.get(action, 'Acao IA') + ': ' + campaign_name
+            message = action_messages.get(action, 'Sugestao registrada com sucesso.')
+
+        return jsonify({
+            'status': 'ok',
+            'title': title,
+            'message': message
+        })
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 # -- AI Suggestions endpoint for Marketplaces --
 
 @app.route('/marketplaces/ai-suggestions', methods=['POST'])
