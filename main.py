@@ -313,85 +313,6 @@ def _marketplaces_inner():
         run_sync_if_needed(org_id, mp, amazon_sync, max_age=60)
         sync_info = get_last_sync_info(org_id, mp)
 
-
-    # Auto-seed Amazon products if connected but mp_products is empty
-    if is_connected and mp == 'amazon':
-        try:
-            _db_chk = get_db()
-            _product_count = _db_chk.execute(
-                "SELECT COUNT(*) as cnt FROM mp_products WHERE org_id=? AND platform='amazon'",
-                (org_id,)).fetchone()
-            _cnt = _product_count['cnt'] if _product_count else 0
-            if _cnt == 0:
-                print('[auto-seed] No Amazon products found, seeding known FBA products...')
-                _known = [
-                    ('B0FRVW35FV', 'Caixa Termica Grande 32 Litros FBA', 77.00, 728),
-                    ('B0FRW5F547', 'Caixa Termica Media 20 Litros FBA', 57.00, 228),
-                    ('B0GSGYM1K7', 'Caixa Termica 26 Latas Compacta FBA', 57.00, 99),
-                    ('B0GSGYSV7Y', 'Caixa Termica 45 Latas Max 36L FBA', 77.00, 177),
-                ]
-                for asin, title, price, qty in _known:
-                    try:
-                        _db_chk.execute(
-                            "INSERT INTO mp_products "
-                            "(org_id,platform,external_id,title,price,stock_qty,status) "
-                            "VALUES (?,'amazon',?,?,?,?,'active') "
-                            "ON CONFLICT(org_id,platform,external_id) DO UPDATE SET "
-                            "title=excluded.title, price=excluded.price, "
-                            "stock_qty=excluded.stock_qty, status='active'",
-                            (org_id, asin, title, price, qty))
-                    except Exception as _e:
-                        print(f'[auto-seed] {asin}: {_e}')
-                _h_row = _db_chk.execute(
-                    "SELECT metrics_json FROM mp_account_health "
-                    "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-                _hm = json.loads(_h_row['metrics_json'] if _h_row else '{}') or {}
-                _hm.setdefault('fulfillment_type', 'FBA')
-                _hm.setdefault('order_defect_rate', '0.2%')
-                _hm.setdefault('late_shipment_rate', '98%')
-                _hm.setdefault('cancel_rate', '0.5%')
-                _hm.setdefault('valid_tracking_rate', '97%')
-                _hm.setdefault('a_to_z_rate', '0.1%')
-                _hm['fulfillment_type'] = 'FBA'
-                if _h_row:
-                    _db_chk.execute(
-                        "UPDATE mp_account_health SET metrics_json=?, score=? "
-                        "WHERE org_id=? AND platform='amazon'",
-                        (json.dumps(_hm), 92, org_id))
-                else:
-                    _db_chk.execute(
-                        "INSERT INTO mp_account_health "
-                        "(org_id,platform,score,level,metrics_json,alerts_json) "
-                        "VALUES (?,'amazon',92,'Good',?,'[]')",
-                        (org_id, json.dumps(_hm)))
-                _db_chk.commit()
-                print('[auto-seed] 4 Amazon FBA products seeded')
-            else:
-                # Products exist, but check if health metrics are sparse
-                _h2 = _db_chk.execute(
-                    "SELECT metrics_json FROM mp_account_health "
-                    "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-                if _h2:
-                    _hm2 = json.loads(_h2['metrics_json'] or '{}')
-                    if len(_hm2) < 3:
-                        print('[auto-seed] Enriching sparse Amazon health metrics...')
-                        _hm2.setdefault('fulfillment_type', 'FBA')
-                        _hm2.setdefault('order_defect_rate', '0.2%')
-                        _hm2.setdefault('late_shipment_rate', '98%')
-                        _hm2.setdefault('cancel_rate', '0.5%')
-                        _hm2.setdefault('valid_tracking_rate', '97%')
-                        _hm2.setdefault('a_to_z_rate', '0.1%')
-                        _hm2['fulfillment_type'] = 'FBA'
-                        _db_chk.execute(
-                            "UPDATE mp_account_health SET metrics_json=?, score=92 "
-                            "WHERE org_id=? AND platform='amazon'",
-                            (json.dumps(_hm2), org_id))
-                        _db_chk.commit()
-                        print('[auto-seed] Health metrics enriched')
-            _db_chk.close()
-        except Exception as _e:
-            print(f'[auto-seed] Error: {_e}')
-
     if is_connected and mp == 'mercado_livre':
         from sync_mercadolivre import sync_all as ml_sync
         run_sync_if_needed(org_id, mp, ml_sync, max_age=60)
@@ -514,19 +435,6 @@ def _marketplaces_inner():
                     'action_label': 'Monitorar',
                 })
 
-        # Last resort: use demo ad data so tab is never empty
-        if not ads:
-            _demo = analyze_mp_ads(mp)
-            for _d in _demo:
-                _d.setdefault('price', 0)
-                _d.setdefault('stock', 0)
-                _d.setdefault('status', 'active')
-            ads = _demo
-
-        # If competitors empty in real mode, use demo data
-        if not competitors:
-            competitors = COMPETITORS.get(mp, [])
-
         is_live = True
     else:
         # ── DEMO DATA MODE ──────────────────────────────────
@@ -545,7 +453,7 @@ def _marketplaces_inner():
 
     # Aggregate marketplace totals from orders (with date filter)
     mp_totals = {}
-    for m_id in ['mercado_livre', 'amazon', 'tiktok_shop']:
+    for m_id in ['mercado_livre', 'amazon', 'tiktok_shop', 'shopee']:
         # Check if this marketplace is connected - if so, only count real orders
         m_integration = get_integration(org_id, m_id)
         m_connected = m_integration and m_integration.get('status') == 'connected'
@@ -577,7 +485,7 @@ def _marketplaces_inner():
         strategy_scores = []
         rebid_recs = []
 
-    # Override comp_analysis with DB prices, falling back to competitor list prices
+    # Always override comp_analysis with REAL DB prices (never demo data)
     try:
         _db2 = get_db()
         _my_row = _db2.execute(
@@ -593,25 +501,13 @@ def _marketplaces_inner():
         _avg_p = round(float(_cp_row['avg_p'] or 0), 2) if _cp_row and _cp_row['avg_p'] else 0
         _min_p = round(float(_cp_row['min_p'] or 0), 2) if _cp_row and _cp_row['min_p'] else 0
         _max_p = round(float(_cp_row['max_p'] or 0), 2) if _cp_row and _cp_row['max_p'] else 0
-
-        # If mp_competitors is empty, use prices from the competitors list (demo or synced)
-        if _avg_p == 0 and competitors:
-            _comp_prices = [c.get('price_32l', 0) for c in competitors if c.get('price_32l', 0) > 0]
-            if _comp_prices:
-                _avg_p = round(sum(_comp_prices) / len(_comp_prices), 2)
-                _min_p = round(min(_comp_prices), 2)
-                _max_p = round(max(_comp_prices), 2)
-
         if _my_p > 0:
             _use_avg = _avg_p if _avg_p > 0 else _my_p
-            # Include my price in range for better visualization
-            _eff_min = min(_min_p, _my_p) if _min_p > 0 else _my_p * 0.7
-            _eff_max = max(_max_p, _my_p) if _max_p > 0 else _my_p * 1.5
             _pos = 'acima' if _my_p > _use_avg * 1.1 else 'abaixo' if _my_p < _use_avg * 0.9 else 'na_media'
             analysis = {
                 'avg_price_32l': _use_avg,
-                'min_price_32l': _eff_min,
-                'max_price_32l': _eff_max,
+                'min_price_32l': _min_p,
+                'max_price_32l': _max_p,
                 'avg_price': _use_avg,
                 'my_price': _my_p,
                 'price_position': _pos,
@@ -619,19 +515,6 @@ def _marketplaces_inner():
             }
     except Exception as _e:
         print(f"[comp_analysis override] {_e}")
-
-    # Ensure all template variables have safe defaults
-    _default_product = {'price_32l': 0, 'price_20l': 0, 'rating': 0, 'reviews': 0,
-                        'stock_32l': 0, 'stock_20l': 0, 'badge': None, 'fulfillment': False}
-    _default_analysis = {'max_price_32l': 0, 'min_price_32l': 0, 'avg_price_32l': 0,
-                         'price_position': 'na_media', 'opportunities': []}
-    for _k, _v in _default_product.items():
-        my_product.setdefault(_k, _v)
-    if not isinstance(analysis, dict):
-        analysis = _default_analysis
-    else:
-        for _k, _v in _default_analysis.items():
-            analysis.setdefault(_k, _v)
 
     return render_template('traffic.html', mp=mp, tab=tab, all_mp=all_mp, health=health, is_live=is_live, sync_info=sync_info, account_name=account_name,
                            competitors=competitors, my=my_product, comp_analysis=analysis,
@@ -1152,143 +1035,6 @@ def debug_ml_promos():
     return jsonify(result)
 
 
-
-
-@app.route('/api/amazon/set-fba', methods=['POST'])
-@login_required
-def amazon_set_fba():
-    """Set FBA status. Uses oauth_manager encrypt for config_json."""
-    try:
-        from oauth_manager import get_integration, _encrypt, _decrypt
-        data    = request.get_json() or {}
-        org_id  = session.get('org_id', 1)
-        is_fba  = bool(data.get('is_fba', True))
-        ftype   = 'FBA' if is_fba else 'FBM'
-
-        db = get_db()
-
-        # 1. Update fulfillment_type in mp_account_health.metrics_json
-        row = db.execute(
-            "SELECT metrics_json FROM mp_account_health "
-            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-        if row:
-            current = json.loads(row['metrics_json'] or '{}')
-            current['fulfillment_type'] = ftype
-            db.execute(
-                "UPDATE mp_account_health SET metrics_json=? "
-                "WHERE org_id=? AND platform='amazon'",
-                (json.dumps(current), org_id))
-        else:
-            db.execute(
-                "INSERT INTO mp_account_health "
-                "(org_id,platform,score,level,metrics_json,alerts_json) "
-                "VALUES (?,?,74,'Good',?,'[]')",
-                (org_id, 'amazon', json.dumps({'fulfillment_type': ftype})))
-
-        # 2. Update is_fba in integration config (ENCRYPTED with Fernet)
-        integ_row = db.execute(
-            "SELECT config_json FROM api_integrations "
-            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-        if integ_row and integ_row['config_json']:
-            raw = integ_row['config_json']
-            try:
-                cfg = json.loads(_decrypt(raw))
-            except Exception:
-                cfg = {}
-            cfg['is_fba'] = is_fba
-            db.execute(
-                "UPDATE api_integrations SET config_json=? "
-                "WHERE org_id=? AND platform='amazon'",
-                (_encrypt(json.dumps(cfg)), org_id))
-
-        db.commit()
-        db.close()
-        return jsonify({'status': 'ok', 'fulfillment_type': ftype})
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'status': 'error', 'error': str(e)}), 500
-
-
-
-@app.route('/api/amazon/seed-products', methods=['POST'])
-@login_required
-def amazon_seed_products():
-    """Pre-populate Amazon products + set FBA=True. Uses encrypt for config."""
-    try:
-        from oauth_manager import get_integration, _encrypt, _decrypt
-        org_id = session.get('org_id', 1)
-
-        known_products = [
-            {'asin': 'B0FRVW35FV', 'title': 'Caixa Térmica Grande 32 Litros',
-             'price': 77.00, 'stock_qty': 728},
-            {'asin': 'B0FRW5F547', 'title': 'Caixa Térmica Média 20 Litros',
-             'price': 57.00, 'stock_qty': 228},
-            {'asin': 'B0GSGYM1K7', 'title': 'Caixa Térmica 26 Latas Compacta',
-             'price': 57.00, 'stock_qty': 99},
-            {'asin': 'B0GSGYSV7Y', 'title': 'Caixa Térmica 45 Latas Max 36L',
-             'price': 77.00, 'stock_qty': 177},
-        ]
-
-        db = get_db()
-        seeded = 0
-        for p in known_products:
-            try:
-                db.execute(
-                    "INSERT INTO mp_products "
-                    "(org_id,platform,external_id,title,price,stock_qty,status) "
-                    "VALUES (?,'amazon',?,?,?,?,'active') "
-                    "ON CONFLICT(org_id,platform,external_id) DO UPDATE SET "
-                    "title=excluded.title, price=excluded.price, "
-                    "stock_qty=excluded.stock_qty, status='active', "
-                    "last_synced=datetime('now')",
-                    (org_id, p['asin'], p['title'], p['price'], p['stock_qty']))
-                seeded += 1
-            except Exception as e:
-                print(f"[seed] {p['asin']}: {e}")
-
-        # Set FBA in health metrics
-        row = db.execute(
-            "SELECT metrics_json FROM mp_account_health "
-            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-        if row:
-            current = json.loads(row['metrics_json'] or '{}')
-            current['fulfillment_type'] = 'FBA'
-            db.execute(
-                "UPDATE mp_account_health SET metrics_json=? "
-                "WHERE org_id=? AND platform='amazon'",
-                (json.dumps(current), org_id))
-        else:
-            db.execute(
-                "INSERT INTO mp_account_health "
-                "(org_id,platform,score,level,metrics_json,alerts_json) "
-                "VALUES (?,?,74,'Good',?,'[]')",
-                (org_id, 'amazon', json.dumps({'fulfillment_type': 'FBA'})))
-
-        # Set is_fba in integration config (ENCRYPTED)
-        integ_row = db.execute(
-            "SELECT config_json FROM api_integrations "
-            "WHERE org_id=? AND platform='amazon'", (org_id,)).fetchone()
-        if integ_row and integ_row['config_json']:
-            try:
-                cfg = json.loads(_decrypt(integ_row['config_json']))
-            except Exception:
-                cfg = {}
-            cfg['is_fba'] = True
-            db.execute(
-                "UPDATE api_integrations SET config_json=? "
-                "WHERE org_id=? AND platform='amazon'",
-                (_encrypt(json.dumps(cfg)), org_id))
-
-        db.commit()
-        db.close()
-        return jsonify({'status': 'ok', 'seeded': seeded, 'fulfillment_type': 'FBA'})
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'status': 'error', 'error': str(e)}), 500
-
-
 @app.route('/api/force-sync')
 def force_sync():
     """Force a full re-sync (bypasses staleness check)."""
@@ -1305,6 +1051,12 @@ def force_sync():
             from sync_amazon import sync_all as amazon_sync_all
             from sync_base import log_sync
             records = amazon_sync_all(org_id)
+            log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
+            return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp})
+        if mp == 'shopee':
+            from sync_shopee import sync_all as shopee_sync_all
+            from sync_base import log_sync
+            records = shopee_sync_all(org_id)
             log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
             return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp})
         return jsonify({'status': 'error', 'error': f'Unknown platform: {mp}'})
