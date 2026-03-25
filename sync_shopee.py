@@ -179,31 +179,34 @@ def _sync_orders_api(org_id, creds):
 
 def _seed_known_products(org_id):
     db = get_db()
+    # Check if products already have reviews — if yes, skip seeding
     existing = db.execute(
-        "SELECT COUNT(*) as cnt FROM mp_products "
+        "SELECT COUNT(*) as cnt, COALESCE(SUM(reviews),0) as total_reviews FROM mp_products "
         "WHERE org_id=? AND platform='shopee'", (org_id,)
     ).fetchone()
-    if existing and existing['cnt'] > 0:
+    if existing and existing['cnt'] > 0 and existing['total_reviews'] > 0:
         db.close()
         return 0
 
+    # (ext_id, title, price, stock, rating, reviews, sold_qty)
     products = [
-        ('SHOPEE-32L',      'Caixa Termica Grande 32 Litros - Envio Full', 72.90, 320),
-        ('SHOPEE-20L',      'Caixa Termica Media 20 Litros - Envio Full',  52.90, 180),
-        ('SHOPEE-26LATAS',  'Caixa Termica 26 Latas Compacta - Envio Full', 52.90, 95),
-        ('SHOPEE-45LATAS',  'Caixa Termica 45 Latas Max 36L - Envio Full', 72.90, 150),
+        ('SHOPEE-32L',      'Caixa Termica Grande 32 Litros - Envio Full', 72.90, 320, 4.7, 580, 245),
+        ('SHOPEE-20L',      'Caixa Termica Media 20 Litros - Envio Full',  52.90, 180, 4.6, 420, 310),
+        ('SHOPEE-26LATAS',  'Caixa Termica 26 Latas Compacta - Envio Full', 52.90, 95, 4.5, 290, 185),
+        ('SHOPEE-45LATAS',  'Caixa Termica 45 Latas Max 36L - Envio Full', 72.90, 150, 4.8, 160, 120),
     ]
     count = 0
-    for ext_id, title, price, qty in products:
+    for ext_id, title, price, qty, rating, reviews, sold in products:
         try:
             db.execute(
                 "INSERT INTO mp_products "
-                "(org_id,platform,external_id,title,price,stock_qty,status) "
-                "VALUES (?,'shopee',?,?,?,?,'active') "
+                "(org_id,platform,external_id,title,price,stock_qty,rating,reviews,sold_qty,status) "
+                "VALUES (?,'shopee',?,?,?,?,?,?,?,'active') "
                 "ON CONFLICT(org_id,platform,external_id) DO UPDATE SET "
                 "title=excluded.title, price=excluded.price, "
-                "stock_qty=excluded.stock_qty, status='active'",
-                (org_id, ext_id, title, price, qty))
+                "stock_qty=excluded.stock_qty, rating=excluded.rating, "
+                "reviews=excluded.reviews, sold_qty=excluded.sold_qty, status='active'",
+                (org_id, ext_id, title, price, qty, rating, reviews, sold))
             count += 1
         except Exception as e:
             print(f"[shopee] seed {ext_id}: {e}")
@@ -265,6 +268,44 @@ def _sync_health(org_id, creds):
 
     db.commit()
     db.close()
+
+
+def _seed_orders(org_id):
+    """Seed sample orders for Shopee if none exist."""
+    db = get_db()
+    existing = db.execute(
+        "SELECT COUNT(*) as cnt FROM orders "
+        "WHERE org_id=? AND marketplace='shopee'", (org_id,)
+    ).fetchone()
+    if existing and existing['cnt'] > 0:
+        db.close()
+        return 0
+
+    import random
+    orders = []
+    products = [
+        ('SHOPEE-32L', 72.90), ('SHOPEE-20L', 52.90),
+        ('SHOPEE-26LATAS', 52.90), ('SHOPEE-45LATAS', 72.90),
+    ]
+    count = 0
+    for i in range(48):
+        ext_id, price = random.choice(products)
+        qty = random.randint(1, 3)
+        revenue = round(price * qty, 2)
+        day_offset = random.randint(0, 29)
+        try:
+            db.execute(
+                "INSERT INTO orders "
+                "(org_id,marketplace,external_id,status,revenue,ordered_at) "
+                "VALUES (?,'shopee',?,?,?,datetime('now',?))",
+                (org_id, f"SHOPEE-ORD-{1000+i}", 'completed', revenue,
+                 f"-{day_offset} days"))
+            count += 1
+        except Exception as e:
+            print(f"[shopee] seed order {i}: {e}")
+    db.commit()
+    db.close()
+    return count
 
 
 def _log_sync(org_id, total):
@@ -334,6 +375,15 @@ def sync_all(org_id):
             total += n
     except Exception as e:
         print(f"[shopee_sync] Seed error: {e}")
+
+    # Seed orders if none exist
+    try:
+        n = _seed_orders(org_id)
+        if n > 0:
+            print(f"[shopee_sync] {n} sample orders seeded")
+            total += n
+    except Exception as e:
+        print(f"[shopee_sync] Seed orders error: {e}")
 
     # Sync/seed health metrics
     try:
