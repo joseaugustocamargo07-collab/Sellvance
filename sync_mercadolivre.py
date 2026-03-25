@@ -293,10 +293,14 @@ def _metric_rate(metrics, key):
 # ── Sub-sync: Orders ────────────────────────────────────────────────────────
 
 def sync_orders(org_id, token, user_id):
-    """Paginate through /orders/search and insert new orders."""
+    """Paginate through /orders/search and insert new orders.
+    Only counts PAID orders as revenue. Cancelled/returned = R$0 revenue."""
     offset = 0
     limit = 50
     total_synced = 0
+
+    # ML order statuses that represent actual completed sales
+    PAID_STATUSES = {'paid', 'delivered', 'shipped'}
 
     while True:
         url = (
@@ -325,17 +329,35 @@ def sync_orders(org_id, token, user_id):
                 date_created = order.get('date_created', '')
                 ordered_at = _normalize_datetime(date_created)
 
+                # Only count revenue for PAID/DELIVERED/SHIPPED orders
+                # Cancelled and returned orders = R$ 0 revenue
+                if status in PAID_STATUSES:
+                    revenue = total_amount
+                else:
+                    revenue = 0.0
+
+                # Get paid_amount from payments if available (most accurate)
+                payments = order.get('payments', [])
+                if payments and status in PAID_STATUSES:
+                    paid_sum = sum(
+                        float(p.get('transaction_amount', 0))
+                        for p in payments
+                        if p.get('status') == 'approved'
+                    )
+                    if paid_sum > 0:
+                        revenue = paid_sum
+
                 db.execute('''
                     INSERT OR IGNORE INTO orders
                         (org_id, marketplace, external_id, status, gmv, revenue, channel, ordered_at)
                     VALUES (?, 'mercado_livre', ?, ?, ?, ?, 'marketplace', ?)
-                ''', (org_id, ext_id, status, total_amount, total_amount, ordered_at))
+                ''', (org_id, ext_id, status, total_amount, revenue, ordered_at))
 
-                # Also update existing orders status
+                # Always update existing orders (status may have changed)
                 db.execute('''
                     UPDATE orders SET status=?, gmv=?, revenue=?
                     WHERE org_id=? AND marketplace='mercado_livre' AND external_id=?
-                ''', (status, total_amount, total_amount, org_id, ext_id))
+                ''', (status, total_amount, revenue, org_id, ext_id))
 
                 buyer = order.get('buyer', {})
                 _upsert_contact_from_buyer(db, org_id, buyer)
