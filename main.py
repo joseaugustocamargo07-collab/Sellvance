@@ -397,6 +397,11 @@ def _marketplaces_inner():
         run_sync_if_needed(org_id, mp, ml_sync, max_age=60)
         sync_info = get_last_sync_info(org_id, mp)
 
+    if is_connected and mp == 'shopee':
+        from sync_shopee import sync_all as shopee_sync
+        run_sync_if_needed(org_id, mp, shopee_sync, max_age=60)
+        sync_info = get_last_sync_info(org_id, mp)
+
     if is_connected and is_platform_synced(org_id, mp):
         # ── REAL DATA MODE ──────────────────────────────────
         health      = get_account_health_live(org_id, mp)
