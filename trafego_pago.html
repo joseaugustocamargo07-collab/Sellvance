@@ -439,7 +439,7 @@ var metaCampaigns = [
     conv_rate: {{ c.conv_rate if c.conv_rate is defined else (c.cvr if c.cvr is defined else 0) }},
     freq: {{ c.freq if c.freq is defined else 0 }},
     problems: {{ c.problems | tojson }},
-    suggestions: {{ c.suggestions | tojson }}
+    suggestions: {{ c.suggestions | tojson if c.suggestions is iterable else '[]' }}
   }{{ "," if not loop.last }}
   {% endfor %}
 ];
@@ -527,19 +527,67 @@ function openAiModal(idx, platform) {
     problemsSection.style.display = 'none';
   }
 
-  // Suggestions with Apply buttons
+  // Suggestions with detailed actions and Apply buttons
   var suggestionsSection = document.getElementById('aiModalSuggestionsSection');
   var suggestionsEl = document.getElementById('aiModalSuggestions');
   if (c.suggestions && c.suggestions.length > 0) {
     suggestionsSection.style.display = 'block';
     var sh = '';
     c.suggestions.forEach(function(s, i) {
-      sh += '<div id="sug_item_' + i + '" style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;margin-bottom:8px;border-radius:10px;background:rgba(108,99,255,0.06);border-left:3px solid var(--accent,#6c63ff)">' +
-        '<span style="font-size:16px;flex-shrink:0">💡</span>' +
-        '<div style="flex:1"><div style="font-size:13px;color:var(--text1);font-weight:600">Sugestao ' + (i+1) + '</div>' +
-        '<div style="font-size:13px;color:var(--text2);margin-top:2px">' + s + '</div></div>' +
-        '<button onclick="applySuggestion(' + i + ')" id="sug_btn_' + i + '" style="flex-shrink:0;padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;cursor:pointer;transition:all .2s;white-space:nowrap" onmouseover="this.style.opacity=\'0.85\'" onmouseout="this.style.opacity=\'1\'">Aplicar</button>' +
-        '</div>';
+      // s can be a string (old format) or object (new format with title, desc, actions)
+      var isDetailed = (typeof s === 'object' && s.title);
+      var title = isDetailed ? s.title : ('Sugestao ' + (i+1));
+      var desc  = isDetailed ? s.desc  : s;
+      var actions = isDetailed ? (s.actions || []) : [];
+      var impact  = isDetailed ? (s.impact || 'Medio') : '';
+      var priority = isDetailed ? (s.priority || '') : '';
+      var expected = isDetailed ? (s.expected || '') : '';
+
+      var impactColor = impact === 'Alto' ? 'var(--red)' : impact === 'Medio' ? 'var(--yellow)' : 'var(--text2)';
+      var priorityColor = (priority === 'Urgente' || priority === 'Agora') ? 'var(--red)' : 'var(--yellow)';
+
+      sh += '<div id="sug_item_' + i + '" style="margin-bottom:12px;border-radius:12px;background:rgba(108,99,255,0.04);border:1px solid rgba(108,99,255,0.15);overflow:hidden">';
+
+      // Header with title + badges + apply button
+      sh += '<div style="padding:12px 16px;background:rgba(108,99,255,0.06);display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(108,99,255,0.1)">';
+      sh += '<span style="font-size:18px;flex-shrink:0">💡</span>';
+      sh += '<div style="flex:1">';
+      sh += '<div style="font-size:14px;color:var(--text1);font-weight:700">' + title + '</div>';
+      if (impact || priority) {
+        sh += '<div style="display:flex;gap:6px;margin-top:4px">';
+        if (priority) sh += '<span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;background:rgba(239,68,68,0.1);color:' + priorityColor + '">' + priority + '</span>';
+        if (impact) sh += '<span style="padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;background:rgba(245,158,11,0.1);color:' + impactColor + '">Impacto: ' + impact + '</span>';
+        sh += '</div>';
+      }
+      sh += '</div>';
+      sh += '<button onclick="applySuggestion(' + i + ')" id="sug_btn_' + i + '" style="flex-shrink:0;padding:8px 18px;border-radius:10px;font-size:12px;font-weight:700;background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;cursor:pointer;transition:all .2s;white-space:nowrap" onmouseover="this.style.opacity=\'0.85\'" onmouseout="this.style.opacity=\'1\'">Aplicar</button>';
+      sh += '</div>';
+
+      // Description
+      sh += '<div style="padding:12px 16px">';
+      sh += '<div style="font-size:13px;color:var(--text2);margin-bottom:10px">' + desc + '</div>';
+
+      // Action steps
+      if (actions.length > 0) {
+        sh += '<div style="font-size:11px;color:var(--text2);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;margin-bottom:8px">O que sera feito:</div>';
+        actions.forEach(function(a, j) {
+          sh += '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">';
+          sh += '<span style="flex-shrink:0;width:20px;height:20px;border-radius:50%;background:rgba(108,99,255,0.15);color:var(--accent,#6c63ff);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">' + (j+1) + '</span>';
+          sh += '<span style="font-size:13px;color:var(--text1)">' + a + '</span>';
+          sh += '</div>';
+        });
+      }
+
+      // Expected result
+      if (expected) {
+        sh += '<div style="margin-top:10px;padding:8px 12px;border-radius:8px;background:rgba(16,185,129,0.06);border-left:2px solid var(--green)">';
+        sh += '<span style="font-size:12px;color:var(--green);font-weight:600">📈 Resultado esperado: </span>';
+        sh += '<span style="font-size:12px;color:var(--text2)">' + expected + '</span>';
+        sh += '</div>';
+      }
+
+      sh += '</div>'; // close padding div
+      sh += '</div>'; // close card
     });
     suggestionsEl.innerHTML = sh;
   } else {
