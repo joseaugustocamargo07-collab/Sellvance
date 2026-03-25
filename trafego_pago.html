@@ -103,7 +103,7 @@ function setPreset(days) {
 <div class="grid g4" style="margin-bottom:20px">
   <div class="card" style="border-top:3px solid var(--green)">
     <div class="card-title">💰 Receita Total</div>
-    <div class="kpi-val" style="color:var(--green)">R$ {{ "{:,.0f}".format(kpis.total_revenue) }}</div>
+    <div class="kpi-val" style="color:var(--green)">R$ {{ kpis.total_revenue | brl2 }}</div>
     <div style="font-size:12px;color:var(--text2)">Receita gerada por ads</div>
   </div>
   <div class="card" style="border-top:3px solid var(--blue)">
@@ -113,12 +113,12 @@ function setPreset(days) {
   </div>
   <div class="card" style="border-top:3px solid var(--yellow)">
     <div class="card-title">💸 Investimento</div>
-    <div class="kpi-val" style="color:var(--yellow)">R$ {{ "{:,.0f}".format(kpis.total_spend) }}</div>
+    <div class="kpi-val" style="color:var(--yellow)">R$ {{ kpis.total_spend | brl2 }}</div>
     <div style="font-size:12px;color:var(--text2)">Total gasto em ads</div>
   </div>
   <div class="card" style="border-top:3px solid {% if kpis.profit >= 0 %}var(--green){% else %}var(--red){% endif %}">
     <div class="card-title">📊 Lucro</div>
-    <div class="kpi-val" style="color:{% if kpis.profit >= 0 %}var(--green){% else %}var(--red){% endif %}">R$ {{ "{:,.0f}".format(kpis.profit) }}</div>
+    <div class="kpi-val" style="color:{% if kpis.profit >= 0 %}var(--green){% else %}var(--red){% endif %}">R$ {{ kpis.profit | brl2 }}</div>
     <div style="font-size:12px;color:var(--text2)">Receita - Investimento</div>
   </div>
 </div>
@@ -137,7 +137,7 @@ function setPreset(days) {
   </div>
   <div class="card">
     <div class="card-title">CPA</div>
-    <div class="kpi-val">R$ {{ "{:.2f}".format(kpis.cpa) }}</div>
+    <div class="kpi-val">R$ {{ kpis.cpa | brl2 }}</div>
     <div style="font-size:12px;color:var(--text2)">Custo por aquisicao</div>
   </div>
   <div class="card">
@@ -165,8 +165,8 @@ function setPreset(days) {
       <tr style="border-bottom:1px solid var(--border)">
         <td style="padding:10px">{{ plat_icons.get(pname, '📢') }} {{ plat_names.get(pname, pname) }}</td>
         <td style="padding:10px;text-align:right">{{ pdata.campaigns }}</td>
-        <td style="padding:10px;text-align:right">R$ {{ "{:,.0f}".format(pdata.spend) }}</td>
-        <td style="padding:10px;text-align:right;color:var(--green)">R$ {{ "{:,.0f}".format(pdata.revenue) }}</td>
+        <td style="padding:10px;text-align:right">R$ {{ pdata.spend | brl2 }}</td>
+        <td style="padding:10px;text-align:right;color:var(--green)">R$ {{ pdata.revenue | brl2 }}</td>
         <td style="padding:10px;text-align:right">
           <span style="padding:3px 8px;border-radius:20px;font-size:12px;font-weight:700;background:{% if pdata.roas >= 4 %}rgba(16,185,129,0.15);color:var(--green){% elif pdata.roas >= 2 %}rgba(245,158,11,0.15);color:var(--yellow){% else %}rgba(239,68,68,0.15);color:var(--red){% endif %}">{{ pdata.roas }}x</span>
         </td>
@@ -261,8 +261,8 @@ function setPreset(days) {
           <td style="padding:10px;text-align:center">
             <span style="font-weight:800;color:{% if c.score >= 75 %}var(--green){% elif c.score >= 50 %}var(--yellow){% else %}var(--red){% endif %}">{{ c.score }}</span>
           </td>
-          <td style="padding:10px;text-align:right">R$ {{ "{:,.0f}".format(c.spend) }}</td>
-          <td style="padding:10px;text-align:right;color:var(--green)">R$ {{ "{:,.0f}".format(c.revenue) }}</td>
+          <td style="padding:10px;text-align:right">R$ {{ c.spend | brl2 }}</td>
+          <td style="padding:10px;text-align:right;color:var(--green)">R$ {{ c.revenue | brl2 }}</td>
           <td style="padding:10px;text-align:center">
             <span style="padding:3px 8px;border-radius:20px;font-size:12px;font-weight:700;background:{% if c.roas >= 4 %}rgba(16,185,129,0.15);color:var(--green){% elif c.roas >= 2 %}rgba(245,158,11,0.15);color:var(--yellow){% else %}rgba(239,68,68,0.15);color:var(--red){% endif %}">{{ c.roas }}x</span>
           </td>
@@ -327,8 +327,8 @@ function setPreset(days) {
           <td style="padding:10px;text-align:center">
             <span style="font-weight:800;color:{% if c.score >= 75 %}var(--green){% elif c.score >= 50 %}var(--yellow){% else %}var(--red){% endif %}">{{ c.score }}</span>
           </td>
-          <td style="padding:10px;text-align:right">R$ {{ "{:,.0f}".format(c.spend) }}</td>
-          <td style="padding:10px;text-align:right;color:var(--green)">R$ {{ "{:,.0f}".format(c.revenue) }}</td>
+          <td style="padding:10px;text-align:right">R$ {{ c.spend | brl2 }}</td>
+          <td style="padding:10px;text-align:right;color:var(--green)">R$ {{ c.revenue | brl2 }}</td>
           <td style="padding:10px;text-align:center">
             <span style="padding:3px 8px;border-radius:20px;font-size:12px;font-weight:700;background:{% if c.roas >= 4 %}rgba(16,185,129,0.15);color:var(--green){% elif c.roas >= 2 %}rgba(245,158,11,0.15);color:var(--yellow){% else %}rgba(239,68,68,0.15);color:var(--red){% endif %}">{{ c.roas }}x</span>
           </td>
