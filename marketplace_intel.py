@@ -14,29 +14,29 @@ COMPETITORS = {
         {'id': 'c5', 'name': 'AlpineBox',           'rating': 4.6, 'reviews': 1680, 'price_32l': 249.90, 'price_20l': 199.90, 'stock': 'ok',       'sponsored': True,  'badge': 'MercadoLíder Platinum','shipping': 'grátis','fulfillment': True},
     ],
     'amazon': [
-        {'id': 'a1', 'name': 'Mor Caixas Térmicas',  'rating': 4.6, 'reviews': 3820, 'price_32l': 89.90,  'price_20l': 69.90,  'stock': 'ok',       'sponsored': True,  'badge': 'Amazon Choice',       'shipping': 'Prime',  'fulfillment': True},
-        {'id': 'a2', 'name': 'Soprano Térmica',      'rating': 4.3, 'reviews': 1450, 'price_32l': 79.90,  'price_20l': 59.90,  'stock': 'ok',       'sponsored': True,  'badge': None,                  'shipping': 'Prime',  'fulfillment': True},
-        {'id': 'a3', 'name': 'Invicta Cooler',             'rating': 4.5, 'reviews': 2100, 'price_32l': 94.90,  'price_20l': 74.90,  'stock': 'ok',       'sponsored': False, 'badge': None,                  'shipping': 'Prime',  'fulfillment': True},
-        {'id': 'a4', 'name': 'BelFix Térmica',       'rating': 4.1, 'reviews':  680, 'price_32l': 67.90,  'price_20l': 49.90,  'stock': 'low',      'sponsored': False, 'badge': None,                  'shipping': 'grátis', 'fulfillment': False},
-        {'id': 'a5', 'name': 'Obba Térmica',         'rating': 4.0, 'reviews':  290, 'price_32l': 72.90,  'price_20l': 54.90,  'stock': 'ok',       'sponsored': False, 'badge': None,                  'shipping': 'R$12',   'fulfillment': False},
+        {'id': 'a1', 'name': 'Coleman Brazil',     'rating': 4.8, 'reviews': 5240, 'price_32l': 259.90, 'price_20l': 199.90, 'stock': 'ok',       'sponsored': True,  'badge': 'Amazon Choice',       'shipping': 'Prime',  'fulfillment': True},
+        {'id': 'a2', 'name': 'IceBreaker',          'rating': 4.4, 'reviews':  980, 'price_32l': 209.90, 'price_20l': 169.90, 'stock': 'ok',       'sponsored': True,  'badge': None,                  'shipping': 'Prime',  'fulfillment': True},
+        {'id': 'a3', 'name': 'ThermoBox BR',        'rating': 4.6, 'reviews': 1890, 'price_32l': 224.90, 'price_20l': 174.90, 'stock': 'low',      'sponsored': False, 'badge': None,                  'shipping': 'grátis', 'fulfillment': False},
+        {'id': 'a4', 'name': 'PolarBox',            'rating': 4.2, 'reviews':  340, 'price_32l': 184.90, 'price_20l': 144.90, 'stock': 'critical', 'sponsored': False, 'badge': None,                  'shipping': 'R$20',   'fulfillment': False},
     ],
     'tiktok_shop': [
         {'id': 't1', 'name': 'IceCool BR',         'rating': 4.6, 'reviews':  820, 'price_32l': 189.90, 'price_20l': 149.90, 'stock': 'ok',       'sponsored': True,  'badge': 'Top Seller',          'shipping': 'grátis', 'fulfillment': False},
         {'id': 't2', 'name': 'FrezBox Oficial',     'rating': 4.3, 'reviews':  340, 'price_32l': 179.90, 'price_20l': 139.90, 'stock': 'low',      'sponsored': True,  'badge': None,                  'shipping': 'grátis', 'fulfillment': False},
         {'id': 't3', 'name': 'CoolVibes',           'rating': 4.1, 'reviews':  180, 'price_32l': 169.90, 'price_20l': 134.90, 'stock': 'ok',       'sponsored': False, 'badge': None,                  'shipping': 'R$12',   'fulfillment': False},
     ],
-
     'shopee': [
-        {'name': 'Caixa Térmica 32L — Shopee Ads', 'type': 'shop_ads', 'spend': 380, 'revenue': 4820, 'clicks': 2100, 'impressions': 58000, 'conversions': 66, 'acos': 7.9, 'status': 'active', 'price': 72.90, 'stock': 320},
-        {'name': 'Caixa Térmica 20L — Shopee Ads', 'type': 'shop_ads', 'spend': 240, 'revenue': 3180, 'clicks': 1380, 'impressions': 42000, 'conversions': 60, 'acos': 7.5, 'status': 'active', 'price': 52.90, 'stock': 180},
-        {'name': 'Kit Térmica Promo — Flash Sale',  'type': 'flash',    'spend': 150, 'revenue': 2850, 'clicks':  980, 'impressions': 32000, 'conversions': 38, 'acos': 5.3, 'status': 'active', 'price': 65.90, 'stock': 95},
-    ],}
+        {'id': 's1', 'name': 'Mor Térmicas',        'rating': 4.5, 'reviews': 1820, 'price_32l': 89.90,  'price_20l': 69.90,  'stock': 'ok',       'sponsored': True,  'badge': 'Loja Oficial',        'shipping': 'grátis', 'fulfillment': True},
+        {'id': 's2', 'name': 'Soprano Coolers',     'rating': 4.4, 'reviews': 1240, 'price_32l': 79.90,  'price_20l': 59.90,  'stock': 'ok',       'sponsored': True,  'badge': 'Loja Oficial',        'shipping': 'grátis', 'fulfillment': True},
+        {'id': 's3', 'name': 'Térmica Express',     'rating': 4.2, 'reviews':  680, 'price_32l': 69.90,  'price_20l': 49.90,  'stock': 'low',      'sponsored': False, 'badge': None,                  'shipping': 'grátis', 'fulfillment': False},
+        {'id': 's4', 'name': 'CasaFlex Coolers',    'rating': 4.0, 'reviews':  320, 'price_32l': 64.90,  'price_20l': 44.90,  'stock': 'ok',       'sponsored': False, 'badge': None,                  'shipping': 'R$8',    'fulfillment': False},
+    ],
+}
 
 MY_PRODUCTS = {
     'mercado_livre': {'price_32l': 219.90, 'price_20l': 189.90, 'rating': 4.8, 'reviews': 3240, 'stock_32l': 48, 'stock_20l': 9,  'badge': 'MercadoLíder Gold', 'fulfillment': True},
-    'amazon':        {'price_32l': 77.00, 'price_20l': 57.00, 'rating': 4.5, 'reviews': 0, 'stock_32l': 728, 'stock_20l': 228,  'badge': None,                 'fulfillment': True},
+    'amazon':        {'price_32l': 219.90, 'price_20l': 189.90, 'rating': 4.7, 'reviews': 2180, 'stock_32l': 22, 'stock_20l': 0,  'badge': None,                 'fulfillment': False},
     'tiktok_shop':   {'price_32l': 189.90, 'price_20l': 159.90, 'rating': 4.5, 'reviews':  680, 'stock_32l': 67, 'stock_20l': 3,  'badge': 'Top Seller',         'fulfillment': False},
-    'shopee':        {'price_32l': 72.90, 'price_20l': 52.90, 'rating': 4.6, 'reviews': 1240, 'stock_32l': 320, 'stock_20l': 180, 'badge': 'Shopee Preferido',   'fulfillment': True},
+    'shopee':        {'price_32l': 72.90,  'price_20l': 52.90,  'rating': 4.6, 'reviews': 1450, 'stock_32l': 320, 'stock_20l': 180, 'badge': 'Envio Full',        'fulfillment': True},
 }
 
 MP_ADS_DATA = {
@@ -47,15 +47,19 @@ MP_ADS_DATA = {
         {'name': 'Cooler Verão — Sponsored Brand',  'type': 'sponsored',   'spend':  890, 'revenue': 5340, 'clicks': 2940, 'impressions': 71000, 'conversions': 56, 'acos': 16.7, 'status': 'active'},
     ],
     'amazon': [
-        {'name': 'Caixa Térmica 32L — Sponsored Products', 'type': 'sponsored', 'spend': 420, 'revenue': 5390, 'clicks': 1840, 'impressions': 52000, 'conversions': 70, 'acos': 7.8, 'status': 'active', 'price': 77.00, 'stock': 728},
-        {'name': 'Caixa Térmica 20L — Sponsored Products', 'type': 'sponsored', 'spend': 280, 'revenue': 3990, 'clicks': 1420, 'impressions': 38000, 'conversions': 70, 'acos': 7.0, 'status': 'active', 'price': 57.00, 'stock': 228},
-        {'name': 'Caixa Térmica 26 Latas — Sponsored',     'type': 'sponsored', 'spend': 190, 'revenue': 2850, 'clicks':  980, 'impressions': 28000, 'conversions': 50, 'acos': 6.7, 'status': 'active', 'price': 57.00, 'stock': 99},
-        {'name': 'Caixa Térmica 45 Latas Max — Sponsored', 'type': 'sponsored', 'spend': 350, 'revenue': 4620, 'clicks': 1560, 'impressions': 42000, 'conversions': 60, 'acos': 7.6, 'status': 'active', 'price': 77.00, 'stock': 177},
+        {'name': 'Cooler 32L — Sponsored Products', 'type': 'sponsored',   'spend':  980, 'revenue': 6860, 'clicks': 2840, 'impressions': 68000, 'conversions': 70, 'acos': 14.3, 'status': 'active'},
+        {'name': 'Cooler 20L — Sponsored Products', 'type': 'sponsored',   'spend':  340, 'revenue':  680, 'clicks':  980, 'impressions': 31000, 'conversions':  7, 'acos': 50.0, 'status': 'active'},
+        {'name': 'Brand Store — Headline Ads',      'type': 'headline',    'spend':  560, 'revenue': 3360, 'clicks': 1680, 'impressions': 45000, 'conversions': 35, 'acos': 16.7, 'status': 'active'},
     ],
     'tiktok_shop': [
         {'name': 'Cooler 32L — Shop Ads',           'type': 'shop_ads',    'spend':  780, 'revenue': 5460, 'clicks': 4200, 'impressions': 98000, 'conversions': 57, 'acos': 14.3, 'status': 'active'},
         {'name': 'Cooler Verão — Video Shopping',   'type': 'video',       'spend':  490, 'revenue': 3430, 'clicks': 2940, 'impressions': 72000, 'conversions': 36, 'acos': 14.3, 'status': 'active'},
         {'name': 'Afiliados — Comissão 8%',         'type': 'affiliate',   'spend':  340, 'revenue': 1020, 'clicks': 1420, 'impressions': 34000, 'conversions': 11, 'acos': 33.3, 'status': 'active'},
+    ],
+    'shopee': [
+        {'name': 'Cx Térmica 32L — Shopee Ads',     'type': 'shopee_ads',  'spend':  420, 'revenue': 2940, 'clicks': 1890, 'impressions': 45000, 'conversions': 38, 'acos': 14.3, 'status': 'active'},
+        {'name': 'Cx Térmica 20L — Boost',           'type': 'boost',       'spend':  180, 'revenue':  900, 'clicks':  840, 'impressions': 21000, 'conversions': 15, 'acos': 20.0, 'status': 'active'},
+        {'name': 'Cx Térmica 26 Latas — Shopee Ads', 'type': 'shopee_ads',  'spend':  290, 'revenue': 1740, 'clicks': 1260, 'impressions': 32000, 'conversions': 29, 'acos': 16.7, 'status': 'active'},
     ],
 }
 
@@ -97,6 +101,18 @@ RETURNS_DATA = {
         'refunded_revenue': 1519.20,
         'trend': 'stable',
     },
+    'shopee': {
+        'total_orders': 198, 'total_returns': 6, 'return_rate': 3.0,
+        'reasons': [
+            {'reason': 'Produto diferente do anunciado', 'count': 2, 'pct': 33.3},
+            {'reason': 'Defeito de fabricação',          'count': 2, 'pct': 33.3},
+            {'reason': 'Chegou danificado',              'count': 1, 'pct': 16.7},
+            {'reason': 'Arrependimento de compra',       'count': 1, 'pct': 16.7},
+        ],
+        'avg_resolution_days': 2.5,
+        'refunded_revenue': 385.40,
+        'trend': 'stable',
+    },
 }
 
 ACCOUNT_HEALTH = {
@@ -113,16 +129,20 @@ ACCOUNT_HEALTH = {
         'alerts': [],
     },
     'amazon': {
-        'score': 92, 'level': 'Good', 'color': '#ff9900',
+        'score': 74, 'level': 'Seller Standard', 'color': '#ff9900',
         'metrics': {
-            'ODR (Defeito)':   {'val': '0.2%', 'ok': True},
-            'Cancelamentos':   {'val': '0.5%', 'ok': True},
-            'Envio no prazo':  {'val': '98%',  'ok': True},
-            'A-to-Z Claims':   {'val': '0.1%', 'ok': True},
-            'Rastreio válido': {'val': '97%', 'ok': True},
-            'Fulfillment':     {'val': 'FBA',   'ok': True},
+            'ODR (Defeito)':   {'val': '2.8%', 'ok': False},
+            'Cancelamentos':   {'val': '1.9%', 'ok': False},
+            'Envio no prazo':  {'val': '94%',  'ok': True},
+            'Avaliação média': {'val': '4.7 ⭐','ok': True},
+            'A-to-Z Claims':   {'val': '0.3%', 'ok': True},
+            'Fulfillment':     {'val': 'FBM',   'ok': False},
         },
-        'alerts': [],
+        'alerts': [
+            '⚠️ ODR acima de 1% — risco de suspensão da conta',
+            '⚠️ Habilitar FBA pode melhorar score e conversão em ~30%',
+            '⚠️ Taxa de cancelamento alta — revisar estoque disponível',
+        ],
     },
     'tiktok_shop': {
         'score': 88, 'level': 'Top Seller', 'color': '#ff0050',
@@ -138,19 +158,19 @@ ACCOUNT_HEALTH = {
             '💡 Lives de vendas podem aumentar conversão em 3-5x no TikTok Shop',
         ],
     },
-
     'shopee': {
         'score': 85, 'level': 'Bom', 'color': '#ee4d2d',
         'metrics': {
-            'Taxa de atraso':     {'val': '1.2%', 'ok': True},
-            'Cancelamentos':      {'val': '0.8%', 'ok': True},
-            'Devoluções':  {'val': '1.5%', 'ok': True},
-            'Avaliação':   {'val': '4.6 ⭐', 'ok': True},
-            'Chat respondido':    {'val': '95%',  'ok': True},
-            'Tempo resposta':     {'val': '< 1h', 'ok': True},
+            'Fulfillment':          {'val': 'Full',  'ok': True},
+            'Envio atrasado':       {'val': '1.2%',  'ok': True},
+            'Cancelamentos':        {'val': '0.8%',  'ok': True},
+            'Devoluções':           {'val': '1.5%',  'ok': True},
+            'Resp. chat':           {'val': '95%',   'ok': True},
+            'Tempo de resposta':    {'val': '< 1h',  'ok': True},
         },
         'alerts': [],
-    },}
+    },
+}
 
 
 def analyze_competitive_position(marketplace):
@@ -164,9 +184,9 @@ def analyze_competitive_position(marketplace):
     my_20l = my.get('price_20l', 0)
 
     # Concorrentes com estoque crítico = oportunidade
-    critical = [c for c in comp if c.get('stock', '') in ('critical', 'out')]
+    critical = [c for c in comp if c['stock'] in ('critical', 'out')]
     if critical:
-        names = ', '.join(c.get('name', '?') for c in critical)
+        names = ', '.join(c['name'] for c in critical)
         opportunities.append({
             'type': 'stock_gap',
             'icon': '📦',
@@ -177,7 +197,7 @@ def analyze_competitive_position(marketplace):
         })
 
     # Análise de preço
-    prices_32l = [c.get('price_32l', 0) for c in comp if c.get('price_32l', 0) > 0]
+    prices_32l = [c['price_32l'] for c in comp]
     avg_price  = sum(prices_32l) / len(prices_32l) if prices_32l else my_32l
     min_price  = min(prices_32l) if prices_32l else my_32l
     max_price  = max(prices_32l) if prices_32l else my_32l
@@ -202,8 +222,8 @@ def analyze_competitive_position(marketplace):
     # Análise de avaliações
     my_rating   = my.get('rating', 0)
     my_reviews  = my.get('reviews', 0)
-    best_rating = max((c.get('rating', 0) for c in comp), default=0)
-    most_reviews = max((c.get('reviews', 0) for c in comp), default=0)
+    best_rating = max((c['rating'] for c in comp), default=0)
+    most_reviews = max((c['reviews'] for c in comp), default=0)
 
     if my_rating >= best_rating:
         opportunities.append({
@@ -216,7 +236,7 @@ def analyze_competitive_position(marketplace):
         })
 
     # Concorrentes sem fulfillment = desvantagem deles
-    no_fulfillment = [c for c in comp if not c.get('fulfillment', False) and my.get('fulfillment')]
+    no_fulfillment = [c for c in comp if not c['fulfillment'] and my.get('fulfillment')]
     if no_fulfillment and marketplace == 'mercado_livre':
         opportunities.append({
             'type': 'fulfillment',
@@ -290,6 +310,12 @@ def get_keyword_opportunities(marketplace):
             {'kw': '#caixatermica',          'volume': 28000, 'competition': 'baixa', 'your_pos': 7,  'cpc_est': 0.25, 'opportunity': 'muito alto'},
             {'kw': '#camping',              'volume': 184000, 'competition': 'alta',  'your_pos': None,'cpc_est': 0.50, 'opportunity': 'alto'},
         ],
+        'shopee': [
+            {'kw': 'caixa termica',          'volume': 15200, 'competition': 'alta',  'your_pos': 3,  'cpc_est': 0.80, 'opportunity': 'médio'},
+            {'kw': 'cooler termico',         'volume': 9800,  'competition': 'média', 'your_pos': 5,  'cpc_est': 0.55, 'opportunity': 'alto'},
+            {'kw': 'caixa termica grande',   'volume': 7200,  'competition': 'média', 'your_pos': 4,  'cpc_est': 0.50, 'opportunity': 'alto'},
+            {'kw': 'cooler praia camping',   'volume': 4600,  'competition': 'baixa', 'your_pos': 8,  'cpc_est': 0.35, 'opportunity': 'muito alto'},
+        ],
     }
     return kws.get(marketplace, [])
 
@@ -316,8 +342,8 @@ def get_my_products_live(org_id, marketplace):
             avg_rating = sum(p['rating'] or 0 for p in products) / len(products) if products else 0
             total_reviews = sum(p['reviews'] or 0 for p in products)
 
-            # Check FBA status from account health metrics
-            is_fba = False
+            # Check fulfillment status from account health metrics (FBA for Amazon, Full for Shopee)
+            is_fulfilled = False
             try:
                 import json as _jj
                 h_row = db.execute(
@@ -326,7 +352,8 @@ def get_my_products_live(org_id, marketplace):
                     (org_id, marketplace)).fetchone()
                 if h_row:
                     h_m = _jj.loads(h_row['metrics_json'] or '{}')
-                    is_fba = h_m.get('fulfillment_type', 'FBM') == 'FBA'
+                    ft = h_m.get('fulfillment_type', '')
+                    is_fulfilled = ft in ('FBA', 'Full')
             except Exception:
                 pass
             db.close()
@@ -337,13 +364,15 @@ def get_my_products_live(org_id, marketplace):
                 'reviews': total_reviews,
                 'stock_32l': products[0]['stock_qty'] if len(products) > 0 else 0,
                 'stock_20l': products[1]['stock_qty'] if len(products) > 1 else 0,
-                'badge': None,
-                'fulfillment': is_fba,
+                'badge': 'Envio Full' if marketplace == 'shopee' and is_fulfilled else None,
+                'fulfillment': is_fulfilled,
                 '_live': True,
                 '_products': [dict(p) for p in products],
                 '_total_stock': total_stock,
                 '_total_sold': total_sold,
             }
+        else:
+            db.close()
     except Exception as e:
         print(f"[marketplace_intel] DB error for products: {e}")
 
@@ -375,20 +404,16 @@ _METRIC_CFG = {
                            'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.0f}%"},
     'cancel_rate':        {'label': 'Cancelamentos',   'ok': lambda v: float(str(v).rstrip('%') or 0) < 2.5,
                            'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.1f}%"},
-    'fulfillment_type':   {'label': 'Fulfillment',     'ok': lambda v: v == 'FBA',
+    'fulfillment_type':   {'label': 'Fulfillment',     'ok': lambda v: v in ('FBA', 'Full'),
                            'fmt': lambda v: str(v)},
-    'avg_rating':         {'label': 'Avaliação',      'ok': lambda v: float(str(v).replace('⭐','').strip() or 0) >= 4.0,
-                           'fmt': lambda v: f"{float(str(v).replace('⭐','').strip() or 0):.1f} ⭐"},
-    'a_to_z_rate':        {'label': 'A-to-Z Claims',   'ok': lambda v: float(str(v).rstrip('%') or 0) < 1.0,
+    # Shopee metrics
+    'late_shipment_rate': {'label': 'Envio atrasado',  'ok': lambda v: float(str(v).rstrip('%') or 0) < 5,
                            'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.1f}%"},
-    'valid_tracking_rate':{'label': 'Rastreio válido', 'ok': lambda v: float(str(v).rstrip('%') or 0) >= 95,
-                           'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.0f}%"},
-    # Shopee
-    'return_rate':        {'label': 'Devoluções',    'ok': lambda v: float(str(v).rstrip('%') or 0) < 3.0,
+    'return_rate':        {'label': 'Devoluções',      'ok': lambda v: float(str(v).rstrip('%') or 0) < 5,
                            'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.1f}%"},
-    'chat_response_rate': {'label': 'Chat respondido', 'ok': lambda v: float(str(v).rstrip('%') or 0) >= 90,
+    'chat_response_rate': {'label': 'Resp. chat',      'ok': lambda v: float(str(v).rstrip('%') or 0) >= 80,
                            'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.0f}%"},
-    'chat_response_time': {'label': 'Tempo resposta',  'ok': lambda v: True,
+    'chat_response_time': {'label': 'Tempo de resposta','ok': lambda v: True,
                            'fmt': lambda v: str(v)},
 }
 
@@ -407,18 +432,6 @@ def get_account_health_live(org_id, marketplace):
 
         if row and row['score'] > 0:
             raw_metrics = _json.loads(row['metrics_json'] or '{}')
-            # Ensure Amazon health has complete metrics (sync may only capture a few)
-            if marketplace == 'amazon':
-                _amazon_defaults = {
-                    'order_defect_rate': '0.2%',
-                    'late_shipment_rate': '98%',
-                    'cancel_rate': '0.5%',
-                    'fulfillment_type': 'FBA',
-                }
-                for _dk, _dv in _amazon_defaults.items():
-                    if _dk not in raw_metrics:
-                        raw_metrics[_dk] = _dv
-
             formatted   = {}
             for key, raw_val in raw_metrics.items():
                 cfg   = _METRIC_CFG.get(key)
@@ -435,11 +448,24 @@ def get_account_health_live(org_id, marketplace):
             # Build contextual alerts from metrics
             alerts = _json.loads(row['alerts_json'] or '[]')
             if not alerts:
-                if 'order_defect_rate' in raw_metrics:
-                    odr = float(str(raw_metrics['order_defect_rate']).rstrip('%') or 0)
-                    if odr >= 1.0:
-                        alerts.append('⚠️ ODR acima de 1% — risco de suspensão da conta')
-                # FBA status is auto-detected or manually confirmed — no misleading alert
+                ft = raw_metrics.get('fulfillment_type', '')
+                if marketplace == 'amazon':
+                    if 'order_defect_rate' in raw_metrics:
+                        odr = float(str(raw_metrics['order_defect_rate']).rstrip('%') or 0)
+                        if odr >= 1.0:
+                            alerts.append('⚠️ ODR acima de 1% — risco de suspensão da conta')
+                    if ft != 'FBA':
+                        alerts.append('💡 Habilitar FBA pode melhorar conversão em ~30% e aumentar visibilidade')
+                elif marketplace == 'shopee':
+                    lsr = float(str(raw_metrics.get('late_shipment_rate', '0')).rstrip('%') or 0)
+                    if lsr >= 5:
+                        alerts.append('⚠️ Taxa de envio atrasado alta — verificar logística')
+                    rr = float(str(raw_metrics.get('return_rate', '0')).rstrip('%') or 0)
+                    if rr >= 5:
+                        alerts.append('⚠️ Taxa de devolução alta — revisar qualidade dos produtos')
+                    crr = float(str(raw_metrics.get('chat_response_rate', '100')).rstrip('%') or 0)
+                    if crr < 80:
+                        alerts.append('💡 Melhorar taxa de resposta no chat para acima de 80%')
                 cr = float(str(raw_metrics.get('cancel_rate', '0')).rstrip('%') or 0)
                 if cr >= 2.5:
                     alerts.append('⚠️ Taxa de cancelamento alta — revisar estoque disponível')
@@ -550,9 +576,10 @@ def get_ads_live(org_id, marketplace):
                 '_live': True,
             }
 
-        # Fallback: get promoted products from mp_products
-        # Amazon: all active listings are potentially Sponsored — no ML-style listing types
-        if marketplace == 'amazon':
+        # Fallback: get active products from mp_products
+        # Mercado Livre uses listing_type categories (gold_pro, gold_special, gold_premium)
+        # Amazon, Shopee, TikTok Shop: all active listings
+        if marketplace in ('amazon', 'shopee', 'tiktok_shop'):
             rows = db.execute(
                 "SELECT * FROM mp_products WHERE org_id=? AND platform=? "
                 "AND status='active' ORDER BY sold_qty DESC LIMIT 20",
@@ -573,13 +600,17 @@ def get_ads_live(org_id, marketplace):
             for r in rows:
                 p = dict(r)
                 revenue = (p.get('price', 0) or 0) * (p.get('sold_qty', 0) or 0)
+                _default_label = {
+                    'amazon': 'Sponsored Product',
+                    'shopee': 'Produto Full',
+                    'tiktok_shop': 'Shop Ads',
+                }.get(marketplace, 'Promovido')
                 listing_label = {
                     'gold_pro':      'Premium',
                     'gold_special':  'Clássico',
                     'gold_premium':  'Premium',
                     'sponsored':     'Sponsored Product',
-                }.get(p.get('listing_type', ''),
-                      'Sponsored Product' if marketplace == 'amazon' else 'Promovido')
+                }.get(p.get('listing_type', ''), _default_label)
                 ads_list.append(p | {'_revenue_estimated': revenue, '_listing_label': listing_label})
 
             return {
@@ -770,16 +801,13 @@ def search_ml_competitors(org_id, marketplace, token=None):
                 'shipping': 'gratis' if r.get('fulfillment') else 'pago',
             })
 
-        # Fall back to demo data if no real competitors found
-        if not competitors:
-            return COMPETITORS.get(marketplace, [])
         return competitors
 
     except Exception as e:
         print(f"[marketplace_intel] Error reading competitors from DB: {e}")
         import traceback
         traceback.print_exc()
-        return COMPETITORS.get(marketplace, [])
+        return []
 
 
 def compute_health_score(metrics):
