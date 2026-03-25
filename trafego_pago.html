@@ -86,13 +86,18 @@ function setPreset(days) {
   });
 })();
 </script>
+
 {% set plat_icons = {'meta':'📘','google':'🔴','tiktok':'🎵'} %}
 {% set plat_names = {'meta':'Meta Ads','google':'Google Ads'} %}
+
+{# ── Separate campaigns by platform ── #}
+{% set meta_campaigns = campaigns | selectattr('platform', 'equalto', 'meta') | list %}
+{% set google_campaigns = campaigns | selectattr('platform', 'equalto', 'google') | list %}
 
 <!-- KPIs GERAIS -->
 <div style="margin-bottom:20px">
   <div style="font-size:20px;font-weight:900">Visao Geral de Trafego Pago</div>
-  <div style="font-size:13px;color:var(--text2);margin-top:2px">{{ kpis.total_campaigns }} campanhas | {{ kpis.active_campaigns }} ativas</div>
+  <div style="font-size:13px;color:var(--text2);margin-top:2px">{{ campaigns|length }} campanhas | {{ kpis.active_campaigns }} ativas</div>
 </div>
 
 <div class="grid g4" style="margin-bottom:20px">
@@ -174,7 +179,7 @@ function setPreset(days) {
 
 <!-- SEO - TRAFEGO ORGANICO -->
 <div class="card" style="margin-bottom:20px;border-top:3px solid #22d3ee">
-  <div class="card-title" style="margin-bottom:12px">\U0001f50d SEO &mdash; Trafego Organico</div>
+  <div class="card-title" style="margin-bottom:12px">🔍 SEO &mdash; Trafego Organico</div>
   <div class="grid g4">
     <div>
       <div style="font-size:12px;color:var(--text2)">Status</div>
@@ -194,7 +199,7 @@ function setPreset(days) {
     </div>
   </div>
   <div style="margin-top:16px;padding:12px 16px;border-radius:10px;background:rgba(34,211,238,0.08)">
-    <div style="font-weight:700;font-size:14px;color:#22d3ee">\U0001f4a1 Recomendacoes SEO</div>
+    <div style="font-weight:700;font-size:14px;color:#22d3ee">💡 Recomendacoes SEO</div>
     <ul style="margin-top:8px;padding-left:20px;font-size:13px;color:var(--text2);line-height:1.8">
       <li>Otimize titulos de produtos com palavras-chave de alta busca</li>
       <li>Crie conteudo para blog focado em termos do seu nicho</li>
@@ -220,34 +225,38 @@ function setPreset(days) {
 </div>
 {% endif %}
 
-<!-- TABELA DE CAMPANHAS -->
-<div class="card" style="padding:0;overflow:hidden;margin-bottom:20px">
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- CAMPANHAS META ADS -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:20px;border-top:3px solid #1877f2">
   <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-    <div style="font-weight:700">📋 Todas as Campanhas</div>
-    <div style="font-size:12px;color:var(--text2)">{{ campaigns|length }} campanhas</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">📘</span>
+      <div>
+        <div style="font-weight:700;font-size:15px">Meta Ads</div>
+        <div style="font-size:11px;color:var(--text2)">Facebook &amp; Instagram</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text2)">{{ meta_campaigns|length }} campanhas</div>
   </div>
+  {% if meta_campaigns %}
   <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead>
         <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">
           <th style="padding:10px 16px;text-align:left">Campanha</th>
-          <th style="padding:10px;text-align:center">Plataforma</th>
           <th style="padding:10px;text-align:center">Score</th>
           <th style="padding:10px;text-align:right">Gasto</th>
           <th style="padding:10px;text-align:right">Receita</th>
           <th style="padding:10px;text-align:center">ROAS</th>
           <th style="padding:10px;text-align:center">CTR</th>
           <th style="padding:10px;text-align:center">Conv.</th>
-          <th style="padding:10px;text-align:center">Acao IA</th>
         </tr>
       </thead>
       <tbody>
-      {% for c in campaigns %}
-        <tr style="border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='rgba(108,99,255,0.05)'" onmouseout="this.style.background=''">
+      {% for c in meta_campaigns %}
+        <tr style="border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='rgba(24,119,242,0.05)'" onmouseout="this.style.background=''">
           <td style="padding:10px 16px;font-weight:600">{{ c.name }}</td>
-          <td style="padding:10px;text-align:center">
-            <span style="font-size:11px;padding:2px 8px;border-radius:20px;background:var(--card2)">{{ plat_icons.get(c.platform, '') }} {{ plat_names.get(c.platform, c.platform) }}</span>
-          </td>
           <td style="padding:10px;text-align:center">
             <span style="font-weight:800;color:{% if c.score >= 75 %}var(--green){% elif c.score >= 50 %}var(--yellow){% else %}var(--red){% endif %}">{{ c.score }}</span>
           </td>
@@ -258,20 +267,74 @@ function setPreset(days) {
           </td>
           <td style="padding:10px;text-align:center">{{ c.ctr }}%</td>
           <td style="padding:10px;text-align:center">{{ c.conv_rate }}%</td>
-          <td style="padding:10px;text-align:center">
-            {% if c.action == 'scale' %}
-              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(16,185,129,0.15);color:var(--green)">🚀 Escalar</span>
-            {% elif c.action == 'optimize' %}
-              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(245,158,11,0.15);color:var(--yellow)">⚠️ Otimizar</span>
-            {% else %}
-              <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(239,68,68,0.15);color:var(--red)">⏸ Pausar</span>
-            {% endif %}
-          </td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
+  {% else %}
+  <div style="padding:40px;text-align:center;color:var(--text2)">
+    <div style="font-size:32px;margin-bottom:10px">📘</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px">Nenhuma campanha Meta Ads</div>
+    <div style="font-size:12px">Conecte sua conta Meta Ads em <a href="/integrations" style="color:var(--accent);text-decoration:underline">Integracoes</a> para ver seus anuncios aqui</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- CAMPANHAS GOOGLE ADS -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:20px;border-top:3px solid #ea4335">
+  <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">🔴</span>
+      <div>
+        <div style="font-weight:700;font-size:15px">Google Ads</div>
+        <div style="font-size:11px;color:var(--text2)">Search, Display &amp; YouTube</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text2)">{{ google_campaigns|length }} campanhas</div>
+  </div>
+  {% if google_campaigns %}
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">
+          <th style="padding:10px 16px;text-align:left">Campanha</th>
+          <th style="padding:10px;text-align:center">Score</th>
+          <th style="padding:10px;text-align:right">Gasto</th>
+          <th style="padding:10px;text-align:right">Receita</th>
+          <th style="padding:10px;text-align:center">ROAS</th>
+          <th style="padding:10px;text-align:center">CTR</th>
+          <th style="padding:10px;text-align:center">Conv.</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for c in google_campaigns %}
+        <tr style="border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='rgba(234,67,53,0.05)'" onmouseout="this.style.background=''">
+          <td style="padding:10px 16px;font-weight:600">{{ c.name }}</td>
+          <td style="padding:10px;text-align:center">
+            <span style="font-weight:800;color:{% if c.score >= 75 %}var(--green){% elif c.score >= 50 %}var(--yellow){% else %}var(--red){% endif %}">{{ c.score }}</span>
+          </td>
+          <td style="padding:10px;text-align:right">R$ {{ "{:,.0f}".format(c.spend) }}</td>
+          <td style="padding:10px;text-align:right;color:var(--green)">R$ {{ "{:,.0f}".format(c.revenue) }}</td>
+          <td style="padding:10px;text-align:center">
+            <span style="padding:3px 8px;border-radius:20px;font-size:12px;font-weight:700;background:{% if c.roas >= 4 %}rgba(16,185,129,0.15);color:var(--green){% elif c.roas >= 2 %}rgba(245,158,11,0.15);color:var(--yellow){% else %}rgba(239,68,68,0.15);color:var(--red){% endif %}">{{ c.roas }}x</span>
+          </td>
+          <td style="padding:10px;text-align:center">{{ c.ctr }}%</td>
+          <td style="padding:10px;text-align:center">{{ c.conv_rate }}%</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:40px;text-align:center;color:var(--text2)">
+    <div style="font-size:32px;margin-bottom:10px">🔴</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px">Nenhuma campanha Google Ads</div>
+    <div style="font-size:12px">Conecte sua conta Google Ads em <a href="/integrations" style="color:var(--accent);text-decoration:underline">Integracoes</a> para ver seus anuncios aqui</div>
+  </div>
+  {% endif %}
 </div>
 
 {% endblock %}
