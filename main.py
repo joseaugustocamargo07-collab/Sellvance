@@ -2231,6 +2231,30 @@ def debug_db_info():
 
     return jsonify(result)
 
+@app.route('/api/debug/orders')
+def debug_orders():
+    """Show all ML orders with status and revenue for debugging."""
+    org_id = 1
+    mp = request.args.get('mp', 'mercado_livre')
+    db = get_db()
+    rows = db.execute(
+        "SELECT external_id, status, gmv, revenue, ordered_at FROM orders WHERE org_id=? AND marketplace=? ORDER BY ordered_at DESC",
+        (org_id, mp)
+    ).fetchall()
+    orders_list = [dict(r) for r in rows]
+    total_revenue = sum(o['revenue'] for o in orders_list)
+    total_gmv = sum(o['gmv'] for o in orders_list)
+    paid_orders = [o for o in orders_list if o['revenue'] > 0]
+    db.close()
+    return jsonify({
+        'total_orders': len(orders_list),
+        'paid_orders': len(paid_orders),
+        'total_revenue': total_revenue,
+        'total_gmv': total_gmv,
+        'orders': orders_list
+    })
+
+
 # ══ ROTAS DE RELATORIOS EXPORTAVEIS ═══════════════════════════════
 
 @app.route('/api/debug/sync-diag')
