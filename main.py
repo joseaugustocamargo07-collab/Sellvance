@@ -1637,9 +1637,23 @@ def resume_campaign(campaign_id):
 @app.route('/traffic')
 @login_required
 def traffic():
+    import re as _re
     db = get_db()
     org_id = session.get('org_id', 1)
-    
+
+    # ── Auto-sync Meta Ads if connected ─────────────────────
+    try:
+        meta_row = db.execute(
+            "SELECT status FROM api_integrations WHERE org_id=? AND platform='meta_ads'",
+            (org_id,)
+        ).fetchone()
+        if meta_row and meta_row['status'] == 'connected':
+            from sync_meta_ads import sync_all as meta_sync
+            from sync_base import run_sync_if_needed
+            run_sync_if_needed(org_id, 'meta_ads', meta_sync, max_age=60)
+    except Exception:
+        pass
+
     # Date filters
     date_start = request.args.get('date_start', '')
     date_end = request.args.get('date_end', '')
@@ -1653,7 +1667,12 @@ def traffic():
     if date_end:
         sql += " AND date <= ?"
         params.append(date_end)
-    campaigns_raw = db.execute(sql, params).fetchall()
+    all_camps = db.execute(sql, params).fetchall()
+
+    # ── Filter demo data when real data exists ──────────────
+    _DEMO_RE = _re.compile(r'^(meta|goog|tik)_\d+$')
+    real_camps = [c for c in all_camps if not _DEMO_RE.match(dict(c).get('external_campaign_id') or '')]
+    campaigns_raw = real_camps if real_camps else all_camps
     
     # Calculate metrics for each campaign
     campaigns = []
