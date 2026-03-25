@@ -36,7 +36,7 @@ MY_PRODUCTS = {
     'mercado_livre': {'price_32l': 219.90, 'price_20l': 189.90, 'rating': 4.8, 'reviews': 3240, 'stock_32l': 48, 'stock_20l': 9,  'badge': 'MercadoLíder Gold', 'fulfillment': True},
     'amazon':        {'price_32l': 77.00, 'price_20l': 57.00, 'rating': 4.5, 'reviews': 0, 'stock_32l': 728, 'stock_20l': 228,  'badge': None,                 'fulfillment': True},
     'tiktok_shop':   {'price_32l': 189.90, 'price_20l': 159.90, 'rating': 4.5, 'reviews':  680, 'stock_32l': 67, 'stock_20l': 3,  'badge': 'Top Seller',         'fulfillment': False},
-    'shopee':        {'price_32l': 72.90, 'price_20l': 52.90, 'rating': 4.6, 'reviews': 1240, 'stock_32l': 320, 'stock_20l': 180, 'badge': 'Shopee Preferido',   'fulfillment': False},
+    'shopee':        {'price_32l': 72.90, 'price_20l': 52.90, 'rating': 4.6, 'reviews': 1240, 'stock_32l': 320, 'stock_20l': 180, 'badge': 'Shopee Preferido',   'fulfillment': True},
 }
 
 MP_ADS_DATA = {
