@@ -8,6 +8,29 @@ import json
 
 app = Flask(__name__, template_folder='.')
 
+
+# ── Filtro Jinja2 para formato monetario brasileiro ──────────────────────────
+def _brl_filter(value, decimals=2):
+    """Formata numero no padrao brasileiro: 1.234,56"""
+    try:
+        value = float(value or 0)
+    except (TypeError, ValueError):
+        return '0'
+    if decimals == 0:
+        formatted = f"{value:,.0f}"
+    else:
+        formatted = f"{value:,.{decimals}f}"
+    # Swap US format to BR: 1,234.56 -> 1.234,56
+    # Step 1: comma -> temp, Step 2: dot -> comma, Step 3: temp -> dot
+    formatted = formatted.replace(',', 'X').replace('.', ',').replace('X', '.')
+    return formatted
+
+
+app.jinja_env.filters['brl'] = _brl_filter
+app.jinja_env.filters['brl0'] = lambda v: _brl_filter(v, 0)
+app.jinja_env.filters['brl2'] = lambda v: _brl_filter(v, 2)
+
+
 # SECRET_KEY obrigatorio via variavel de ambiente (sem fallback)
 _secret = os.environ.get('SECRET_KEY')
 if not _secret:
@@ -1046,16 +1069,30 @@ def debug_ml_promos():
 
 @app.route('/api/force-sync')
 def force_sync():
-    """Force a full re-sync (bypasses staleness check)."""
+    """Force a full re-sync (bypasses staleness check).
+    Add ?clean=1 to delete old data first and resync from scratch."""
     org_id = 1
     mp = request.args.get('mp', 'mercado_livre')
+    clean = request.args.get('clean', '0') == '1'
     try:
+        if clean:
+            # Delete old orders/data so they get re-synced with correct revenue values
+            db = get_db()
+            if mp == 'mercado_livre':
+                # Delete ML orders that have external_id (will be re-fetched)
+                db.execute("DELETE FROM orders WHERE org_id=? AND marketplace='mercado_livre' AND external_id IS NOT NULL AND external_id != ''", (org_id,))
+                # Also delete demo orders (no external_id) for ML marketplace
+                db.execute("DELETE FROM orders WHERE org_id=? AND marketplace='mercado_livre' AND (external_id IS NULL OR external_id = '')", (org_id,))
+                # Clear sync log to force fresh sync
+                db.execute("DELETE FROM sync_log WHERE org_id=? AND platform=?", (org_id, mp))
+            db.commit()
+
         if mp == 'mercado_livre':
             from sync_mercadolivre import sync_all
             from sync_base import log_sync
             records = sync_all(org_id)
             log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
-            return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp})
+            return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp, 'cleaned': clean})
         if mp == 'amazon':
             from sync_amazon import sync_all as amazon_sync_all
             from sync_base import log_sync
