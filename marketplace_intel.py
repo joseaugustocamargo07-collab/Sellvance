@@ -383,6 +383,13 @@ _METRIC_CFG = {
                            'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.1f}%"},
     'valid_tracking_rate':{'label': 'Rastreio válido', 'ok': lambda v: float(str(v).rstrip('%') or 0) >= 95,
                            'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.0f}%"},
+    # Shopee
+    'return_rate':        {'label': 'Devoluções',    'ok': lambda v: float(str(v).rstrip('%') or 0) < 3.0,
+                           'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.1f}%"},
+    'chat_response_rate': {'label': 'Chat respondido', 'ok': lambda v: float(str(v).rstrip('%') or 0) >= 90,
+                           'fmt': lambda v: f"{float(str(v).rstrip('%') or 0):.0f}%"},
+    'chat_response_time': {'label': 'Tempo resposta',  'ok': lambda v: True,
+                           'fmt': lambda v: str(v)},
 }
 
 
