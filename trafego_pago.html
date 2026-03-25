@@ -401,8 +401,16 @@ function setPreset(days) {
       <div id="aiModalSuggestions"></div>
     </div>
 
+    <!-- Resultado da aplicacao -->
+    <div id="aiModalResultSection" style="display:none;padding:16px 24px;border-bottom:1px solid var(--border)">
+      <div id="aiModalResult"></div>
+    </div>
+
     <!-- Footer -->
-    <div style="padding:16px 24px;display:flex;justify-content:flex-end;gap:10px">
+    <div style="padding:16px 24px;display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <button id="aiModalApplyAllBtn" onclick="applyAllSuggestions()" style="padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+        <span>🤖</span> Aplicar Todas as Sugestoes
+      </button>
       <button onclick="closeAiModal()" style="padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;background:var(--card2,#1e1e2e);color:var(--text1);border:1px solid var(--border);cursor:pointer">Fechar</button>
     </div>
   </div>
@@ -410,10 +418,14 @@ function setPreset(days) {
 
 <!-- Campaign data for JS -->
 <script>
+var _currentPlatform = '';
+var _currentIdx = 0;
+
 var metaCampaigns = [
   {% for c in meta_campaigns %}
   {
     name: {{ c.name | tojson }},
+    campaign_id: {{ c.external_campaign_id | default('', true) | tojson }},
     score: {{ c.score }},
     action: {{ c.action | tojson }},
     status_label: {{ c.status_label | tojson }},
@@ -435,6 +447,7 @@ var googleCampaigns = [
   {% for c in google_campaigns %}
   {
     name: {{ c.name | tojson }},
+    campaign_id: {{ c.external_campaign_id | default('', true) | tojson }},
     score: {{ c.score }},
     action: {{ c.action | tojson }},
     status_label: {{ c.status_label | tojson }},
@@ -456,6 +469,11 @@ var googleCampaigns = [
 function openAiModal(idx, platform) {
   var c = platform === 'meta' ? metaCampaigns[idx] : googleCampaigns[idx];
   if (!c) return;
+  _currentPlatform = platform;
+  _currentIdx = idx;
+
+  // Reset result section
+  document.getElementById('aiModalResultSection').style.display = 'none';
 
   document.getElementById('aiModalTitle').textContent = c.name;
   document.getElementById('aiModalSubtitle').textContent = (platform === 'meta' ? '📘 Meta Ads' : '🔴 Google Ads') + ' | Score ' + c.score + '/100';
@@ -509,26 +527,158 @@ function openAiModal(idx, platform) {
     problemsSection.style.display = 'none';
   }
 
-  // Suggestions
+  // Suggestions with Apply buttons
   var suggestionsSection = document.getElementById('aiModalSuggestionsSection');
   var suggestionsEl = document.getElementById('aiModalSuggestions');
   if (c.suggestions && c.suggestions.length > 0) {
     suggestionsSection.style.display = 'block';
     var sh = '';
     c.suggestions.forEach(function(s, i) {
-      sh += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;margin-bottom:8px;border-radius:10px;background:rgba(108,99,255,0.06);border-left:3px solid var(--accent,#6c63ff)">' +
+      sh += '<div id="sug_item_' + i + '" style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;margin-bottom:8px;border-radius:10px;background:rgba(108,99,255,0.06);border-left:3px solid var(--accent,#6c63ff)">' +
         '<span style="font-size:16px;flex-shrink:0">💡</span>' +
-        '<div><div style="font-size:13px;color:var(--text1);font-weight:600">Sugestao ' + (i+1) + '</div>' +
-        '<div style="font-size:13px;color:var(--text2);margin-top:2px">' + s + '</div></div></div>';
+        '<div style="flex:1"><div style="font-size:13px;color:var(--text1);font-weight:600">Sugestao ' + (i+1) + '</div>' +
+        '<div style="font-size:13px;color:var(--text2);margin-top:2px">' + s + '</div></div>' +
+        '<button onclick="applySuggestion(' + i + ')" id="sug_btn_' + i + '" style="flex-shrink:0;padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;background:linear-gradient(135deg,#6c63ff,#857cff);color:#fff;border:none;cursor:pointer;transition:all .2s;white-space:nowrap" onmouseover="this.style.opacity=\'0.85\'" onmouseout="this.style.opacity=\'1\'">Aplicar</button>' +
+        '</div>';
     });
     suggestionsEl.innerHTML = sh;
   } else {
     suggestionsSection.style.display = 'none';
   }
 
+  // Show/hide apply all button
+  var applyAllBtn = document.getElementById('aiModalApplyAllBtn');
+  applyAllBtn.style.display = (c.suggestions && c.suggestions.length > 1) ? 'flex' : 'none';
+
   // Show modal
   var modal = document.getElementById('aiModal');
   modal.style.display = 'flex';
+}
+
+function applySuggestion(sugIdx) {
+  var c = _currentPlatform === 'meta' ? metaCampaigns[_currentIdx] : googleCampaigns[_currentIdx];
+  if (!c) return;
+
+  var btn = document.getElementById('sug_btn_' + sugIdx);
+  btn.textContent = 'Aplicando...';
+  btn.style.opacity = '0.6';
+  btn.disabled = true;
+
+  fetch('/traffic/ai-apply', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      platform: _currentPlatform,
+      campaign_id: c.campaign_id,
+      campaign_name: c.name,
+      action: c.action,
+      suggestion_index: sugIdx,
+      suggestion_text: c.suggestions[sugIdx]
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.status === 'ok') {
+      btn.textContent = '✅ Aplicado';
+      btn.style.background = 'rgba(16,185,129,0.2)';
+      btn.style.color = 'var(--green)';
+      btn.style.opacity = '1';
+
+      // Show result
+      var resultSection = document.getElementById('aiModalResultSection');
+      var resultEl = document.getElementById('aiModalResult');
+      resultSection.style.display = 'block';
+      resultEl.innerHTML = '<div style="padding:12px 16px;border-radius:10px;background:rgba(16,185,129,0.08);border-left:3px solid var(--green)">' +
+        '<div style="font-weight:700;font-size:14px;color:var(--green);margin-bottom:4px">✅ ' + data.title + '</div>' +
+        '<div style="font-size:13px;color:var(--text2)">' + data.message + '</div></div>';
+
+      // Highlight the suggestion item
+      var sugItem = document.getElementById('sug_item_' + sugIdx);
+      if (sugItem) sugItem.style.borderLeftColor = 'var(--green)';
+    } else {
+      btn.textContent = '❌ Erro';
+      btn.style.background = 'rgba(239,68,68,0.2)';
+      btn.style.color = 'var(--red)';
+      btn.style.opacity = '1';
+      setTimeout(function() {
+        btn.textContent = 'Aplicar';
+        btn.style.background = 'linear-gradient(135deg,#6c63ff,#857cff)';
+        btn.style.color = '#fff';
+        btn.disabled = false;
+      }, 3000);
+    }
+  })
+  .catch(function() {
+    btn.textContent = '❌ Erro';
+    btn.style.opacity = '1';
+    setTimeout(function() {
+      btn.textContent = 'Aplicar';
+      btn.style.background = 'linear-gradient(135deg,#6c63ff,#857cff)';
+      btn.style.color = '#fff';
+      btn.disabled = false;
+    }, 3000);
+  });
+}
+
+function applyAllSuggestions() {
+  var c = _currentPlatform === 'meta' ? metaCampaigns[_currentIdx] : googleCampaigns[_currentIdx];
+  if (!c || !c.suggestions) return;
+
+  var applyAllBtn = document.getElementById('aiModalApplyAllBtn');
+  applyAllBtn.innerHTML = '<span>⏳</span> Aplicando...';
+  applyAllBtn.disabled = true;
+  applyAllBtn.style.opacity = '0.6';
+
+  fetch('/traffic/ai-apply', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      platform: _currentPlatform,
+      campaign_id: c.campaign_id,
+      campaign_name: c.name,
+      action: c.action,
+      suggestion_index: -1,
+      suggestion_text: c.suggestions.join(' | '),
+      apply_all: true
+    })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.status === 'ok') {
+      applyAllBtn.innerHTML = '<span>✅</span> Todas Aplicadas';
+      applyAllBtn.style.background = 'rgba(16,185,129,0.2)';
+      applyAllBtn.style.color = 'var(--green)';
+      applyAllBtn.style.opacity = '1';
+
+      // Mark all individual buttons as applied
+      c.suggestions.forEach(function(s, i) {
+        var btn = document.getElementById('sug_btn_' + i);
+        if (btn) {
+          btn.textContent = '✅ Aplicado';
+          btn.style.background = 'rgba(16,185,129,0.2)';
+          btn.style.color = 'var(--green)';
+          btn.disabled = true;
+        }
+        var item = document.getElementById('sug_item_' + i);
+        if (item) item.style.borderLeftColor = 'var(--green)';
+      });
+
+      // Show result
+      var resultSection = document.getElementById('aiModalResultSection');
+      var resultEl = document.getElementById('aiModalResult');
+      resultSection.style.display = 'block';
+      resultEl.innerHTML = '<div style="padding:12px 16px;border-radius:10px;background:rgba(16,185,129,0.08);border-left:3px solid var(--green)">' +
+        '<div style="font-weight:700;font-size:14px;color:var(--green);margin-bottom:4px">✅ ' + data.title + '</div>' +
+        '<div style="font-size:13px;color:var(--text2)">' + data.message + '</div></div>';
+    }
+  })
+  .catch(function() {
+    applyAllBtn.innerHTML = '<span>🤖</span> Aplicar Todas as Sugestoes';
+    applyAllBtn.disabled = false;
+    applyAllBtn.style.opacity = '1';
+    applyAllBtn.style.background = 'linear-gradient(135deg,#6c63ff,#857cff)';
+    applyAllBtn.style.color = '#fff';
+  });
 }
 
 function closeAiModal() {
