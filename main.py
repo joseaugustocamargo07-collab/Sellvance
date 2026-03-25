@@ -1740,9 +1740,14 @@ def traffic():
         'active_campaigns': sum(1 for c in campaigns if c.get('status') == 'active'),
     }
     
-    return render_template('trafego_pago.html', 
-                         campaigns=campaigns, kpis=kpis, 
-                         platforms=platforms, insights=ai_insights, ai_global_roas=ai_global_roas)
+    # Split by platform for separate tables
+    meta_campaigns = [c for c in campaigns if c.get('platform') == 'meta']
+    google_campaigns = [c for c in campaigns if c.get('platform') == 'google']
+
+    return render_template('trafego_pago.html',
+                         campaigns=campaigns, kpis=kpis,
+                         platforms=platforms, insights=ai_insights, ai_global_roas=ai_global_roas,
+                         meta_campaigns=meta_campaigns, google_campaigns=google_campaigns)
 
 # -- AI Suggestions endpoint for Marketplaces --
 
