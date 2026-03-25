@@ -424,10 +424,19 @@ def get_account_health_live(org_id, marketplace):
         from database import get_db
         import json as _json
         db = get_db()
-        row = db.execute(
-            "SELECT * FROM mp_account_health WHERE org_id=? AND platform=?",
-            (org_id, marketplace)
-        ).fetchone()
+
+        # Try with platform filter first (new schema), fallback to without
+        row = None
+        try:
+            row = db.execute(
+                "SELECT * FROM mp_account_health WHERE org_id=? AND platform=?",
+                (org_id, marketplace)
+            ).fetchone()
+        except Exception:
+            row = db.execute(
+                "SELECT * FROM mp_account_health WHERE org_id=?",
+                (org_id,)
+            ).fetchone()
         db.close()
 
         if row and row['score'] > 0:
@@ -489,21 +498,44 @@ def get_returns_live(org_id, marketplace):
         from database import get_db
         import json as _json
         db = get_db()
-        row = db.execute(
-            "SELECT * FROM mp_returns WHERE org_id=? AND platform=?",
-            (org_id, marketplace)
-        ).fetchone()
+
+        # Try with platform filter first (new schema)
+        row = None
+        try:
+            row = db.execute(
+                "SELECT * FROM mp_returns WHERE org_id=? AND platform=?",
+                (org_id, marketplace)
+            ).fetchone()
+        except Exception:
+            # platform column may not exist yet — try without
+            row = db.execute(
+                "SELECT * FROM mp_returns WHERE org_id=?",
+                (org_id,)
+            ).fetchone()
         db.close()
 
         if row:
+            d = dict(row)
+            # Handle both old schema (returned_orders only) and new schema (all columns)
+            total_returns = d.get('total_returns', 0) or d.get('returned_orders', 0) or 0
+            total_orders = d.get('total_orders', 0) or 0
+            return_rate = d.get('return_rate', 0) or 0
+
+            # Parse reasons_json safely
+            reasons_raw = d.get('reasons_json', '[]') or '[]'
+            try:
+                reasons = _json.loads(reasons_raw) if isinstance(reasons_raw, str) else []
+            except Exception:
+                reasons = []
+
             return {
-                'total_orders': row['total_orders'],
-                'total_returns': row['total_returns'],
-                'return_rate': row['return_rate'],
-                'reasons': _json.loads(row['reasons_json'] or '[]'),
-                'avg_resolution_days': row['avg_resolution_days'],
-                'refunded_revenue': row['refunded_revenue'],
-                'trend': row['trend'],
+                'total_orders': total_orders,
+                'total_returns': total_returns,
+                'return_rate': return_rate,
+                'reasons': reasons,
+                'avg_resolution_days': d.get('avg_resolution_days', 0) or 0,
+                'refunded_revenue': d.get('refunded_revenue', 0) or 0,
+                'trend': d.get('trend', 'stable') or 'stable',
                 '_live': True,
             }
     except Exception as e:
@@ -553,10 +585,16 @@ def get_ads_live(org_id, marketplace):
         db = get_db()
 
         # First try mp_ads table (has spend/revenue data if populated)
-        rows = db.execute(
-            "SELECT * FROM mp_ads WHERE org_id=? AND platform=? ORDER BY spend DESC",
-            (org_id, marketplace)
-        ).fetchall()
+        try:
+            rows = db.execute(
+                "SELECT * FROM mp_ads WHERE org_id=? AND platform=? ORDER BY spend DESC",
+                (org_id, marketplace)
+            ).fetchall()
+        except Exception:
+            rows = db.execute(
+                "SELECT * FROM mp_ads WHERE org_id=? ORDER BY price DESC",
+                (org_id,)
+            ).fetchall()
 
         if rows:
             ads_list = []
@@ -625,11 +663,18 @@ def get_ads_live(org_id, marketplace):
 
 
 def get_real_orders_totals(org_id, marketplace, date_start='', date_end=''):
-    """Returns revenue/orders from REAL synced orders only (with external_id)."""
+    """Returns revenue/orders from REAL synced orders only.
+    Only counts paid/delivered/shipped orders — excludes cancelled and returned."""
     try:
         from database import get_db
         db = get_db()
-        sql = "SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders FROM orders WHERE org_id=? AND marketplace=? AND external_id IS NOT NULL AND external_id != ''"
+        # Only count orders with external_id (real, from API) and with paid status
+        sql = """SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders
+                 FROM orders
+                 WHERE org_id=? AND marketplace=?
+                   AND external_id IS NOT NULL AND external_id != ''
+                   AND status NOT IN ('cancelled', 'returned', 'invalid')
+                   AND revenue > 0"""
         params = [org_id, marketplace]
         if date_start:
             sql += " AND date(ordered_at) >= date(?)"
@@ -638,11 +683,29 @@ def get_real_orders_totals(org_id, marketplace, date_start='', date_end=''):
             sql += " AND date(ordered_at) <= date(?)"
             params.append(date_end)
         row = db.execute(sql, params).fetchone()
+
+        # Also get total orders count (including cancelled) for context
+        sql2 = """SELECT COUNT(*) as total FROM orders
+                  WHERE org_id=? AND marketplace=?
+                    AND external_id IS NOT NULL AND external_id != ''"""
+        params2 = [org_id, marketplace]
+        if date_start:
+            sql2 += " AND date(ordered_at) >= date(?)"
+            params2.append(date_start)
+        if date_end:
+            sql2 += " AND date(ordered_at) <= date(?)"
+            params2.append(date_end)
+        row2 = db.execute(sql2, params2).fetchone()
+
         db.close()
-        return {'revenue': row['revenue'], 'orders': row['orders']}
+        return {
+            'revenue': row['revenue'],
+            'orders': row['orders'],
+            'total_orders': row2['total'] if row2 else row['orders'],
+        }
     except Exception as e:
         print(f"[marketplace_intel] DB error for real orders: {e}")
-        return {'revenue': 0, 'orders': 0}
+        return {'revenue': 0, 'orders': 0, 'total_orders': 0}
 
 
 def get_real_products_list(org_id, marketplace):
@@ -650,10 +713,16 @@ def get_real_products_list(org_id, marketplace):
     try:
         from database import get_db
         db = get_db()
-        rows = db.execute(
-            "SELECT * FROM mp_products WHERE org_id=? AND platform=? ORDER BY sold_qty DESC",
-            (org_id, marketplace)
-        ).fetchall()
+        try:
+            rows = db.execute(
+                "SELECT * FROM mp_products WHERE org_id=? AND platform=? ORDER BY sold_qty DESC",
+                (org_id, marketplace)
+            ).fetchall()
+        except Exception:
+            rows = db.execute(
+                "SELECT * FROM mp_products WHERE org_id=? ORDER BY sold_qty DESC",
+                (org_id,)
+            ).fetchall()
         db.close()
         return [dict(r) for r in rows]
     except Exception as e:
