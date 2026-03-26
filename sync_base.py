@@ -1,113 +1,109 @@
 """
-Sellvance - Sync Base Infrastructure
-Token management, HTTP helpers, sync orchestration.
+Sellvance -- Sync Infrastructure
+Provides token management, HTTP helpers, staleness checks, and sync orchestration
+for all marketplace and ads platform integrations.
 """
 
 import json
 import time
+import logging
 import threading
-import traceback
 import urllib.request
 import urllib.error
-import urllib.parse
 from database import get_db
+from oauth_manager import get_integration, refresh_access_token, save_integration
 
-# Thread locks per org+platform to prevent concurrent syncs
+logger = logging.getLogger(__name__)
+
+# ── Per-org+platform locks to prevent concurrent syncs ────────────────────────
 _sync_locks = {}
 _locks_lock = threading.Lock()
 
 
 def _get_lock(org_id, platform):
-    key = f"{org_id}:{platform}"
+    """Return a per-org+platform threading.Lock, creating it on first use."""
+    key = (org_id, platform)
     with _locks_lock:
         if key not in _sync_locks:
             _sync_locks[key] = threading.Lock()
         return _sync_locks[key]
 
 
-def get_valid_token(org_id, platform):
-    """Load token from DB, refresh if expired, return access_token string."""
-    from oauth_manager import get_integration, refresh_access_token, OAUTH_APPS
+# ── Token management ─────────────────────────────────────────────────────────
 
+def get_valid_token(org_id, platform):
+    """Load the access token for *org_id*/*platform*, refreshing it when expired.
+
+    Returns the access_token string or raises RuntimeError if the integration
+    is missing, disconnected, or the refresh fails.
+    """
     integration = get_integration(org_id, platform)
-    if not integration:
-        print(f"[sync] get_valid_token: no integration found for org={org_id} platform={platform}")
-        return None
-    
-    status = integration.get('status', '')
-    print(f"[sync] get_valid_token: integration found, status='{status}', account='{integration.get('account_name','')}'")
-    
-    if status != 'connected':
-        print(f"[sync] get_valid_token: status is not 'connected', returning None")
-        return None
+    if not integration or integration.get('status') != 'connected':
+        raise RuntimeError(f"Integration {platform} not connected for org {org_id}")
 
     config = integration.get('config', {})
     access_token = config.get('access_token', '')
     refresh_token = config.get('refresh_token', '')
-    
-    print(f"[sync] get_valid_token: access_token={'YES (len=' + str(len(access_token)) + ')' if access_token else 'EMPTY'}, refresh_token={'YES' if refresh_token else 'EMPTY'}")
+    expires_in = int(config.get('expires_in', 3600))
 
     if not access_token:
-        print(f"[sync] get_valid_token: no access_token, trying refresh...")
-        if refresh_token:
-            new_token = force_refresh_token(org_id, platform)
-            if new_token:
-                return new_token
-        return None
+        raise RuntimeError(f"No access_token stored for {platform} org {org_id}")
+
+    # Check expiry: last_sync timestamp + expires_in vs now
+    last_sync = integration.get('last_sync', '')
+    token_expired = False
+    if last_sync and refresh_token:
+        try:
+            from datetime import datetime
+            last_dt = datetime.strptime(last_sync, '%Y-%m-%d %H:%M:%S')
+            elapsed = (datetime.utcnow() - last_dt).total_seconds()
+            # Refresh 5 minutes before actual expiry to avoid race conditions
+            if elapsed >= (expires_in - 300):
+                token_expired = True
+        except (ValueError, TypeError):
+            token_expired = True
+
+    if token_expired and refresh_token:
+        new_data, err = refresh_access_token(platform, refresh_token)
+        if err:
+            raise RuntimeError(f"Token refresh failed for {platform}: {err}")
+        # Merge new tokens into existing config and persist
+        config['access_token'] = new_data.get('access_token', access_token)
+        if new_data.get('refresh_token'):
+            config['refresh_token'] = new_data['refresh_token']
+        if new_data.get('expires_in'):
+            config['expires_in'] = new_data['expires_in']
+        save_integration(org_id, platform, config)
+        access_token = config['access_token']
 
     return access_token
 
 
-def force_refresh_token(org_id, platform):
-    """Force token refresh and return new access_token."""
-    from oauth_manager import get_integration, refresh_access_token, save_integration
-
-    integration = get_integration(org_id, platform)
-    if not integration:
-        return None
-
-    config = integration.get('config', {})
-    refresh_token = config.get('refresh_token', '')
-    if not refresh_token:
-        return None
-
-    new_data, error = refresh_access_token(platform, refresh_token)
-    if error or not new_data:
-        print(f"[sync] Token refresh failed for {platform}: {error}")
-        # Mark integration as needing reconnect
-        db = get_db()
-        db.execute("UPDATE api_integrations SET status='token_expired' WHERE org_id=? AND platform=?",
-                   (org_id, platform))
-        db.commit()
-        db.close()
-        return None
-
-    # Save new tokens
-    account_info = {'id': config.get('user_id', ''), 'name': integration.get('account_name', '')}
-    save_integration(org_id, platform, new_data, account_info)
-    return new_data.get('access_token', '')
-
+# ── HTTP helper ──────────────────────────────────────────────────────────────
 
 def api_request(url, headers=None, method='GET', data=None, retries=2, timeout=15):
-    """HTTP request wrapper with retry, JSON parsing, and error handling."""
-    hdrs = {'User-Agent': 'Sellvance/1.0'}
-    if headers:
-        hdrs.update(headers)
+    """Make an HTTP request and return parsed JSON.
+
+    Retries on 5xx errors up to *retries* times with exponential back-off.
+    Raises RuntimeError on 4xx or after exhausting retries.
+    """
+    if headers is None:
+        headers = {}
 
     body = None
-    if data:
-        if isinstance(data, dict):
-            body = json.dumps(data).encode()
-            hdrs['Content-Type'] = 'application/json'
+    if data is not None:
+        if isinstance(data, (dict, list)):
+            body = json.dumps(data).encode('utf-8')
+            headers.setdefault('Content-Type', 'application/json')
         elif isinstance(data, bytes):
             body = data
         else:
-            body = str(data).encode()
+            body = str(data).encode('utf-8')
 
     last_error = None
     for attempt in range(retries + 1):
         try:
-            req = urllib.request.Request(url, data=body, headers=hdrs, method=method)
+            req = urllib.request.Request(url, data=body, headers=headers, method=method)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 raw = resp.read()
                 if not raw:
@@ -115,120 +111,130 @@ def api_request(url, headers=None, method='GET', data=None, retries=2, timeout=1
                 return json.loads(raw)
         except urllib.error.HTTPError as e:
             status = e.code
-            err_body = e.read().decode()[:500]
-            if status == 401:
-                raise AuthError(f"401 Unauthorized: {err_body}")
-            if status == 429:
-                # Rate limited - wait and retry
-                retry_after = int(e.headers.get('Retry-After', '5'))
-                time.sleep(min(retry_after, 10))
-                last_error = f"429 Rate Limited"
-                continue
-            if status >= 500 and attempt < retries:
-                time.sleep(2 ** attempt)
-                last_error = f"{status}: {err_body}"
-                continue
-            raise ApiError(f"HTTP {status}: {err_body}")
-        except Exception as e:
+            err_body = ''
+            try:
+                err_body = e.read().decode('utf-8', errors='replace')[:500]
+            except Exception:
+                pass
+
+            if 400 <= status < 500:
+                raise RuntimeError(f"HTTP {status} from {url}: {err_body}")
+
+            # 5xx -- retry
+            last_error = f"HTTP {status} from {url}: {err_body}"
+            logger.warning("Retry %d/%d for %s: %s", attempt + 1, retries, url, last_error)
             if attempt < retries:
-                time.sleep(1)
-                last_error = str(e)
-                continue
-            raise ApiError(f"Request failed: {e}")
+                time.sleep(2 ** attempt)
+        except Exception as exc:
+            last_error = str(exc)
+            logger.warning("Retry %d/%d for %s: %s", attempt + 1, retries, url, last_error)
+            if attempt < retries:
+                time.sleep(2 ** attempt)
 
-    raise ApiError(f"Max retries exceeded. Last error: {last_error}")
-
-
-class AuthError(Exception):
-    """Token expired or invalid."""
-    pass
-
-class ApiError(Exception):
-    """General API error."""
-    pass
+    raise RuntimeError(f"Request to {url} failed after {retries + 1} attempts: {last_error}")
 
 
-def is_stale(org_id, platform, sync_type='full', max_age_minutes=60):
-    """Check if data needs re-sync. Returns True if stale or no prior sync."""
+# ── Staleness check ──────────────────────────────────────────────────────────
+
+def _ensure_sync_log_table():
+    """Create the sync_log table if it does not exist."""
     db = get_db()
-    row = db.execute(
-        """SELECT finished_at FROM sync_log
-           WHERE org_id=? AND platform=? AND sync_type=? AND status='success'
-           ORDER BY finished_at DESC LIMIT 1""",
-        (org_id, platform, sync_type)
-    ).fetchone()
-    db.close()
+    try:
+        db.execute('''
+            CREATE TABLE IF NOT EXISTS sync_log (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id          INTEGER NOT NULL,
+                platform        TEXT NOT NULL,
+                sync_type       TEXT NOT NULL,
+                status          TEXT NOT NULL,
+                records_synced  INTEGER DEFAULT 0,
+                error_message   TEXT DEFAULT '',
+                created_at      TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        db.commit()
+    finally:
+        db.close()
 
-    if not row or not row['finished_at']:
+
+# Ensure table exists on module import
+_ensure_sync_log_table()
+
+
+def is_stale(org_id, platform, sync_type, max_age_minutes=60):
+    """Return True if the last successful sync is older than *max_age_minutes* or missing."""
+    db = get_db()
+    try:
+        row = db.execute('''
+            SELECT created_at FROM sync_log
+            WHERE org_id = ? AND platform = ? AND sync_type = ? AND status = 'success'
+            ORDER BY created_at DESC LIMIT 1
+        ''', (org_id, platform, sync_type)).fetchone()
+    finally:
+        db.close()
+
+    if not row:
         return True
 
-    from datetime import datetime, timedelta
     try:
-        last = datetime.fromisoformat(row['finished_at'])
-        return datetime.now() - last > timedelta(minutes=max_age_minutes)
-    except Exception:
+        from datetime import datetime, timedelta
+        last = datetime.strptime(row['created_at'], '%Y-%m-%d %H:%M:%S')
+        return datetime.utcnow() - last > timedelta(minutes=max_age_minutes)
+    except (ValueError, TypeError):
         return True
 
 
 def log_sync(org_id, platform, sync_type, status, records_synced=0, error_message=''):
-    """Record sync attempt in sync_log table."""
+    """Insert a row into sync_log."""
     db = get_db()
-    from datetime import datetime
-    now = datetime.now().isoformat()
-    db.execute(
-        """INSERT INTO sync_log (org_id, platform, sync_type, status, records_synced, error_message, started_at, finished_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (org_id, platform, sync_type, status, records_synced, error_message[:500], now, now)
-    )
-    db.commit()
-    db.close()
+    try:
+        db.execute('''
+            INSERT INTO sync_log (org_id, platform, sync_type, status, records_synced, error_message)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (org_id, platform, sync_type, status, records_synced, error_message))
+        db.commit()
+    finally:
+        db.close()
 
 
-def get_last_sync_info(org_id, platform):
-    """Get last sync timestamp and status for display."""
-    db = get_db()
-    row = db.execute(
-        """SELECT status, finished_at, records_synced, error_message FROM sync_log
-           WHERE org_id=? AND platform=?
-           ORDER BY finished_at DESC LIMIT 1""",
-        (org_id, platform)
-    ).fetchone()
-    db.close()
-    if row:
-        return dict(row)
-    return None
-
+# ── Orchestrator ─────────────────────────────────────────────────────────────
 
 def run_sync_if_needed(org_id, platform, sync_func, sync_type='full', max_age=60):
-    """Check staleness, acquire lock, run sync, log result. Returns True if sync ran."""
-    if not is_stale(org_id, platform, sync_type, max_age):
-        return False
+    """Run *sync_func(org_id)* if the data is stale, with locking and logging.
+
+    Parameters
+    ----------
+    org_id : int
+    platform : str
+    sync_func : callable(org_id) -> int
+        Should return the number of records synced.
+    sync_type : str
+        Label stored in sync_log (e.g. 'full', 'orders', 'campaigns').
+    max_age : int
+        Maximum age in minutes before data is considered stale.
+
+    Returns
+    -------
+    dict with keys 'synced' (bool), 'records' (int), 'error' (str or None).
+    """
+    if not is_stale(org_id, platform, sync_type, max_age_minutes=max_age):
+        return {'synced': False, 'records': 0, 'error': None}
 
     lock = _get_lock(org_id, platform)
-    if not lock.acquire(blocking=False):
-        # Another thread is already syncing
-        return False
+    acquired = lock.acquire(blocking=False)
+    if not acquired:
+        logger.info("Sync already in progress for org=%s platform=%s", org_id, platform)
+        return {'synced': False, 'records': 0, 'error': 'sync_in_progress'}
 
     try:
         records = sync_func(org_id)
-        log_sync(org_id, platform, sync_type, 'success', records_synced=records or 0)
-        return True
-    except AuthError as e:
-        # Try token refresh once
-        new_token = force_refresh_token(org_id, platform)
-        if new_token:
-            try:
-                records = sync_func(org_id)
-                log_sync(org_id, platform, sync_type, 'success', records_synced=records or 0)
-                return True
-            except Exception as e2:
-                log_sync(org_id, platform, sync_type, 'error', error_message=str(e2))
-                return False
-        log_sync(org_id, platform, sync_type, 'auth_error', error_message=str(e))
-        return False
-    except Exception as e:
-        traceback.print_exc()
-        log_sync(org_id, platform, sync_type, 'error', error_message=str(e))
-        return False
+        if records and records > 0:
+            log_sync(org_id, platform, sync_type, 'success', records_synced=records)
+        return {'synced': True, 'records': records or 0, 'error': None}
+    except Exception as exc:
+        error_msg = str(exc)[:500]
+        logger.exception("Sync failed for org=%s platform=%s: %s", org_id, platform, error_msg)
+        log_sync(org_id, platform, sync_type, 'error', error_message=error_msg)
+        return {'synced': False, 'records': 0, 'error': error_msg}
     finally:
         lock.release()
