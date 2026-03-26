@@ -1100,6 +1100,8 @@ def force_sync():
         if clean:
             # Delete old orders/data so they get re-synced with correct revenue values
             db = get_db()
+            # Always clean sync_log for this platform when clean=1
+            db.execute("DELETE FROM sync_log WHERE org_id=? AND platform=?", (org_id, mp))
             if mp == 'mercado_livre':
                 # Delete ML orders that have external_id (will be re-fetched)
                 db.execute("DELETE FROM orders WHERE org_id=? AND marketplace='mercado_livre' AND external_id IS NOT NULL AND external_id != ''", (org_id,))
@@ -1220,7 +1222,8 @@ def force_sync():
             }
             try:
                 records = amazon_sync_all(org_id)
-                log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
+                if records and records > 0:
+                    log_sync(org_id, mp, 'full', 'success', records_synced=records)
                 return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp, 'debug': debug_info})
             except Exception as e:
                 return jsonify({'status': 'error', 'records_synced': 0, 'platform': mp,
