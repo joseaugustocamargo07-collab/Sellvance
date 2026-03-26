@@ -48,7 +48,7 @@ function dashExport(fmt){
 <div class="grid g4" style="margin-bottom:20px">
   <div class="card">
     <div class="card-title">💰 Receita Total (30d)</div>
-    <div class="kpi-val" style="color:var(--green)">R$ {{ "{:,.0f}".format(kpis['total_revenue']) }}</div>
+    <div class="kpi-val" style="color:var(--green)">R$ {{ kpis['total_revenue']|brl0 }}</div>
     <div class="kpi-chg up">↑ Últimos 30 dias</div>
     <div class="kpi-bar"><div class="kpi-bar-fill" style="width:72%;background:var(--green)"></div></div>
   </div>
@@ -60,7 +60,7 @@ function dashExport(fmt){
   </div>
   <div class="card">
     <div class="card-title">🎯 CAC Médio</div>
-    <div class="kpi-val" style="color:var(--yellow)">R$ {{ "{:.2f}".format(cac) }}</div>
+    <div class="kpi-val" style="color:var(--yellow)">R$ {{ cac|brl2 }}</div>
     <div class="kpi-chg">Custo por novo cliente</div>
     <div class="kpi-bar"><div class="kpi-bar-fill" style="width:55%;background:var(--yellow)"></div></div>
   </div>
@@ -104,7 +104,7 @@ function dashExport(fmt){
         {% elif row['channel'] == 'whatsapp' %}💬 WhatsApp
         {% else %}🔗 {{ row['channel'] }}{% endif %}
       </td>
-      <td style="color:var(--green);font-weight:700">R$ {{ "{:,.0f}".format(row['revenue']) }}</td>
+      <td style="color:var(--green);font-weight:700">R$ {{ row['revenue']|brl0 }}</td>
       <td style="color:var(--text2)">{{ row['orders'] }}</td>
       <td>
         {% set pct = (row['revenue'] / total_rev * 100)|round(1) %}
