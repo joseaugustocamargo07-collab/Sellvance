@@ -1102,7 +1102,7 @@ def force_sync():
                 token_len = 0
                 return jsonify({'status': 'error', 'step': 'get_token', 'error': str(e), 'trace': _tb.format_exc()})
 
-            # Step 2: Test API using urllib (requests not available)
+            # Step 2: Test API — force refresh if 401
             try:
                 from sync_base import api_request as _api_req
                 api_data = _api_req('https://api.mercadolibre.com/users/me',
@@ -1111,10 +1111,50 @@ def force_sync():
                 user_id = api_data.get('id', '')
                 nickname = api_data.get('nickname', '')
             except Exception as e:
-                api_ok = False
-                api_data = str(e)
-                user_id = ''
-                nickname = ''
+                # If 401, force a token refresh and retry
+                if '401' in str(e):
+                    try:
+                        from oauth_manager import get_integration, refresh_access_token, save_integration
+                        integ = get_integration(org_id, 'mercado_livre')
+                        cfg = integ.get('config', {}) if integ else {}
+                        rt = cfg.get('refresh_token', '')
+                        if rt:
+                            new_data, err = refresh_access_token('mercado_livre', rt)
+                            if not err and new_data.get('access_token'):
+                                cfg['access_token'] = new_data['access_token']
+                                if new_data.get('refresh_token'):
+                                    cfg['refresh_token'] = new_data['refresh_token']
+                                if new_data.get('expires_in'):
+                                    cfg['expires_in'] = new_data['expires_in']
+                                save_integration(org_id, 'mercado_livre', cfg)
+                                token = cfg['access_token']
+                                token_len = len(token)
+                                # Retry API test
+                                api_data = _api_req('https://api.mercadolibre.com/users/me',
+                                                    headers={'Authorization': f'Bearer {token}'})
+                                api_ok = True
+                                user_id = api_data.get('id', '')
+                                nickname = api_data.get('nickname', '')
+                            else:
+                                api_ok = False
+                                api_data = f"Refresh failed: {err}"
+                                user_id = ''
+                                nickname = ''
+                        else:
+                            api_ok = False
+                            api_data = "No refresh_token available"
+                            user_id = ''
+                            nickname = ''
+                    except Exception as e2:
+                        api_ok = False
+                        api_data = f"Refresh retry failed: {e2}"
+                        user_id = ''
+                        nickname = ''
+                else:
+                    api_ok = False
+                    api_data = str(e)
+                    user_id = ''
+                    nickname = ''
 
             # Step 3: Run sync
             try:
