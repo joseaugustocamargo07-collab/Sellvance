@@ -92,6 +92,17 @@
 <!-- TAB: VISÃO GERAL -->
 {% if tab == 'overview' %}
 
+{% if awaiting_sync %}
+<div style="background:linear-gradient(135deg, rgba(108,99,255,.15), rgba(255,159,28,.10));border:1px solid rgba(108,99,255,.4);border-radius:12px;padding:24px 28px;margin-bottom:20px;text-align:center">
+  <div style="font-size:32px;margin-bottom:8px">⏳</div>
+  <div style="font-size:18px;font-weight:800;color:var(--accent);margin-bottom:6px">Integração Conectada — Aguardando Dados</div>
+  <div style="font-size:13px;color:var(--text2);max-width:500px;margin:0 auto">
+    A plataforma <b>{{ mp_name }}</b> está conectada, mas ainda não recebemos dados reais.<br>
+    Verifique se as credenciais da API estão completas na página de <a href="/integrations" style="color:var(--accent);text-decoration:underline">Integrações</a>.
+  </div>
+</div>
+{% endif %}
+
 <!-- Saúde da Conta -->
 <div class="grid g2" style="margin-bottom:20px">
   <div class="card" style="border-top:3px solid {{ mp_color }}">
