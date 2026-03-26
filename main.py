@@ -459,8 +459,25 @@ def _marketplaces_inner():
                 })
 
         is_live = True
+        _awaiting_sync = False
+    elif is_connected and not is_platform_synced(org_id, mp):
+        # ── CONNECTED BUT NO DATA YET ───────────────────────
+        # Platform is connected but has never synced successfully.
+        # Show empty state instead of misleading demo data.
+        health      = {'score': 0, 'metrics': {}, 'alerts': []}
+        my_product  = {'name': '', 'price_32l': 0, 'reviews': 0, 'rating': 0}
+        competitors = []
+        analysis    = {'max_price_32l': 0, 'min_price_32l': 0, 'avg_price_32l': 0,
+                       'price_position': 'na_media', 'opportunities': []}
+        ads         = []
+        returns     = {'total_orders': 0, 'total_returns': 0, 'return_rate': 0,
+                       'refunded_revenue': 0, 'reasons': []}
+        keywords    = []
+        is_live     = False
+        # Flag to show "awaiting sync" banner in template
+        _awaiting_sync = True
     else:
-        # ── DEMO DATA MODE ──────────────────────────────────
+        # ── DEMO DATA MODE (not connected) ───────────────────
         health      = ACCOUNT_HEALTH.get(mp, {'score': 0, 'metrics': {}, 'alerts': []})
         my_product  = MY_PRODUCTS.get(mp, {})
         competitors = COMPETITORS.get(mp, [])
@@ -469,6 +486,7 @@ def _marketplaces_inner():
         returns     = RETURNS_DATA.get(mp, {})
         keywords    = get_keyword_opportunities(mp)
         is_live     = False
+        _awaiting_sync = False
 
     db          = get_db()
     stock_items = db.execute('SELECT * FROM stock_items WHERE org_id = ? AND marketplace = ?',
@@ -484,8 +502,11 @@ def _marketplaces_inner():
         if m_connected and is_platform_synced(org_id, m_id):
             # Only real orders (with external_id from sync)
             mp_totals[m_id] = get_real_orders_totals(org_id, m_id, date_start, date_end)
+        elif m_connected:
+            # Connected but no sync yet — show zeros, not demo data
+            mp_totals[m_id] = {'revenue': 0, 'orders': 0, 'total_orders': 0}
         else:
-            # Demo mode - use all orders
+            # Not connected — demo mode
             mp_sql = 'SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders FROM orders WHERE org_id = ? AND marketplace = ?'
             mp_params = [org_id, m_id]
             if date_start:
@@ -552,7 +573,8 @@ def _marketplaces_inner():
                            competitors=competitors, my=my_product, comp_analysis=analysis,
                            ads=ads, returns=returns, keywords=keywords, stock_items=stock_items,
                            mp_totals=mp_totals, date_start=date_start, date_end=date_end,
-                           strategy_scores=strategy_scores, rebid_recs=rebid_recs)
+                           strategy_scores=strategy_scores, rebid_recs=rebid_recs,
+                           awaiting_sync=_awaiting_sync)
 
 
 
