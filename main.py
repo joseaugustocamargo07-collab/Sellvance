@@ -350,10 +350,12 @@ def _marketplaces_inner():
     _has_real_data = False
     if is_connected:
         try:
-            _rd_row = get_db().execute(
+            _chk_db = get_db()
+            _rd_row = _chk_db.execute(
                 "SELECT COUNT(*) as cnt FROM orders WHERE org_id=? AND marketplace=? AND external_id IS NOT NULL AND external_id != ''",
                 (org_id, mp)).fetchone()
-            _has_real_data = _rd_row and _rd_row['cnt'] > 0
+            _chk_db.close()
+            _has_real_data = bool(_rd_row and _rd_row['cnt'] > 0)
         except Exception:
             _has_real_data = is_platform_synced(org_id, mp)
 
