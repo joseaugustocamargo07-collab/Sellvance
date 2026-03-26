@@ -336,16 +336,22 @@ def sync_orders(org_id, token, user_id):
                 else:
                     revenue = 0.0
 
-                # Get paid_amount from payments if available (most accurate)
-                payments = order.get('payments', [])
-                if payments and status in PAID_STATUSES:
-                    paid_sum = sum(
-                        float(p.get('transaction_amount', 0))
-                        for p in payments
-                        if p.get('status') == 'approved'
-                    )
-                    if paid_sum > 0:
-                        revenue = paid_sum
+                # Use paid_amount (includes shipping) when available — most accurate
+                if status in PAID_STATUSES:
+                    paid_amount = float(order.get('paid_amount', 0))
+                    if paid_amount > 0:
+                        revenue = paid_amount
+                    else:
+                        # Fallback: sum transaction_amount from approved payments
+                        payments = order.get('payments', [])
+                        if payments:
+                            paid_sum = sum(
+                                float(p.get('transaction_amount', 0))
+                                for p in payments
+                                if p.get('status') == 'approved'
+                            )
+                            if paid_sum > 0:
+                                revenue = paid_sum
 
                 db.execute('''
                     INSERT OR IGNORE INTO orders
