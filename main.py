@@ -1102,13 +1102,12 @@ def force_sync():
                 token_len = 0
                 return jsonify({'status': 'error', 'step': 'get_token', 'error': str(e), 'trace': _tb.format_exc()})
 
-            # Step 2: Test API
+            # Step 2: Test API using urllib (requests not available)
             try:
-                import requests as _rq
-                test_r = _rq.get('https://api.mercadolibre.com/users/me',
-                                 headers={'Authorization': f'Bearer {token}'})
-                api_ok = test_r.status_code == 200
-                api_data = test_r.json()
+                from sync_base import api_request as _api_req
+                api_data = _api_req('https://api.mercadolibre.com/users/me',
+                                    headers={'Authorization': f'Bearer {token}'})
+                api_ok = True
                 user_id = api_data.get('id', '')
                 nickname = api_data.get('nickname', '')
             except Exception as e:
@@ -1836,11 +1835,16 @@ def traffic():
 # -- AI Apply endpoint for Traffic campaigns --
 
 def _meta_api_call(token, campaign_id, payload):
-    """Faz chamada PUT na Meta Graph API para alterar campanha."""
-    import requests as _req
-    url = f"https://graph.facebook.com/v18.0/{campaign_id}"
-    r = _req.post(url, params={'access_token': token}, json=payload)
-    return r.status_code, r.json()
+    """Faz chamada POST na Meta Graph API para alterar campanha."""
+    import urllib.request, urllib.parse, json as _json
+    url = f"https://graph.facebook.com/v18.0/{campaign_id}?access_token={urllib.parse.quote(token)}"
+    body = _json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status, _json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return e.code, _json.loads(e.read().decode('utf-8', errors='replace'))
 
 
 def _get_meta_token(db, org_id):
@@ -1893,14 +1897,14 @@ def traffic_ai_apply():
         if platform == 'meta' and campaign_id:
             token = _get_meta_token(db, org_id)
             if token:
-                import requests as _req
+                from sync_base import api_request as _api_req
+                import urllib.parse as _up
 
                 if action == 'pause':
                     # Pausar campanha na Meta
                     status_code, result = _meta_api_call(token, campaign_id, {'status': 'PAUSED'})
                     if status_code == 200 and result.get('success'):
                         api_actions_done.append('Campanha pausada no Meta Ads')
-                        # Update local DB too
                         db.execute("UPDATE ad_campaigns SET status='paused' WHERE external_campaign_id=? AND org_id=?",
                                    (campaign_id, org_id))
                     else:
@@ -1909,11 +1913,10 @@ def traffic_ai_apply():
                 elif action == 'scale':
                     # Buscar adsets da campanha e aumentar budget em 25%
                     try:
-                        adsets_r = _req.get(
-                            f"https://graph.facebook.com/v18.0/{campaign_id}/adsets",
-                            params={'access_token': token, 'fields': 'id,name,daily_budget,lifetime_budget,status'}
+                        adsets_data = _api_req(
+                            f"https://graph.facebook.com/v18.0/{campaign_id}/adsets?access_token={_up.quote(token)}&fields=id,name,daily_budget,lifetime_budget,status"
                         )
-                        adsets = adsets_r.json().get('data', [])
+                        adsets = adsets_data.get('data', [])
                         for adset in adsets:
                             if adset.get('daily_budget'):
                                 old_budget = int(adset['daily_budget'])
@@ -1939,19 +1942,17 @@ def traffic_ai_apply():
                 elif action == 'optimize':
                     # Para otimizar: pausar adsets com baixo desempenho
                     try:
-                        adsets_r = _req.get(
-                            f"https://graph.facebook.com/v18.0/{campaign_id}/adsets",
-                            params={'access_token': token, 'fields': 'id,name,status'}
-                        )
-                        adsets = adsets_r.json().get('data', [])
+                        _adsets_url = (f"https://graph.facebook.com/v18.0/{campaign_id}/adsets"
+                                       f"?access_token={_up.quote(token)}"
+                                       f"&fields=id,name,status")
+                        adsets = _api_req(_adsets_url).get('data', [])
                         # Buscar insights de cada adset para identificar os piores
                         adsets_data = []
                         for adset in adsets:
-                            insights_r = _req.get(
-                                f"https://graph.facebook.com/v18.0/{adset['id']}/insights",
-                                params={'access_token': token, 'fields': 'spend,actions', 'date_preset': 'last_7d'}
-                            )
-                            ins_data = insights_r.json().get('data', [{}])
+                            _ins_url = (f"https://graph.facebook.com/v18.0/{adset['id']}/insights"
+                                        f"?access_token={_up.quote(token)}"
+                                        f"&fields=spend,actions&date_preset=last_7d")
+                            ins_data = _api_req(_ins_url).get('data', [{}])
                             spend = float(ins_data[0].get('spend', 0)) if ins_data else 0
                             conversions = 0
                             for a in (ins_data[0].get('actions', []) if ins_data else []):
