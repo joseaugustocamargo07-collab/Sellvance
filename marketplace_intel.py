@@ -664,44 +664,47 @@ def get_ads_live(org_id, marketplace):
 
 def get_real_orders_totals(org_id, marketplace, date_start='', date_end=''):
     """Returns revenue/orders from REAL synced orders only.
-    Only counts paid/delivered/shipped orders — excludes cancelled and returned."""
+    Orders = all approved orders (including later cancelled).
+    Revenue = sum of paid_amount/revenue for all approved orders (gmv for cancelled)."""
     try:
         from database import get_db
         db = get_db()
-        # Only count orders with external_id (real, from API) and with paid status
-        sql = """SELECT COALESCE(SUM(revenue), 0) as revenue, COUNT(*) as orders
-                 FROM orders
-                 WHERE org_id=? AND marketplace=?
-                   AND external_id IS NOT NULL AND external_id != ''
-                   AND status NOT IN ('cancelled', 'returned', 'invalid')
-                   AND revenue > 0"""
-        params = [org_id, marketplace]
-        if date_start:
-            sql += " AND date(ordered_at) >= date(?)"
-            params.append(date_start)
-        if date_end:
-            sql += " AND date(ordered_at) <= date(?)"
-            params.append(date_end)
-        row = db.execute(sql, params).fetchone()
 
-        # Also get total orders count (including cancelled) for context
-        sql2 = """SELECT COUNT(*) as total FROM orders
-                  WHERE org_id=? AND marketplace=?
-                    AND external_id IS NOT NULL AND external_id != ''"""
-        params2 = [org_id, marketplace]
+        # Count ALL real orders (approved = all that came from API)
+        sql_count = """SELECT COUNT(*) as orders
+                       FROM orders
+                       WHERE org_id=? AND marketplace=?
+                         AND external_id IS NOT NULL AND external_id != ''"""
+        params_count = [org_id, marketplace]
         if date_start:
-            sql2 += " AND date(ordered_at) >= date(?)"
-            params2.append(date_start)
+            sql_count += " AND date(ordered_at) >= date(?)"
+            params_count.append(date_start)
         if date_end:
-            sql2 += " AND date(ordered_at) <= date(?)"
-            params2.append(date_end)
-        row2 = db.execute(sql2, params2).fetchone()
+            sql_count += " AND date(ordered_at) <= date(?)"
+            params_count.append(date_end)
+        row_count = db.execute(sql_count, params_count).fetchone()
+
+        # Revenue = sum of gmv for ALL approved orders (gmv has the full paid_amount)
+        sql_rev = """SELECT COALESCE(SUM(gmv), 0) as revenue
+                     FROM orders
+                     WHERE org_id=? AND marketplace=?
+                       AND external_id IS NOT NULL AND external_id != ''"""
+        params_rev = [org_id, marketplace]
+        if date_start:
+            sql_rev += " AND date(ordered_at) >= date(?)"
+            params_rev.append(date_start)
+        if date_end:
+            sql_rev += " AND date(ordered_at) <= date(?)"
+            params_rev.append(date_end)
+        row_rev = db.execute(sql_rev, params_rev).fetchone()
 
         db.close()
+        total_orders = row_count['orders'] if row_count else 0
+        revenue = row_rev['revenue'] if row_rev else 0
         return {
-            'revenue': row['revenue'],
-            'orders': row['orders'],
-            'total_orders': row2['total'] if row2 else row['orders'],
+            'revenue': revenue,
+            'orders': total_orders,
+            'total_orders': total_orders,
         }
     except Exception as e:
         print(f"[marketplace_intel] DB error for real orders: {e}")
