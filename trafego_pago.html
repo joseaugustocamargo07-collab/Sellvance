@@ -132,7 +132,7 @@ function setPreset(days) {
   </div>
   <div class="card">
     <div class="card-title">CPC Medio</div>
-    <div class="kpi-val">R$ {{ "{:.2f}".format(kpis.cpc) }}</div>
+    <div class="kpi-val">R$ {{ kpis.cpc|brl2 }}</div>
     <div style="font-size:12px;color:var(--text2)">Custo por clique</div>
   </div>
   <div class="card">
