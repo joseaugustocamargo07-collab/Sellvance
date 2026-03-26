@@ -7,11 +7,11 @@
 {% endblock %}
 
 {% block content %}
-{% set mp_icons  = {'mercado_livre':'🛒','amazon':'📦','tiktok_shop':'🎵'} %}
-{% set mp_names  = {'mercado_livre':'Mercado Livre','amazon':'Amazon','tiktok_shop':'TikTok Shop'} %}
-{% set mp_colors = {'mercado_livre':'#ffe600','amazon':'#ff9900','tiktok_shop':'#ff0050'} %}
-{% set mp_color  = mp_colors[mp] %}
-{% set mp_name   = mp_names[mp] %}
+{% set mp_icons  = {'mercado_livre':'🛒','amazon':'📦','tiktok_shop':'🎵','shopee':'🧡'} %}
+{% set mp_names  = {'mercado_livre':'Mercado Livre','amazon':'Amazon','tiktok_shop':'TikTok Shop','shopee':'Shopee'} %}
+{% set mp_colors = {'mercado_livre':'#ffe600','amazon':'#ff9900','tiktok_shop':'#ff0050','shopee':'#ee4d2d'} %}
+{% set mp_color  = mp_colors.get(mp, '#6b7280') %}
+{% set mp_name   = mp_names.get(mp, mp|title) %}
 
 <!-- MARKETPLACE SWITCHER -->
 <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
