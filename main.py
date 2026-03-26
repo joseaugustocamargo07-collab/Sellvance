@@ -346,7 +346,18 @@ def _marketplaces_inner():
         run_sync_if_needed(org_id, mp, shopee_sync, max_age=60)
         sync_info = get_last_sync_info(org_id, mp)
 
-    if is_connected and is_platform_synced(org_id, mp):
+    # Check if we have ACTUAL data (real orders with external_id) — more reliable than sync_log
+    _has_real_data = False
+    if is_connected:
+        try:
+            _rd_row = get_db().execute(
+                "SELECT COUNT(*) as cnt FROM orders WHERE org_id=? AND marketplace=? AND external_id IS NOT NULL AND external_id != ''",
+                (org_id, mp)).fetchone()
+            _has_real_data = _rd_row and _rd_row['cnt'] > 0
+        except Exception:
+            _has_real_data = is_platform_synced(org_id, mp)
+
+    if is_connected and (_has_real_data or is_platform_synced(org_id, mp)):
         # ── REAL DATA MODE ──────────────────────────────────
         health      = get_account_health_live(org_id, mp)
         my_product  = get_my_products_live(org_id, mp)
@@ -460,7 +471,7 @@ def _marketplaces_inner():
 
         is_live = True
         _awaiting_sync = False
-    elif is_connected and not is_platform_synced(org_id, mp):
+    elif is_connected and not _has_real_data:
         # ── CONNECTED BUT NO DATA YET ───────────────────────
         # Platform is connected but has never synced successfully.
         # Show empty state instead of misleading demo data.
