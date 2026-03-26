@@ -1182,9 +1182,27 @@ def force_sync():
         if mp == 'amazon':
             from sync_amazon import sync_all as amazon_sync_all
             from sync_base import log_sync
-            records = amazon_sync_all(org_id)
-            log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
-            return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp})
+            import traceback as _tb_amz
+            import os as _os
+            # Debug: check credentials availability
+            from oauth_manager import get_integration as _gi
+            amz_integ = _gi(org_id, 'amazon')
+            amz_cfg = amz_integ.get('config', {}) if amz_integ else {}
+            debug_info = {
+                'connected': bool(amz_integ and amz_integ.get('status') == 'connected'),
+                'has_client_id': bool(amz_cfg.get('client_id')),
+                'has_refresh_token': bool(amz_cfg.get('refresh_token')),
+                'has_seller_id': bool(amz_cfg.get('seller_id')),
+                'has_aws_key': bool(_os.environ.get('AMAZON_AWS_ACCESS_KEY')),
+                'has_aws_secret': bool(_os.environ.get('AMAZON_AWS_SECRET_KEY')),
+            }
+            try:
+                records = amazon_sync_all(org_id)
+                log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
+                return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp, 'debug': debug_info})
+            except Exception as e:
+                return jsonify({'status': 'error', 'records_synced': 0, 'platform': mp,
+                                'error': str(e), 'trace': _tb_amz.format_exc()[:500], 'debug': debug_info})
         if mp == 'shopee':
             from sync_shopee import sync_all as shopee_sync_all
             from sync_base import log_sync
