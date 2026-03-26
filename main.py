@@ -326,24 +326,29 @@ def _marketplaces_inner():
                 'color': _info['color'], 'is_connected': True,
                 'account_name': _conn.get('account_name', ''),
             })
-    # Check if platform is connected and trigger sync if needed
+    # Check if platform is connected and trigger sync if needed (background)
     integration = get_integration(org_id, mp)
     is_connected = integration and integration.get('status') == 'connected'
     sync_info = None
 
-    if is_connected and mp == 'amazon':
-        from sync_amazon import sync_all as amazon_sync
-        run_sync_if_needed(org_id, mp, amazon_sync, max_age=60)
-        sync_info = get_last_sync_info(org_id, mp)
+    # Fire-and-forget sync in background thread to avoid blocking page load
+    import threading as _th
+    def _bg_sync(_oid, _mp):
+        try:
+            if _mp == 'amazon':
+                from sync_amazon import sync_all as _sf
+            elif _mp == 'mercado_livre':
+                from sync_mercadolivre import sync_all as _sf
+            elif _mp == 'shopee':
+                from sync_shopee import sync_all as _sf
+            else:
+                return
+            run_sync_if_needed(_oid, _mp, _sf, max_age=60)
+        except Exception as _e:
+            print(f"[bg_sync] {_mp} error: {_e}")
 
-    if is_connected and mp == 'mercado_livre':
-        from sync_mercadolivre import sync_all as ml_sync
-        run_sync_if_needed(org_id, mp, ml_sync, max_age=60)
-        sync_info = get_last_sync_info(org_id, mp)
-
-    if is_connected and mp == 'shopee':
-        from sync_shopee import sync_all as shopee_sync
-        run_sync_if_needed(org_id, mp, shopee_sync, max_age=60)
+    if is_connected and mp in ('amazon', 'mercado_livre', 'shopee'):
+        _th.Thread(target=_bg_sync, args=(org_id, mp), daemon=True).start()
         sync_info = get_last_sync_info(org_id, mp)
 
     if is_connected and is_platform_synced(org_id, mp):
