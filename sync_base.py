@@ -15,6 +15,12 @@ from oauth_manager import get_integration, refresh_access_token, save_integratio
 
 logger = logging.getLogger(__name__)
 
+
+class AuthError(RuntimeError):
+    """Raised when an API returns 401/403 indicating invalid or expired credentials."""
+    pass
+
+
 # ── Per-org+platform locks to prevent concurrent syncs ────────────────────────
 _sync_locks = {}
 _locks_lock = threading.Lock()
@@ -193,6 +199,22 @@ def log_sync(org_id, platform, sync_type, status, records_synced=0, error_messag
             VALUES (?, ?, ?, ?, ?, ?)
         ''', (org_id, platform, sync_type, status, records_synced, error_message))
         db.commit()
+    finally:
+        db.close()
+
+
+def get_last_sync_info(org_id, platform):
+    """Return the last sync_log row for *org_id*/*platform* (any status), or None."""
+    db = get_db()
+    try:
+        row = db.execute('''
+            SELECT * FROM sync_log
+            WHERE org_id = ? AND platform = ?
+            ORDER BY created_at DESC LIMIT 1
+        ''', (org_id, platform)).fetchone()
+        return dict(row) if row else None
+    except Exception:
+        return None
     finally:
         db.close()
 
