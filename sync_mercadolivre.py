@@ -325,45 +325,32 @@ def sync_orders(org_id, token, user_id):
                     continue
 
                 total_amount = float(order.get('total_amount', 0))
+                paid_amount = float(order.get('paid_amount', 0))
                 status = order.get('status', '')
                 date_created = order.get('date_created', '')
                 ordered_at = _normalize_datetime(date_created)
 
-                # Only count revenue for PAID/DELIVERED/SHIPPED orders
-                # Cancelled and returned orders = R$ 0 revenue
+                # GMV = paid_amount (includes shipping) — best total for the order
+                # Falls back to total_amount if paid_amount is 0
+                gmv = paid_amount if paid_amount > 0 else total_amount
+
+                # Revenue = gmv for paid orders, 0 for cancelled/returned
                 if status in PAID_STATUSES:
-                    revenue = total_amount
+                    revenue = gmv
                 else:
                     revenue = 0.0
-
-                # Use paid_amount (includes shipping) when available — most accurate
-                if status in PAID_STATUSES:
-                    paid_amount = float(order.get('paid_amount', 0))
-                    if paid_amount > 0:
-                        revenue = paid_amount
-                    else:
-                        # Fallback: sum transaction_amount from approved payments
-                        payments = order.get('payments', [])
-                        if payments:
-                            paid_sum = sum(
-                                float(p.get('transaction_amount', 0))
-                                for p in payments
-                                if p.get('status') == 'approved'
-                            )
-                            if paid_sum > 0:
-                                revenue = paid_sum
 
                 db.execute('''
                     INSERT OR IGNORE INTO orders
                         (org_id, marketplace, external_id, status, gmv, revenue, channel, ordered_at)
                     VALUES (?, 'mercado_livre', ?, ?, ?, ?, 'marketplace', ?)
-                ''', (org_id, ext_id, status, total_amount, revenue, ordered_at))
+                ''', (org_id, ext_id, status, gmv, revenue, ordered_at))
 
                 # Always update existing orders (status may have changed)
                 db.execute('''
                     UPDATE orders SET status=?, gmv=?, revenue=?
                     WHERE org_id=? AND marketplace='mercado_livre' AND external_id=?
-                ''', (status, total_amount, revenue, org_id, ext_id))
+                ''', (status, gmv, revenue, org_id, ext_id))
 
                 buyer = order.get('buyer', {})
                 _upsert_contact_from_buyer(db, org_id, buyer)
