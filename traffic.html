@@ -134,9 +134,9 @@
         <div style="font-size:11px;color:var(--text3);width:60px;text-align:right">Máximo</div>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)">
-        <span>R$ {{ comp_analysis.min_price_32l|round(2) }}</span>
-        <span style="color:{{ mp_color }};font-weight:700">Você: R$ {{ my.price_32l }}</span>
-        <span>R$ {{ comp_analysis.max_price_32l|round(2) }}</span>
+        <span>R$ {{ comp_analysis.min_price_32l|brl2 }}</span>
+        <span style="color:{{ mp_color }};font-weight:700">Você: R$ {{ my.price_32l|brl2 }}</span>
+        <span>R$ {{ comp_analysis.max_price_32l|brl2 }}</span>
       </div>
       <div style="margin-top:8px;padding:6px 10px;border-radius:7px;font-size:12px;
         {% if comp_analysis.price_position == 'acima' %}background:rgba(239,68,68,.1);color:#fca5a5
@@ -149,7 +149,7 @@
     <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Sua avaliação vs mercado</div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
       <div style="font-size:26px;font-weight:900;color:var(--yellow)">{{ my.rating }}⭐</div>
-      <div style="font-size:12px;color:var(--text2)">{{ "{:,}".format(my.reviews) }} avaliações</div>
+      <div style="font-size:12px;color:var(--text2)">{{ my.reviews|brl0 }} avaliações</div>
     </div>
 
     <!-- Oportunidades -->
@@ -197,10 +197,10 @@
     <tr>
       <td style="font-weight:600;font-size:12px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ ad.name }}</td>
       <td><span class="badge b-purple" style="font-size:10px">{{ ad.type }}</span></td>
-      <td style="font-weight:700;color:var(--green)">R$ {{ "{:,.2f}".format(ad.price or 0) }}</td>
+      <td style="font-weight:700;color:var(--green)">R$ {{ (ad.price or 0)|brl2 }}</td>
       <td style="color:var(--accent);font-weight:700">{{ ad.conversions }}</td>
       <td style="color:{% if (ad.stock or 0) > 20 %}var(--green){% elif (ad.stock or 0) > 5 %}var(--yellow){% else %}var(--red){% endif %};font-weight:700">{{ ad.stock or 0 }}</td>
-      <td style="color:var(--green);font-weight:700">R$ {{ "{:,.0f}".format(ad.revenue) }}</td>
+      <td style="color:var(--green);font-weight:700">R$ {{ ad.revenue|brl0 }}</td>
       <td><span class="badge {% if ad.status == 'active' %}b-green{% else %}b-yellow{% endif %}" style="font-size:10px">{{ ad.status or 'ativo' }}</span></td>
     </tr>
     {% endfor %}
@@ -234,7 +234,7 @@
     </div>
     <div style="margin-left:auto;display:flex;gap:20px">
       <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--yellow)">{{ my.rating }}⭐</div><div style="font-size:10px;color:var(--text3)">Avaliação</div></div>
-      <div style="text-align:center"><div style="font-size:18px;font-weight:900">{{ "{:,}".format(my.reviews) }}</div><div style="font-size:10px;color:var(--text3)">Reviews</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:900">{{ my.reviews|brl0 }}</div><div style="font-size:10px;color:var(--text3)">Reviews</div></div>
       <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_32l }}</div><div style="font-size:10px;color:var(--text3)">Produto 1</div></div>
       <div style="text-align:center"><div style="font-size:18px;font-weight:900;color:var(--green)">R$ {{ my.price_20l }}</div><div style="font-size:10px;color:var(--text3)">Produto 2</div></div>
       <div style="text-align:center">
@@ -299,7 +299,7 @@
         {% if c.rating > my.rating %}<span style="font-size:10px;color:#fca5a5"> ▲</span>
         {% elif c.rating < my.rating %}<span style="font-size:10px;color:var(--green)"> ▼</span>{% endif %}
       </td>
-      <td style="color:var(--text2)">{{ "{:,}".format(c.reviews) }}</td>
+      <td style="color:var(--text2)">{{ c.reviews|brl0 }}</td>
       <td>
         <span style="font-weight:700;color:{% if c.price_32l < my.price_32l %}var(--red){% elif c.price_32l > my.price_32l %}var(--green){% else %}var(--text){% endif %}">
           R$ {{ c.price_32l }}
@@ -353,7 +353,7 @@
   </div>
   <div class="card">
     <div class="card-title">💰 Receita Estimada</div>
-    <div class="kpi-val" style="color:var(--green)">R$ {{ "{:,.0f}".format(total_revenue) }}</div>
+    <div class="kpi-val" style="color:var(--green)">R$ {{ total_revenue|brl0 }}</div>
   </div>
   <div class="card">
     <div class="card-title">✅ Vendas</div>
@@ -362,7 +362,7 @@
   {% if has_spend %}
   <div class="card">
     <div class="card-title">💸 Total Investido</div>
-    <div class="kpi-val">R$ {{ "{:,.0f}".format(total_spend) }}</div>
+    <div class="kpi-val">R$ {{ total_spend|brl0 }}</div>
   </div>
   {% else %}
   <div class="card">
@@ -391,7 +391,7 @@
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;text-align:center;flex-shrink:0">
       <div>
-        <div style="font-size:14px;font-weight:800;color:var(--green)">R$ {{ "{:,.2f}".format(ad.price or 0) }}</div>
+        <div style="font-size:14px;font-weight:800;color:var(--green)">R$ {{ (ad.price or 0)|brl2 }}</div>
         <div style="font-size:10px;color:var(--text3)">Preço</div>
       </div>
       <div>
@@ -403,7 +403,7 @@
         <div style="font-size:10px;color:var(--text3)">Estoque</div>
       </div>
       <div>
-        <div style="font-size:14px;font-weight:800;color:var(--green)">R$ {{ "{:,.0f}".format(ad.revenue) }}</div>
+        <div style="font-size:14px;font-weight:800;color:var(--green)">R$ {{ ad.revenue|brl0 }}</div>
         <div style="font-size:10px;color:var(--text3)">Receita</div>
       </div>
     </div>
@@ -443,7 +443,7 @@
   </div>
   <div class="card">
     <div class="card-title">💸 Receita Perdida</div>
-    <div class="kpi-val" style="color:var(--red)">R$ {{ "{:,.0f}".format(returns.get('refunded_revenue', 0)) }}</div>
+    <div class="kpi-val" style="color:var(--red)">R$ {{ returns.get('refunded_revenue', 0)|brl0 }}</div>
     <div style="font-size:12px;color:var(--text2)">{{ returns.get('avg_resolution_days', 0) }} dias médio de resolução</div>
   </div>
 </div>
@@ -482,7 +482,7 @@
       <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:8px;padding:12px">
         <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:6px">📈 Meta: Reduzir para {{ [returns.get('return_rate', 0) - 1.5, 2.0]|max|round(1) }}%</div>
         <div style="font-size:12px;color:var(--text2)">
-          Isso representa economia de R$ {{ "{:,.0f}".format(returns.get('refunded_revenue', 0) * 0.30) }} por mês e melhora o score da conta.
+          Isso representa economia de R$ {{ (returns.get('refunded_revenue', 0) * 0.30)|brl0 }} por mês e melhora o score da conta.
         </div>
       </div>
     </div>
@@ -509,7 +509,7 @@
     <tr>
       <td style="font-weight:700;font-size:13px">{{ kw.kw }}</td>
       <td>
-        <div style="font-weight:700">{{ "{:,}".format(kw.volume) }}</div>
+        <div style="font-weight:700">{{ kw.volume|brl0 }}</div>
         <div class="prog" style="margin-top:4px">
           <div class="prog-fill" style="width:{{ [kw.volume / 2000, 100]|min }}%;background:var(--accent)"></div>
         </div>
@@ -621,7 +621,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:8px 10px">
           <div>
             <div style="font-size:11px;font-weight:600;color:var(--text1)">💰 Posição de Preço</div>
-            <div style="font-size:10px;color:var(--text2);margin-top:1px">{{ _pd }}{% if s.avg_comp_price > 0 and s.our_price > 0 %} · Seu R$ {{ "%.0f"|format(s.our_price) }} vs média R$ {{ "%.0f"|format(s.avg_comp_price) }}{% endif %}</div>
+            <div style="font-size:10px;color:var(--text2);margin-top:1px">{{ _pd }}{% if s.avg_comp_price > 0 and s.our_price > 0 %} · Seu R$ {{ s.our_price|brl0 }} vs média R$ {{ s.avg_comp_price|brl0 }}{% endif %}</div>
           </div>
           <span style="background:{{ _pc }}18;color:{{ _pc }};font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap">{{ _pv }} {{ _pl }}</span>
         </div>
@@ -799,7 +799,7 @@
           <div style="font-size:13px;font-weight:700;color:{% if comp_analysis.price_position == 'abaixo' %}var(--green){% elif comp_analysis.price_position == 'na_media' %}var(--yellow){% else %}var(--red){% endif %}">
             {% if comp_analysis.price_position == 'abaixo' %}Abaixo{% elif comp_analysis.price_position == 'na_media' %}Na média{% else %}Acima{% endif %}
           </div>
-          {% if comp_analysis.avg_price_32l > 0 %}<div style="font-size:10px;color:var(--text2)">média R$ {{ "%.2f"|format(comp_analysis.avg_price_32l) }}</div>{% endif %}
+          {% if comp_analysis.avg_price_32l > 0 %}<div style="font-size:10px;color:var(--text2)">média R$ {{ comp_analysis.avg_price_32l|brl2 }}</div>{% endif %}
         </div>
         <div style="background:var(--surface2);border-radius:8px;padding:8px 10px">
           <div style="font-size:10px;color:var(--text2);margin-bottom:2px">Taxa marketplace</div>
@@ -1074,11 +1074,11 @@
         {% set _my_p = comp_analysis.my_price if comp_analysis.my_price is defined and comp_analysis.my_price > 0 else (my.price_32l or 0) %}
         {% set _avg_p = comp_analysis.avg_price if comp_analysis.avg_price is defined and comp_analysis.avg_price > 0 else (comp_analysis.avg_price_32l or 0) %}
         {% if _avg_p > 0 and _my_p > 0 %}
-        1. Ajuste de preço: seu produto (R$ {{ "%.2f"|format(_my_p) }}) está acima da média dos concorrentes (R$ {{ "%.2f"|format(_avg_p) }}) — desconto de {{ [((_my_p - _avg_p) / _my_p * 100)|int + 2, 5]|max }}% posiciona melhor para Oferta do Dia.<br>
+        1. Ajuste de preço: seu produto (R$ {{ _my_p|brl2 }}) está acima da média dos concorrentes (R$ {{ _avg_p|brl2 }}) — desconto de {{ [((_my_p - _avg_p) / _my_p * 100)|int + 2, 5]|max }}% posiciona melhor para Oferta do Dia.<br>
         {% endif %}
         {% endif %}
         {% if rebid_recs and rebid_recs[0].is_change %}
-        2. Re-bid: {{ rebid_recs[0].title[:30] }} → upgrade de {{ rebid_recs[0].current_type }} para {{ rebid_recs[0].rec_type }} (+R$ {{ "{:,}".format(rebid_recs[0].monthly_gain) }}/mês est.).<br>
+        2. Re-bid: {{ rebid_recs[0].title[:30] }} → upgrade de {{ rebid_recs[0].current_type }} para {{ rebid_recs[0].rec_type }} (+R$ {{ rebid_recs[0].monthly_gain|brl0 }}/mês est.).<br>
         {% endif %}
         3. Ative Oferta do Dia ou Relâmpago na Central de Marketing para visibilidade imediata.
         {% if best.full_sellers == 0 %}<br>4. Considere Envios Full — nenhum concorrente usa e você ganha vantagem orgânica.{% endif %}
@@ -1156,7 +1156,7 @@
       <td>
         <div style="font-weight:600;font-size:13px">{{ rec.title }}{% if rec.title|length == 45 %}...{% endif %}</div>
         <div style="font-size:11px;color:var(--text2)">
-          R$ {{ "%.2f"|format(rec.price) }}
+          R$ {{ rec.price|brl2 }}
           {% if rec.sold_qty > 0 %} &nbsp;·&nbsp; {{ rec.sold_qty }} vendas{% endif %}
           {% if rec.stock_qty > 0 %} &nbsp;·&nbsp; {{ rec.stock_qty }} em estoque{% endif %}
         </div>
@@ -1185,7 +1185,7 @@
       </td>
       <td style="text-align:right">
         {% if rec.monthly_gain > 0 %}
-        <span style="color:var(--green);font-weight:700;font-size:14px">+R$ {{ "{:,.0f}".format(rec.monthly_gain) }}</span>
+        <span style="color:var(--green);font-weight:700;font-size:14px">+R$ {{ rec.monthly_gain|brl0 }}</span>
         {% else %}
         <span style="color:var(--text2);font-size:12px">&mdash;</span>
         {% endif %}
@@ -1208,7 +1208,7 @@
   {% if total_gain > 0 %}
   <div style="padding:12px 20px;border-top:1px solid var(--border);background:rgba(16,185,129,.05);display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:12px;color:var(--text2)">Ganho potencial total ao implementar todas as recomendações</span>
-    <span style="color:var(--green);font-weight:800;font-size:16px">+R$ {{ "{:,.0f}".format(total_gain) }}/mês</span>
+    <span style="color:var(--green);font-weight:800;font-size:16px">+R$ {{ total_gain|brl0 }}/mês</span>
   </div>
   {% endif %}
 </div>
