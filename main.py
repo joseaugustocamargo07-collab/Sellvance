@@ -1245,6 +1245,126 @@ def force_sync():
         return jsonify({'status': 'error', 'error': str(e), 'trace': traceback.format_exc()})
 
 
+@app.route('/api/debug/amazon')
+def debug_amazon():
+    """Step-by-step Amazon SP-API diagnostic — shows exactly where sync fails."""
+    import traceback, os, json as _json, io, sys
+    org_id = 1
+    steps = []
+
+    # Step 1: Load credentials
+    try:
+        from oauth_manager import get_integration
+        integ = get_integration(org_id, 'amazon')
+        if not integ:
+            return jsonify({'error': 'No Amazon integration found', 'steps': steps})
+        cfg = integ.get('config', {})
+        cred_info = {
+            'status': integ.get('status'),
+            'has_client_id': bool(cfg.get('client_id')),
+            'client_id_prefix': (cfg.get('client_id', '')[:30] + '…') if cfg.get('client_id') else None,
+            'has_client_secret': bool(cfg.get('client_secret')),
+            'has_refresh_token': bool(cfg.get('refresh_token')),
+            'refresh_token_prefix': (cfg.get('refresh_token', '')[:15] + '…') if cfg.get('refresh_token') else None,
+            'seller_id': cfg.get('seller_id', ''),
+            'marketplace_id': cfg.get('marketplace_id', ''),
+            'has_aws_key': bool(os.environ.get('AMAZON_AWS_ACCESS_KEY')),
+            'aws_key_prefix': (os.environ.get('AMAZON_AWS_ACCESS_KEY', '')[:6] + '…'),
+            'has_aws_secret': bool(os.environ.get('AMAZON_AWS_SECRET_KEY')),
+        }
+        steps.append({'step': '1_credentials', 'ok': True, 'data': cred_info})
+    except Exception as e:
+        steps.append({'step': '1_credentials', 'ok': False, 'error': str(e)})
+        return jsonify({'steps': steps})
+
+    # Step 2: LWA token exchange
+    try:
+        from sync_amazon import _get_lwa_token, _ENDPOINT, _DEFAULT_ENDPOINT
+        client_id = cfg.get('client_id', '')
+        client_secret = cfg.get('client_secret', '')
+        refresh_token = cfg.get('refresh_token', '')
+        access_token, expires_in = _get_lwa_token(client_id, client_secret, refresh_token)
+        steps.append({
+            'step': '2_lwa_token',
+            'ok': True,
+            'token_prefix': access_token[:20] + '…',
+            'expires_in': expires_in,
+        })
+    except Exception as e:
+        steps.append({'step': '2_lwa_token', 'ok': False, 'error': str(e), 'trace': traceback.format_exc()[:400]})
+        return jsonify({'steps': steps})
+
+    # Step 3: Test Orders API
+    try:
+        from sync_amazon import _sp_get
+        import urllib.parse, urllib.request, urllib.error
+        mp_id = cfg.get('marketplace_id', 'A2Q3Y263D00KWC')
+        endpoint = _ENDPOINT.get(mp_id, _DEFAULT_ENDPOINT)
+        aws_key = os.environ.get('AMAZON_AWS_ACCESS_KEY', '')
+        aws_secret = os.environ.get('AMAZON_AWS_SECRET_KEY', '')
+
+        from datetime import datetime, timedelta, timezone
+        since = (datetime.now(timezone.utc) - timedelta(days=90)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        params = {
+            'MarketplaceIds': mp_id,
+            'CreatedAfter': since,
+            'MaxResultsPerPage': '10',
+        }
+        resp = _sp_get(endpoint, '/orders/v0/orders', access_token,
+                       params=params, aws_key=aws_key, aws_secret=aws_secret, region='us-east-1')
+        orders_payload = resp.get('payload', {})
+        orders_list = orders_payload.get('Orders', [])
+        steps.append({
+            'step': '3_orders_api',
+            'ok': True,
+            'endpoint': endpoint,
+            'params': params,
+            'response_keys': list(resp.keys()) if isinstance(resp, dict) else 'not_dict',
+            'payload_keys': list(orders_payload.keys()) if orders_payload else 'empty',
+            'orders_count': len(orders_list),
+            'first_order': {k: v for k, v in orders_list[0].items() if k in ('AmazonOrderId', 'OrderStatus', 'PurchaseDate', 'OrderTotal')} if orders_list else None,
+            'raw_response_preview': str(resp)[:500],
+        })
+    except Exception as e:
+        steps.append({'step': '3_orders_api', 'ok': False, 'error': str(e), 'trace': traceback.format_exc()[:400]})
+
+    # Step 4: Test Listings API
+    try:
+        seller_id = cfg.get('seller_id', '')
+        resp2 = _sp_get(endpoint, f'/listings/2021-08-01/items/{seller_id}', access_token,
+                        params={'marketplaceIds': mp_id, 'includedData': 'summaries', 'pageSize': '5'},
+                        aws_key=aws_key, aws_secret=aws_secret, region='us-east-1')
+        steps.append({
+            'step': '4_listings_api',
+            'ok': True,
+            'response_keys': list(resp2.keys()) if isinstance(resp2, dict) else 'not_dict',
+            'items_count': len(resp2.get('items', [])),
+            'raw_response_preview': str(resp2)[:500],
+        })
+    except Exception as e:
+        steps.append({'step': '4_listings_api', 'ok': False, 'error': str(e), 'trace': traceback.format_exc()[:400]})
+
+    # Step 5: Raw HTTP test (bypass _sp_get to see actual error)
+    try:
+        from sync_amazon import _sigv4_headers
+        qs = urllib.parse.urlencode({'MarketplaceIds': mp_id, 'CreatedAfter': since, 'MaxResultsPerPage': '5'})
+        url = f"https://{endpoint}/orders/v0/orders?{qs}"
+        base_hdrs = {'x-amz-access-token': access_token, 'Content-Type': 'application/json'}
+        signed_hdrs = _sigv4_headers('GET', url, base_hdrs, b'', aws_key, aws_secret, 'us-east-1')
+        req = urllib.request.Request(url, headers=signed_hdrs, method='GET')
+        with urllib.request.urlopen(req, timeout=20) as raw_resp:
+            raw_body = raw_resp.read().decode('utf-8')[:800]
+            raw_status = raw_resp.status
+        steps.append({'step': '5_raw_http', 'ok': True, 'status': raw_status, 'body': raw_body})
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode()[:600]
+        steps.append({'step': '5_raw_http', 'ok': False, 'http_code': e.code, 'body': body_err})
+    except Exception as e:
+        steps.append({'step': '5_raw_http', 'ok': False, 'error': str(e), 'trace': traceback.format_exc()[:400]})
+
+    return jsonify({'steps': steps})
+
+
 @app.route('/api/debug/competitors')
 def debug_competitors():
     import traceback
