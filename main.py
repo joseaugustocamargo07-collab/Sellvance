@@ -1248,11 +1248,12 @@ def force_sync():
 @app.route('/api/simulate/amazon')
 def simulate_amazon_data():
     """Insert realistic Amazon test data to verify the full pipeline works."""
-    import random, json as _j
+    import random, json as _j, traceback as _tb
     from datetime import datetime, timedelta
     from database import get_db
-    org_id = 1
-    db = get_db()
+    try:
+        org_id = 1
+        db = get_db()
 
     # ── Produtos Amazon realistas (BR) ──
     products = [
@@ -1357,6 +1358,8 @@ def simulate_amazon_data():
         'orders_inserted': order_count,
         'message': f'Simulação Amazon: {prod_count} produtos, {order_count} pedidos (8 meses)'
     })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'trace': _tb.format_exc()[:800]})
 
 
 @app.route('/api/fix/amazon-secret')
