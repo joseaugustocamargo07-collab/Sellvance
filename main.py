@@ -1254,6 +1254,9 @@ def simulate_amazon_data():
     try:
         org_id = 1
         db = get_db()
+        # Limpar dados anteriores de simulacao
+        db.execute("DELETE FROM orders WHERE org_id=? AND marketplace='amazon'", (org_id,))
+        db.execute("DELETE FROM mp_products WHERE org_id=? AND platform='amazon'", (org_id,))
         products = [
             ('B0CX23VBGR', 'Fone Bluetooth TWS com Cancelamento de Ruido', 189.90, 45),
             ('B0DFKP9TQ7', 'Smartwatch Fitness Monitor Cardiaco IP68', 259.90, 32),
@@ -1272,9 +1275,8 @@ def simulate_amazon_data():
         for asin, title, price, stock in products:
             try:
                 db.execute(
-                    "INSERT INTO mp_products (org_id,platform,external_id,title,price,stock_qty,status) "
-                    "VALUES (?,?,?,?,?,?,?) ON CONFLICT(org_id,platform,external_id) DO UPDATE SET "
-                    "title=excluded.title, price=excluded.price, stock_qty=excluded.stock_qty, last_synced=datetime('now')",
+                    "INSERT OR REPLACE INTO mp_products (org_id,platform,external_id,title,price,stock_qty,status) "
+                    "VALUES (?,?,?,?,?,?,?)",
                     (org_id, 'amazon', asin, title, price, stock, 'active'))
                 prod_count += 1
             except Exception:
@@ -1300,17 +1302,15 @@ def simulate_amazon_data():
                 order_rows.append((org_id, None, 'amazon', ext_id, status, gmv, revenue, cost, 'organic',
                                    order_date.strftime('%Y-%m-%d %H:%M:%S')))
         db.executemany(
-            "INSERT INTO orders (org_id,contact_id,marketplace,external_id,status,gmv,revenue,cost,channel,ordered_at) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(org_id,marketplace,external_id) DO UPDATE SET "
-            "status=excluded.status, gmv=excluded.gmv, revenue=excluded.revenue, cost=excluded.cost",
+            "INSERT OR REPLACE INTO orders (org_id,contact_id,marketplace,external_id,status,gmv,revenue,cost,channel,ordered_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
             order_rows)
         order_count = len(order_rows)
         try:
+            db.execute("DELETE FROM mp_account_health WHERE org_id=? AND platform=?", (org_id, 'amazon'))
             db.execute(
                 "INSERT INTO mp_account_health (org_id,platform,score,level,metrics_json,alerts_json) "
-                "VALUES (?,?,?,?,?,?) ON CONFLICT(org_id,platform) DO UPDATE SET "
-                "score=excluded.score, level=excluded.level, metrics_json=excluded.metrics_json, "
-                "alerts_json=excluded.alerts_json, last_synced=datetime('now')",
+                "VALUES (?,?,?,?,?,?)",
                 (org_id, 'amazon', 92, 'Excellent',
                  _j.dumps({'order_defect_rate': 0.3, 'late_shipment_rate': 1.2, 'cancel_rate': 0.8}),
                  _j.dumps([])))
@@ -1320,12 +1320,10 @@ def simulate_amazon_data():
             total_returns = int(order_count * 0.04)
             return_rate = round(total_returns / max(order_count, 1) * 100, 2)
             refunded_rev = round(total_returns * 185.50, 2)
+            db.execute("DELETE FROM mp_returns WHERE org_id=? AND platform=?", (org_id, 'amazon'))
             db.execute(
                 "INSERT INTO mp_returns (org_id,platform,total_orders,total_returns,return_rate,refunded_revenue,trend) "
-                "VALUES (?,?,?,?,?,?,?) ON CONFLICT(org_id,platform) DO UPDATE SET "
-                "total_orders=excluded.total_orders, total_returns=excluded.total_returns, "
-                "return_rate=excluded.return_rate, refunded_revenue=excluded.refunded_revenue, "
-                "trend=excluded.trend, last_synced=datetime('now')",
+                "VALUES (?,?,?,?,?,?,?)",
                 (org_id, 'amazon', order_count, total_returns, return_rate, refunded_rev, 'stable'))
         except Exception:
             pass
