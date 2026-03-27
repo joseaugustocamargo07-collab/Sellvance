@@ -1245,6 +1245,26 @@ def force_sync():
         return jsonify({'status': 'error', 'error': str(e), 'trace': traceback.format_exc()})
 
 
+@app.route('/api/fix/amazon-secret')
+def fix_amazon_secret():
+    """One-time fix: update Amazon client_secret and reset status."""
+    import json as _j
+    from database import get_db
+    org_id = 1
+    db = get_db()
+    row = db.execute('SELECT config_json FROM api_integrations WHERE org_id=? AND platform=?', (org_id, 'amazon')).fetchone()
+    if not row:
+        return jsonify({'error': 'No Amazon integration found'})
+    cfg = _j.loads(row['config_json'] or '{}')
+    old_secret = cfg.get('client_secret', '')
+    cfg['client_secret'] = 'amzn1.oa2-cs.v1.9b1134d563deac59e453ed9efbbc9b1ff4cc762f2d537d574d0f42f12b8749cc'
+    db.execute("UPDATE api_integrations SET config_json=?, status='connected' WHERE org_id=? AND platform=?",
+               (_j.dumps(cfg), org_id, 'amazon'))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'old_secret_suffix': old_secret[-10:], 'new_secret_suffix': cfg['client_secret'][-10:]})
+
+
 @app.route('/api/debug/amazon')
 def debug_amazon():
     """Step-by-step Amazon SP-API diagnostic — shows exactly where sync fails."""
