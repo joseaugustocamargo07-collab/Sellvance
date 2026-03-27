@@ -1282,15 +1282,14 @@ def simulate_amazon_data():
         except Exception:
             pass
 
-    # ── Pedidos dos últimos 8 meses ──
-    order_count = 0
+    # ── Pedidos dos últimos 8 meses (batch insert) ──
     statuses_pool = ['delivered'] * 75 + ['pending'] * 10 + ['shipped'] * 10 + ['cancelled'] * 5
     now = datetime.now()
+    order_rows = []
     for day_offset in range(240):
         date = now - timedelta(days=day_offset)
-        # 2-6 pedidos por dia, variando
         n_orders = random.randint(2, 6)
-        if date.weekday() in (4, 5):  # sexta/sábado mais vendas
+        if date.weekday() in (4, 5):
             n_orders += random.randint(1, 3)
         for i in range(n_orders):
             prod = random.choice(products)
@@ -1300,21 +1299,16 @@ def simulate_amazon_data():
             revenue = round(gmv * random.uniform(0.72, 0.88), 2)
             cost = round(gmv * random.uniform(0.35, 0.50), 2)
             status = random.choice(statuses_pool) if day_offset > 3 else random.choice(['pending', 'shipped'])
-            order_date = date.replace(
-                hour=random.randint(6, 23),
-                minute=random.randint(0, 59),
-                second=random.randint(0, 59))
+            order_date = date.replace(hour=random.randint(6, 23), minute=random.randint(0, 59), second=random.randint(0, 59))
             ext_id = f"408-{random.randint(1000000,9999999)}-{random.randint(1000000,9999999)}"
-            try:
-                db.execute(
-                    "INSERT INTO orders (org_id,contact_id,marketplace,external_id,status,gmv,revenue,cost,channel,ordered_at) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(org_id,marketplace,external_id) DO UPDATE SET "
-                    "status=excluded.status, gmv=excluded.gmv, revenue=excluded.revenue, cost=excluded.cost",
-                    (org_id, None, 'amazon', ext_id, status, gmv, revenue, cost, 'organic',
-                     order_date.strftime('%Y-%m-%d %H:%M:%S')))
-                order_count += 1
-            except Exception:
-                pass
+            order_rows.append((org_id, None, 'amazon', ext_id, status, gmv, revenue, cost, 'organic',
+                               order_date.strftime('%Y-%m-%d %H:%M:%S')))
+    db.executemany(
+        "INSERT INTO orders (org_id,contact_id,marketplace,external_id,status,gmv,revenue,cost,channel,ordered_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(org_id,marketplace,external_id) DO UPDATE SET "
+        "status=excluded.status, gmv=excluded.gmv, revenue=excluded.revenue, cost=excluded.cost",
+        order_rows)
+    order_count = len(order_rows)
 
     # ── Account Health ──
     try:
