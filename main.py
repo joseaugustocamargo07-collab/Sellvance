@@ -1330,8 +1330,11 @@ def simulate_amazon_data():
         db.execute("UPDATE api_integrations SET last_sync=datetime('now'), status='connected' WHERE org_id=? AND platform='amazon'", (org_id,))
         db.commit()
         db.close()
-        from sync_base import log_sync
-        log_sync(org_id, 'amazon', 'full', 'success', records_synced=order_count + prod_count)
+        try:
+            from sync_base import log_sync
+            log_sync(org_id, 'amazon', 'full', 'success', records_synced=order_count + prod_count)
+        except Exception:
+            pass
         return jsonify({'ok': True, 'products_inserted': prod_count, 'orders_inserted': order_count,
                         'message': f'Simulacao Amazon: {prod_count} produtos, {order_count} pedidos (8 meses)'})
     except Exception as e:
