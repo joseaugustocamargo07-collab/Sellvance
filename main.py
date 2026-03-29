@@ -1341,6 +1341,105 @@ def simulate_amazon_data():
         return jsonify({'ok': False, 'error': str(e), 'trace': _tb.format_exc()[:800]})
 
 
+@app.route('/api/simulate/shopee')
+def simulate_shopee_data():
+    """Insert realistic Shopee test data to verify the full pipeline works."""
+    import random, json as _j, traceback as _tb
+    from datetime import datetime, timedelta
+    from database import get_db
+    try:
+        org_id = 1
+        db = get_db()
+        # Reconectar Shopee no banco
+        existing = db.execute("SELECT id FROM api_integrations WHERE org_id=? AND platform='shopee'", (org_id,)).fetchone()
+        if existing:
+            db.execute("UPDATE api_integrations SET status='connected', last_sync=datetime('now') WHERE org_id=? AND platform='shopee'", (org_id,))
+        else:
+            db.execute("INSERT INTO api_integrations (org_id,platform,status,account_id,account_name,config_json,last_sync) VALUES (?,?,?,?,?,?,datetime('now'))",
+                       (org_id, 'shopee', 'connected', 'shopee_br_001', 'Loja Shopee BR', _j.dumps({'shop_id': 'shopee_br_001', 'simulated': True})))
+        # Limpar dados anteriores
+        db.execute("DELETE FROM orders WHERE org_id=? AND marketplace='shopee'", (org_id,))
+        db.execute("DELETE FROM mp_products WHERE org_id=? AND platform='shopee'", (org_id,))
+        db.execute("DELETE FROM mp_account_health WHERE org_id=? AND platform='shopee'", (org_id,))
+        db.execute("DELETE FROM mp_returns WHERE org_id=? AND platform='shopee'", (org_id,))
+        # Produtos Shopee realistas (BR)
+        products = [
+            ('SHP001', 'Capa Celular Samsung Galaxy S24 Ultra Silicone', 29.90, 320),
+            ('SHP002', 'Pelicula Vidro Temperado iPhone 15 Pro Max', 14.90, 580),
+            ('SHP003', 'Fone de Ouvido Bluetooth i12 TWS', 39.90, 245),
+            ('SHP004', 'Carregador Turbo USB-C 25W Samsung', 49.90, 167),
+            ('SHP005', 'Cabo USB-C para USB-C 2m Nylon', 19.90, 412),
+            ('SHP006', 'Suporte Celular Veicular Magnetico', 24.90, 198),
+            ('SHP007', 'Mini Caixa de Som Bluetooth Portatil', 59.90, 134),
+            ('SHP008', 'Relogio Smartband Monitor Cardiaco', 79.90, 89),
+            ('SHP009', 'Luminaria LED Mesa USB Touch 3 Cores', 44.90, 156),
+            ('SHP010', 'Mouse Sem Fio Silencioso 2.4GHz', 34.90, 267),
+            ('SHP011', 'Hub Adaptador USB-C 4 Portas', 39.90, 143),
+            ('SHP012', 'Ring Light 6pol com Tripe Celular', 54.90, 201),
+            ('SHP013', 'Fita LED RGB 5m Controle Remoto', 34.90, 178),
+            ('SHP014', 'Organizador Cabos Silicone 6 Vias', 12.90, 890),
+            ('SHP015', 'Mousepad Gamer Grande 70x30cm RGB', 49.90, 112),
+        ]
+        prod_count = 0
+        for ext_id, title, price, stock in products:
+            try:
+                db.execute("INSERT INTO mp_products (org_id,platform,external_id,title,price,stock_qty,status) VALUES (?,?,?,?,?,?,?)",
+                           (org_id, 'shopee', ext_id, title, price, stock, 'active'))
+                prod_count += 1
+            except Exception:
+                pass
+        # Pedidos 8 meses - Shopee tem volume maior, ticket menor
+        statuses_pool = ['delivered'] * 70 + ['pending'] * 12 + ['shipped'] * 12 + ['cancelled'] * 6
+        now = datetime.now()
+        order_rows = []
+        for day_offset in range(240):
+            date = now - timedelta(days=day_offset)
+            n_orders = random.randint(5, 15)
+            if date.weekday() in (4, 5):
+                n_orders += random.randint(3, 8)
+            # Datas promocionais Shopee (dia do mes = mes, ex: 3.3, 4.4, etc)
+            if date.day == date.month and date.month <= 12:
+                n_orders += random.randint(15, 30)
+            for i in range(n_orders):
+                prod = random.choice(products)
+                _, title, price, _ = prod
+                qty = random.choices([1, 2, 3, 4, 5], weights=[50, 25, 15, 7, 3])[0]
+                gmv = round(price * qty, 2)
+                # Shopee tem taxas diferentes
+                revenue = round(gmv * random.uniform(0.78, 0.92), 2)
+                cost = round(gmv * random.uniform(0.30, 0.45), 2)
+                status = random.choice(statuses_pool) if day_offset > 3 else random.choice(['pending', 'shipped'])
+                order_date = date.replace(hour=random.randint(6, 23), minute=random.randint(0, 59), second=random.randint(0, 59))
+                ext_id = f"SH{date.strftime('%y%m%d')}{random.randint(100000,999999)}"
+                order_rows.append((org_id, None, 'shopee', ext_id, status, gmv, revenue, cost, 'organic',
+                                   order_date.strftime('%Y-%m-%d %H:%M:%S')))
+        db.executemany("INSERT OR REPLACE INTO orders (org_id,contact_id,marketplace,external_id,status,gmv,revenue,cost,channel,ordered_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                       order_rows)
+        order_count = len(order_rows)
+        # Account Health
+        db.execute("INSERT INTO mp_account_health (org_id,platform,score,level,metrics_json,alerts_json) VALUES (?,?,?,?,?,?)",
+                   (org_id, 'shopee', 88, 'Good',
+                    _j.dumps({'penalty_points': 1, 'chat_response_rate': 96.5, 'late_shipment_rate': 2.1, 'cancel_rate': 1.5}),
+                    _j.dumps([{'type': 'warning', 'message': 'Taxa de resposta no chat abaixo de 98%'}])))
+        # Returns
+        total_returns = int(order_count * 0.05)
+        return_rate = round(total_returns / max(order_count, 1) * 100, 2)
+        refunded_rev = round(total_returns * 42.50, 2)
+        db.execute("INSERT INTO mp_returns (org_id,platform,total_orders,total_returns,return_rate,refunded_revenue,trend) VALUES (?,?,?,?,?,?,?)",
+                   (org_id, 'shopee', order_count, total_returns, return_rate, refunded_rev, 'up'))
+        db.commit()
+        db.close()
+        try:
+            from sync_base import log_sync
+            log_sync(org_id, 'shopee', 'full', 'success', records_synced=order_count + prod_count)
+        except Exception:
+            pass
+        return jsonify({'ok': True, 'products_inserted': prod_count, 'orders_inserted': order_count,
+                        'message': f'Simulacao Shopee: {prod_count} produtos, {order_count} pedidos (8 meses)'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'trace': _tb.format_exc()[:800]})
+
+
 @app.route('/api/fix/amazon-secret')
 def fix_amazon_secret():
     """One-time fix: update Amazon client_secret and reset status."""
