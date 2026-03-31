@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Acesso Restrito — Sellvance{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:center;min-height:70vh;">
+  <div style="text-align:center;max-width:480px;padding:40px;">
+    <div style="font-size:64px;margin-bottom:20px;">🔒</div>
+    <h2 style="color:var(--text);margin-bottom:12px;">Recurso nao disponivel no seu plano</h2>
+    <p style="color:var(--text2);font-size:15px;line-height:1.6;margin-bottom:24px;">
+      Voce esta no plano <strong style="color:var(--accent);">{{ plan_label }}</strong>.
+      Esta funcionalidade requer um plano diferente.
+    </p>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;text-align:left;">
+      <h4 style="color:var(--text);margin-bottom:16px;">Nossos planos:</h4>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="padding:12px;border-radius:8px;border:1px solid {% if user_plan=='marketplaces' %}var(--accent){% else %}var(--border){% endif %};background:{% if user_plan=='marketplaces' %}rgba(108,99,255,.08){% else %}var(--bg2){% endif %};">
+          <strong style="color:var(--text);">Marketplaces</strong>
+          <div style="color:var(--text2);font-size:13px;margin-top:4px;">Dashboard, Marketplaces, CRM, Integracoes de marketplace</div>
+          {% if user_plan=='marketplaces' %}<span style="color:var(--accent);font-size:12px;">Seu plano atual</span>{% endif %}
+        </div>
+        <div style="padding:12px;border-radius:8px;border:1px solid {% if user_plan=='marketing' %}var(--accent){% else %}var(--border){% endif %};background:{% if user_plan=='marketing' %}rgba(108,99,255,.08){% else %}var(--bg2){% endif %};">
+          <strong style="color:var(--text);">Marketing</strong>
+          <div style="color:var(--text2);font-size:13px;margin-top:4px;">Dashboard, Trafego Pago, Ranking IA, Integracoes de ads/SEO</div>
+          {% if user_plan=='marketing' %}<span style="color:var(--accent);font-size:12px;">Seu plano atual</span>{% endif %}
+        </div>
+        <div style="padding:12px;border-radius:8px;border:1px solid {% if user_plan=='completo' or user_plan=='growth' %}var(--accent){% else %}var(--border){% endif %};background:{% if user_plan=='completo' or user_plan=='growth' %}rgba(108,99,255,.08){% else %}var(--bg2){% endif %};">
+          <strong style="color:var(--text);">Completo</strong>
+          <div style="color:var(--text2);font-size:13px;margin-top:4px;">Todos os recursos: Marketplaces + Marketing + CRM</div>
+          {% if user_plan=='completo' or user_plan=='growth' %}<span style="color:var(--accent);font-size:12px;">Seu plano atual</span>{% endif %}
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <a href="/settings" style="padding:10px 24px;background:var(--accent);color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Alterar Plano</a>
+      <a href="/dashboard" style="padding:10px 24px;background:var(--card);color:var(--text2);border:1px solid var(--border);border-radius:8px;text-decoration:none;">Voltar ao Dashboard</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
