@@ -5,8 +5,75 @@ from auth import login_required, verify_password, hash_password
 from traffic_ai import analyze_all, calc_metrics, score_campaign
 import os
 import json
+from functools import wraps
+
+# ── Plan access control ──────────────────────────────────────────────────────
+# Plan definitions: which pages each plan can access
+PLAN_ACCESS = {
+    'marketplaces': {
+        'label': 'Marketplaces',
+        'pages': ['dashboard', 'marketplaces', 'crm', 'integrations', 'settings'],
+        'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop'],
+    },
+    'marketing': {
+        'label': 'Marketing',
+        'pages': ['dashboard', 'traffic', 'ranking', 'integrations', 'settings'],
+        'integrations': ['meta', 'google', 'tiktok', 'google_analytics'],
+    },
+    'completo': {
+        'label': 'Completo',
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'integrations', 'settings'],
+        'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
+    },
+    'growth': {  # legacy — treat as completo
+        'label': 'Completo',
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'integrations', 'settings'],
+        'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
+    },
+}
+
+def get_org_plan(org_id=None):
+    """Return the plan name for the current org."""
+    if org_id is None:
+        org_id = session.get('org_id', 1)
+    db = get_db()
+    row = db.execute('SELECT plan FROM organizations WHERE id=?', (org_id,)).fetchone()
+    db.close()
+    return row['plan'] if row else 'completo'
+
+def plan_has_access(plan, page):
+    """Check if a plan can access a given page."""
+    cfg = PLAN_ACCESS.get(plan, PLAN_ACCESS['completo'])
+    return page in cfg['pages']
+
+def plan_required(page_name):
+    """Decorator that checks if the org's plan allows access to this page."""
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if 'user_id' not in session:
+                return redirect(url_for('login'))
+            plan = get_org_plan()
+            if not plan_has_access(plan, page_name):
+                plan_label = PLAN_ACCESS.get(plan, {}).get('label', plan)
+                return render_template('plan_blocked.html', page=page_name, plan=plan, plan_label=plan_label), 403
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
 
 app = Flask(__name__, template_folder='.')
+
+@app.context_processor
+def inject_plan():
+    """Make plan info available in all templates."""
+    plan = session.get('plan', 'completo')
+    plan_cfg = PLAN_ACCESS.get(plan, PLAN_ACCESS['completo'])
+    return {
+        'user_plan': plan,
+        'plan_label': plan_cfg['label'],
+        'plan_pages': plan_cfg['pages'],
+        'plan_integrations': plan_cfg.get('integrations', []),
+    }
 
 
 # ── Filtro Jinja2 para formato monetario brasileiro ──────────────────────────
@@ -145,6 +212,7 @@ def login():
             session['user_name'] = user['name']
             session['org_id']    = user['org_id']
             session['org_name']  = user['org_name']
+            session['plan']      = get_org_plan(user['org_id'])
             return redirect(url_for('dashboard'))
         return render_template('login.html', error='Email ou senha invalidos')
     return render_template('login.html')
@@ -156,6 +224,7 @@ def logout():
 
 @app.route('/crm')
 @login_required
+@plan_required('crm')
 def crm():
     db     = get_db()
     org_id = session.get('org_id', 1)
@@ -209,6 +278,7 @@ def crm():
 
 @app.route('/ranking')
 @login_required
+@plan_required('ranking')
 def ranking():
     import re as _re
     db     = get_db()
@@ -267,6 +337,7 @@ def ranking():
 
 @app.route('/marketplaces')
 @login_required
+@plan_required('marketplaces')
 def marketplaces():
     try:
         return _marketplaces_inner()
@@ -2086,8 +2157,29 @@ def settings():
             db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
                        (hash_password(password), session['user_id']))
         db.commit()
+        # Handle plan change
+        new_plan = request.form.get('plan', '')
+        if new_plan in PLAN_ACCESS:
+            db.execute('UPDATE organizations SET plan=? WHERE id=?', (new_plan, session['org_id']))
+            session['plan'] = new_plan
         msg = 'Alterações salvas com sucesso!'
     return render_template('integrations.html', msg=msg)
+
+
+@app.route('/api/change-plan', methods=['POST'])
+@login_required
+def api_change_plan():
+    """Change org plan via API."""
+    plan = request.json.get('plan', '') if request.is_json else request.form.get('plan', '')
+    if plan not in PLAN_ACCESS:
+        return jsonify({'error': 'Plano invalido'}), 400
+    db = get_db()
+    db.execute('UPDATE organizations SET plan=? WHERE id=?', (plan, session['org_id']))
+    db.commit()
+    db.close()
+    session['plan'] = plan
+    return jsonify({'ok': True, 'plan': plan, 'label': PLAN_ACCESS[plan]['label']})
+
 
 # ── API endpoints for dashboard charts ──────────────────────────────────────
 
@@ -2142,6 +2234,7 @@ def resume_campaign(campaign_id):
 
 @app.route('/traffic')
 @login_required
+@plan_required('traffic')
 def traffic():
     import re as _re
     db = get_db()
