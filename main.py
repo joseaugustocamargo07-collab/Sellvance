@@ -388,9 +388,11 @@ def _marketplaces_inner():
                 'is_connected': _is_connected,
                 'account_name': _conn.get('account_name', ''),
             })
-    # Also add any connected platform not in default list
+    # Also add any connected MARKETPLACE platform not in default list
+    # Exclude ads/marketing platforms — they belong to the Marketing plan
+    _ads_platforms = {'meta_ads', 'google_ads', 'tiktok_ads', 'google_analytics', 'meta', 'google', 'tiktok'}
     for _pid, _conn in _all_integ.items():
-        if _conn.get('status') == 'connected' and _pid not in _default_order:
+        if _conn.get('status') == 'connected' and _pid not in _default_order and _pid not in _ads_platforms:
             _info = _MP_CATALOG.get(_pid, {'name': _pid.title(), 'icon': '\U0001f6cd', 'color': '#6b7280'})
             all_mp.append({
                 'id': _pid, 'name': _info['name'], 'icon': _info['icon'],
