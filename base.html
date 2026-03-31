@@ -128,13 +128,14 @@ canvas{max-height:220px!important;}
 <div class="sidebar">
   <div class="logo">
     <div class="logo-name">Sellvance</div>
-    <div class="logo-sub">Marketplace Intelligence</div>
+    <div class="logo-sub">{% if user_plan=='marketplaces' %}Marketplace Intelligence{% elif user_plan=='marketing' %}Marketing Intelligence{% else %}Full Commerce Intelligence{% endif %}</div>
   </div>
   <nav class="nav">
     <div class="nav-section">Principal</div>
     <a href="/dashboard" class="nav-item {% if page=='dashboard' %}active{% endif %}">
       <span class="nav-icon">📊</span> Dashboard
     </a>
+    {% if 'traffic' in plan_pages %}
     <div class="nav-section">Marketing</div>
     <a href="/traffic" class="nav-item {% if page=='traffic' %}active{% endif %}">
       <span class="nav-icon">🎯</span> Tráfego Pago
@@ -142,13 +143,19 @@ canvas{max-height:220px!important;}
     <a href="/ranking" class="nav-item {% if page=='ranking' %}active{% endif %}">
       <span class="nav-icon">🏆</span> Ranking IA
     </a>
+    {% endif %}
+    {% if 'marketplaces' in plan_pages %}
+    <div class="nav-section">Vendas</div>
     <a href="/marketplaces" class="nav-item {% if page=='marketplaces' %}active{% endif %}">
       <span class="nav-icon">🏪</span> Marketplaces
     </a>
+    {% endif %}
+    {% if 'crm' in plan_pages %}
     <div class="nav-section">CRM</div>
     <a href="/crm" class="nav-item {% if page=='crm' %}active{% endif %}">
       <span class="nav-icon">👥</span> Contatos & RFM
     </a>
+    {% endif %}
     <div class="nav-section">Conta</div>
     <a href="/integrations" class="nav-item {% if page=='integrations' %}active{% endif %}">
       <span class="nav-icon">🔗</span> Integrações
@@ -162,7 +169,7 @@ canvas{max-height:220px!important;}
       <div class="user-avatar">{{ session.user_name[:2].upper() }}</div>
       <div>
         <div class="user-name">{{ session.user_name }}</div>
-        <div class="user-plan">✦ Plano Growth</div>
+        <div class="user-plan">✦ Plano {{ plan_label }}</div>
       </div>
       <a href="/logout" class="logout-btn" title="Sair">↩</a>
     </div>
