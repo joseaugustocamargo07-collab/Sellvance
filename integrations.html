@@ -23,16 +23,16 @@
     </form>
   </div>
 
-  <div class="card">
-    <div class="sec-title">🏢 Informações do Plano</div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="sec-title">🏢 Informacoes da Conta</div>
     <div style="display:flex;flex-direction:column;gap:10px;font-size:13px">
       <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-        <span style="color:var(--text2)">Organização</span>
+        <span style="color:var(--text2)">Organizacao</span>
         <span style="font-weight:600">{{ session.org_name }}</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
         <span style="color:var(--text2)">Plano atual</span>
-        <span class="badge b-purple">✦ Growth</span>
+        <span class="badge b-purple" id="plan-badge">{{ plan_label }}</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:10px 0">
         <span style="color:var(--text2)">Email de acesso</span>
@@ -40,5 +40,66 @@
       </div>
     </div>
   </div>
+
+  <div class="card">
+    <div class="sec-title">Escolha seu Plano</div>
+    <p style="color:var(--text2);font-size:13px;margin-bottom:16px;">Selecione o plano que melhor atende suas necessidades. O acesso ao sistema sera ajustado automaticamente.</p>
+    <div style="display:flex;flex-direction:column;gap:12px;" id="plan-cards">
+
+      <div class="plan-card" data-plan="marketplaces" onclick="selectPlan('marketplaces')"
+           style="padding:16px;border-radius:10px;border:2px solid {% if user_plan=='marketplaces' %}var(--accent){% else %}var(--border){% endif %};background:{% if user_plan=='marketplaces' %}rgba(108,99,255,.08){% else %}var(--card){% endif %};cursor:pointer;transition:all .2s;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong style="color:var(--text);font-size:15px;">Marketplaces</strong>
+          {% if user_plan=='marketplaces' %}<span style="color:var(--accent);font-size:12px;font-weight:600;">ATIVO</span>{% endif %}
+        </div>
+        <div style="color:var(--text2);font-size:13px;line-height:1.5;">
+          Dashboard de vendas, Marketplaces (Amazon, Shopee, Mercado Livre), CRM com segmentacao RFM, Integracoes de marketplace
+        </div>
+      </div>
+
+      <div class="plan-card" data-plan="marketing" onclick="selectPlan('marketing')"
+           style="padding:16px;border-radius:10px;border:2px solid {% if user_plan=='marketing' %}var(--accent){% else %}var(--border){% endif %};background:{% if user_plan=='marketing' %}rgba(108,99,255,.08){% else %}var(--card){% endif %};cursor:pointer;transition:all .2s;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong style="color:var(--text);font-size:15px;">Marketing</strong>
+          {% if user_plan=='marketing' %}<span style="color:var(--accent);font-size:12px;font-weight:600;">ATIVO</span>{% endif %}
+        </div>
+        <div style="color:var(--text2);font-size:13px;line-height:1.5;">
+          Dashboard de performance, Trafego Pago (Google Ads, Meta Ads), Ranking IA de campanhas, SEO, Integracoes de ads
+        </div>
+      </div>
+
+      <div class="plan-card" data-plan="completo" onclick="selectPlan('completo')"
+           style="padding:16px;border-radius:10px;border:2px solid {% if user_plan=='completo' or user_plan=='growth' %}var(--accent){% else %}var(--border){% endif %};background:{% if user_plan=='completo' or user_plan=='growth' %}rgba(108,99,255,.08){% else %}var(--card){% endif %};cursor:pointer;transition:all .2s;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <strong style="color:var(--text);font-size:15px;">Completo</strong>
+          {% if user_plan=='completo' or user_plan=='growth' %}<span style="color:var(--accent);font-size:12px;font-weight:600;">ATIVO</span>{% endif %}
+        </div>
+        <div style="color:var(--text2);font-size:13px;line-height:1.5;">
+          Todos os recursos: Marketplaces + Marketing + CRM + Ranking IA. Acesso completo a todas as funcionalidades.
+        </div>
+      </div>
+
+    </div>
+  </div>
 </div>
+
+<script>
+function selectPlan(plan) {
+  if (!confirm('Deseja alterar para o plano ' + plan.charAt(0).toUpperCase() + plan.slice(1) + '?')) return;
+  fetch('/api/change-plan', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({plan: plan})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      window.location.reload();
+    } else {
+      alert('Erro: ' + (data.error || 'Tente novamente'));
+    }
+  })
+  .catch(() => alert('Erro de conexao'));
+}
+</script>
 {% endblock %}
