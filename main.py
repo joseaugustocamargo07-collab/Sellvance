@@ -12,7 +12,7 @@ from functools import wraps
 PLAN_ACCESS = {
     'marketplaces': {
         'label': 'Marketplaces',
-        'pages': ['dashboard', 'marketplaces', 'crm', 'vulnerability', 'integrations', 'settings'],
+        'pages': ['dashboard', 'marketplaces', 'crm', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop'],
     },
     'marketing': {
@@ -22,12 +22,12 @@ PLAN_ACCESS = {
     },
     'completo': {
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'vulnerability', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
     'growth': {  # legacy — treat as completo
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'vulnerability', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
 }
@@ -2143,6 +2143,189 @@ def disconnect_integration(platform):
     org_id = session.get('org_id', 1)
     do_disconnect(org_id, platform)
     return redirect(url_for('integrations'))
+
+# ── Mini Loja Virtual ────────────────────────────────────────────────────────
+
+import re as _re_mod, unicodedata as _unicodedata
+
+def _slugify(text):
+    text = _unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('ascii')
+    text = _re_mod.sub(r'[^\w\s-]', '', text.lower())
+    return _re_mod.sub(r'[-\s]+', '-', text).strip('-')
+
+
+def _ensure_loja_config(org_id):
+    """Garante que existe config da Mini Loja para o org."""
+    db = get_db()
+    row = db.execute('SELECT * FROM mini_loja_config WHERE org_id=?', (org_id,)).fetchone()
+    if row:
+        db.close()
+        return dict(row)
+    # Criar config padrao
+    org = db.execute('SELECT name FROM organizations WHERE id=?', (org_id,)).fetchone()
+    name = org['name'] if org else f'Loja {org_id}'
+    slug = _slugify(name)
+    # Garantir slug unico
+    base_slug = slug
+    counter = 1
+    while db.execute('SELECT id FROM mini_loja_config WHERE slug=?', (slug,)).fetchone():
+        slug = f'{base_slug}-{counter}'
+        counter += 1
+    db.execute(
+        "INSERT INTO mini_loja_config (org_id,slug,store_name) VALUES (?,?,?)",
+        (org_id, slug, name))
+    db.commit()
+    row = db.execute('SELECT * FROM mini_loja_config WHERE org_id=?', (org_id,)).fetchone()
+    db.close()
+    return dict(row)
+
+
+@app.route('/loja/<slug>')
+def mini_loja_public(slug):
+    """Vitrine publica da Mini Loja — sem login."""
+    import hashlib
+    db = get_db()
+    config = db.execute('SELECT * FROM mini_loja_config WHERE slug=? AND is_active=1', (slug,)).fetchone()
+    if not config:
+        db.close()
+        return render_template('mini_loja_404.html'), 404
+    config = dict(config)
+    org_id = config['org_id']
+    # Produtos visiveis
+    products = db.execute('''
+        SELECT mp.* FROM mp_products mp
+        JOIN mini_loja_products mlp ON mp.id = mlp.mp_product_id
+        WHERE mlp.org_id=? AND mlp.is_visible=1 AND mp.status='active'
+        ORDER BY mlp.sort_order, mp.title
+    ''', (org_id,)).fetchall()
+    products = [dict(p) for p in products]
+    # Analytics — page view
+    try:
+        ip_raw = request.remote_addr or '0.0.0.0'
+        ip_hash = hashlib.sha256(ip_raw.encode()).hexdigest()[:16]
+        db.execute("INSERT INTO mini_loja_analytics (org_id,event_type,ip_hash,referrer) VALUES (?,?,?,?)",
+                   (org_id, 'page_view', ip_hash, request.referrer or ''))
+        db.commit()
+    except Exception:
+        pass
+    db.close()
+    return render_template('mini_loja_public.html', config=config, products=products)
+
+
+@app.route('/api/loja/click', methods=['POST'])
+def mini_loja_click():
+    """Registra clique no WhatsApp (chamado do JS da loja publica)."""
+    import hashlib
+    data = request.get_json(silent=True) or {}
+    org_id = data.get('org_id')
+    product_id = data.get('product_id')
+    if not org_id:
+        return jsonify({'ok': False}), 400
+    try:
+        db = get_db()
+        ip_hash = hashlib.sha256((request.remote_addr or '').encode()).hexdigest()[:16]
+        db.execute("INSERT INTO mini_loja_analytics (org_id,event_type,product_id,ip_hash) VALUES (?,?,?,?)",
+                   (org_id, 'whatsapp_click', product_id, ip_hash))
+        db.commit()
+        db.close()
+    except Exception:
+        pass
+    return jsonify({'ok': True})
+
+
+@app.route('/mini-loja')
+@login_required
+@plan_required('mini-loja')
+def mini_loja_admin():
+    """Painel admin da Mini Loja."""
+    org_id = session.get('org_id', 1)
+    config = _ensure_loja_config(org_id)
+    db = get_db()
+    # Produtos com status de visibilidade
+    all_products = db.execute('SELECT * FROM mp_products WHERE org_id=? AND status=?', (org_id, 'active')).fetchall()
+    visible_ids = set()
+    for r in db.execute('SELECT mp_product_id FROM mini_loja_products WHERE org_id=? AND is_visible=1', (org_id,)).fetchall():
+        visible_ids.add(r['mp_product_id'])
+    products = []
+    for p in all_products:
+        pd = dict(p)
+        pd['loja_visible'] = pd['id'] in visible_ids
+        products.append(pd)
+    # Analytics ultimos 30 dias
+    views_30d = db.execute(
+        "SELECT COUNT(*) as c FROM mini_loja_analytics WHERE org_id=? AND event_type='page_view' AND created_at >= datetime('now','-30 days')",
+        (org_id,)).fetchone()['c']
+    clicks_30d = db.execute(
+        "SELECT COUNT(*) as c FROM mini_loja_analytics WHERE org_id=? AND event_type='whatsapp_click' AND created_at >= datetime('now','-30 days')",
+        (org_id,)).fetchone()['c']
+    db.close()
+    return render_template('mini_loja_admin.html', page='mini-loja', config=config,
+                           products=products, views_30d=views_30d, clicks_30d=clicks_30d)
+
+
+@app.route('/mini-loja/save', methods=['POST'])
+@login_required
+def mini_loja_save():
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    store_name = request.form.get('store_name', '').strip()
+    slug = _slugify(request.form.get('slug', '').strip() or store_name)
+    whatsapp = _re_mod.sub(r'\D', '', request.form.get('whatsapp', ''))
+    logo_url = request.form.get('logo_url', '').strip()
+    accent_color = request.form.get('accent_color', '#6c63ff').strip()
+    banner_text = request.form.get('banner_text', '').strip()
+    is_active = 1 if request.form.get('is_active') else 0
+    # Validar slug unico
+    existing = db.execute('SELECT org_id FROM mini_loja_config WHERE slug=? AND org_id!=?', (slug, org_id)).fetchone()
+    if existing:
+        slug = slug + '-' + str(org_id)
+    db.execute('''UPDATE mini_loja_config SET store_name=?, slug=?, whatsapp=?, logo_url=?,
+                  accent_color=?, banner_text=?, is_active=?, updated_at=datetime('now')
+                  WHERE org_id=?''',
+               (store_name, slug, whatsapp, logo_url, accent_color, banner_text, is_active, org_id))
+    db.commit()
+    db.close()
+    return redirect('/mini-loja')
+
+
+@app.route('/api/mini-loja/toggle-product', methods=['POST'])
+@login_required
+def mini_loja_toggle_product():
+    org_id = session.get('org_id', 1)
+    data = request.get_json(silent=True) or {}
+    mp_id = data.get('mp_product_id')
+    visible = 1 if data.get('visible', True) else 0
+    if not mp_id:
+        return jsonify({'ok': False}), 400
+    db = get_db()
+    existing = db.execute('SELECT id FROM mini_loja_products WHERE org_id=? AND mp_product_id=?', (org_id, mp_id)).fetchone()
+    if existing:
+        db.execute('UPDATE mini_loja_products SET is_visible=? WHERE org_id=? AND mp_product_id=?', (visible, org_id, mp_id))
+    else:
+        db.execute('INSERT INTO mini_loja_products (org_id,mp_product_id,is_visible) VALUES (?,?,?)', (org_id, mp_id, visible))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'visible': visible})
+
+
+@app.route('/api/mini-loja/add-all', methods=['POST'])
+@login_required
+def mini_loja_add_all():
+    """Adiciona todos os produtos ativos na Mini Loja."""
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    products = db.execute('SELECT id FROM mp_products WHERE org_id=? AND status=?', (org_id, 'active')).fetchall()
+    count = 0
+    for p in products:
+        try:
+            db.execute('INSERT OR REPLACE INTO mini_loja_products (org_id,mp_product_id,is_visible) VALUES (?,?,1)', (org_id, p['id']))
+            count += 1
+        except Exception:
+            pass
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'count': count})
+
 
 # ── Vulnerability Score ──────────────────────────────────────────────────────
 
