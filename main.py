@@ -12,7 +12,7 @@ from functools import wraps
 PLAN_ACCESS = {
     'marketplaces': {
         'label': 'Marketplaces',
-        'pages': ['dashboard', 'marketplaces', 'crm', 'integrations', 'settings'],
+        'pages': ['dashboard', 'marketplaces', 'crm', 'vulnerability', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop'],
     },
     'marketing': {
@@ -22,12 +22,12 @@ PLAN_ACCESS = {
     },
     'completo': {
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'vulnerability', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
     'growth': {  # legacy — treat as completo
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'vulnerability', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
 }
@@ -2143,6 +2143,31 @@ def disconnect_integration(platform):
     org_id = session.get('org_id', 1)
     do_disconnect(org_id, platform)
     return redirect(url_for('integrations'))
+
+# ── Vulnerability Score ──────────────────────────────────────────────────────
+
+@app.route('/vulnerability')
+@login_required
+@plan_required('vulnerability')
+def vulnerability():
+    from vulnerability_engine import compute_store_vulnerability
+    org_id = session.get('org_id', 1)
+    data = compute_store_vulnerability(org_id)
+    return render_template('vulnerability.html', page='vulnerability', data=data)
+
+
+@app.route('/api/vulnerability/recalculate', methods=['POST'])
+@login_required
+def api_vulnerability_recalculate():
+    from vulnerability_engine import compute_store_vulnerability
+    import traceback
+    org_id = session.get('org_id', 1)
+    try:
+        data = compute_store_vulnerability(org_id)
+        return jsonify({'ok': True, 'store_score': data['store_score'], 'total': data['total_products']})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()[:500]})
+
 
 @app.route('/settings', methods=['GET', 'POST'])
 @login_required
