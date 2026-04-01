@@ -300,6 +300,43 @@ def migrate_db():
             );
         ''')
 
+    if 'mini_loja_config' not in existing:
+        db = get_db()
+        db.executescript('''
+            CREATE TABLE IF NOT EXISTS mini_loja_config (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id       INTEGER NOT NULL UNIQUE,
+                slug         TEXT NOT NULL UNIQUE,
+                store_name   TEXT NOT NULL DEFAULT '',
+                logo_url     TEXT DEFAULT '',
+                whatsapp     TEXT DEFAULT '',
+                accent_color TEXT DEFAULT '#6c63ff',
+                banner_text  TEXT DEFAULT '',
+                is_active    INTEGER DEFAULT 0,
+                created_at   TEXT DEFAULT (datetime('now')),
+                updated_at   TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS mini_loja_products (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id        INTEGER NOT NULL,
+                mp_product_id INTEGER NOT NULL,
+                is_visible    INTEGER DEFAULT 1,
+                sort_order    INTEGER DEFAULT 0,
+                UNIQUE(org_id, mp_product_id)
+            );
+            CREATE TABLE IF NOT EXISTS mini_loja_analytics (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id      INTEGER NOT NULL,
+                event_type  TEXT NOT NULL,
+                product_id  INTEGER,
+                ip_hash     TEXT,
+                referrer    TEXT DEFAULT '',
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
+        ''')
+        db.commit()
+        db.close()
+
     if 'vulnerability_scores' not in existing:
         db = get_db()
         db.executescript('''
