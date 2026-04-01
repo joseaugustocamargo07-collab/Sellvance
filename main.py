@@ -1318,6 +1318,38 @@ def force_sync():
         return jsonify({'status': 'error', 'error': str(e), 'trace': traceback.format_exc()})
 
 
+@app.route('/api/setup-mini-loja')
+def setup_mini_loja():
+    """Setup Mini Loja with simulated products for demo."""
+    import json as _j
+    from database import get_db
+    try:
+        org_id = 1
+        db = get_db()
+        # Create or update config
+        existing = db.execute('SELECT id FROM mini_loja_config WHERE org_id=?', (org_id,)).fetchone()
+        if existing:
+            db.execute("UPDATE mini_loja_config SET is_active=1, whatsapp='5511999999999', store_name='Primeplas Coolers', banner_text='Entrega rapida em todo Brasil! Compre direto pelo WhatsApp' WHERE org_id=?", (org_id,))
+        else:
+            db.execute("INSERT INTO mini_loja_config (org_id,slug,store_name,whatsapp,is_active,banner_text) VALUES (?,?,?,?,?,?)",
+                       (org_id, 'primeplas-coolers', 'Primeplas Coolers', '5511999999999', 1, 'Entrega rapida em todo Brasil! Compre direto pelo WhatsApp'))
+        # Add all active products
+        products = db.execute('SELECT id FROM mp_products WHERE org_id=? AND status=?', (org_id, 'active')).fetchall()
+        count = 0
+        for p in products:
+            try:
+                db.execute('INSERT OR REPLACE INTO mini_loja_products (org_id,mp_product_id,is_visible) VALUES (?,?,1)', (org_id, p['id']))
+                count += 1
+            except Exception:
+                pass
+        db.commit()
+        db.close()
+        return jsonify({'ok': True, 'products_added': count, 'url': '/loja/primeplas-coolers'})
+    except Exception as e:
+        import traceback
+        return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()[:500]})
+
+
 @app.route('/api/simulate/amazon')
 def simulate_amazon_data():
     """Insert realistic Amazon test data to verify the full pipeline works."""
