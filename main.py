@@ -2365,10 +2365,11 @@ def mini_loja_add_all():
 @login_required
 @plan_required('vulnerability')
 def vulnerability():
-    from vulnerability_engine import compute_store_vulnerability
+    from vulnerability_engine import compute_store_vulnerability, get_alerts
     org_id = session.get('org_id', 1)
     data = compute_store_vulnerability(org_id)
-    return render_template('vulnerability.html', page='vulnerability', data=data)
+    alerts_data = get_alerts(org_id, limit=20)
+    return render_template('vulnerability.html', page='vulnerability', data=data, alerts=alerts_data)
 
 
 @app.route('/api/vulnerability/recalculate', methods=['POST'])
@@ -2382,6 +2383,25 @@ def api_vulnerability_recalculate():
         return jsonify({'ok': True, 'store_score': data['store_score'], 'total': data['total_products']})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()[:500]})
+
+
+@app.route('/api/vulnerability/alerts')
+@login_required
+def api_vulnerability_alerts():
+    from vulnerability_engine import get_alerts
+    org_id = session.get('org_id', 1)
+    unread = request.args.get('unread', '0') == '1'
+    data = get_alerts(org_id, unread_only=unread)
+    return jsonify(data)
+
+
+@app.route('/api/vulnerability/dismiss-alert/<int:alert_id>', methods=['POST'])
+@login_required
+def api_dismiss_alert(alert_id):
+    from vulnerability_engine import dismiss_alert
+    org_id = session.get('org_id', 1)
+    dismiss_alert(alert_id, org_id)
+    return jsonify({'ok': True})
 
 
 @app.route('/settings', methods=['GET', 'POST'])
