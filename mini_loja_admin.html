@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Mini Loja — Sellvance{% endblock %}
+{% block topbar_title %}🛍️ Mini Loja Virtual{% endblock %}
+
+{% block content %}
+<style>
+.loja-preview{display:inline-block;padding:4px 10px;background:var(--bg2);border-radius:6px;font-size:12px;color:var(--accent);font-family:monospace;}
+.toggle-sw{position:relative;width:42px;height:24px;cursor:pointer;}
+.toggle-sw input{opacity:0;width:0;height:0;}
+.toggle-track{position:absolute;top:0;left:0;right:0;bottom:0;background:var(--bg2);border-radius:12px;transition:.3s;}
+.toggle-track:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;}
+.toggle-sw input:checked+.toggle-track{background:var(--accent);}
+.toggle-sw input:checked+.toggle-track:before{transform:translateX(18px);}
+.prod-list-item{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+.prod-list-item:last-child{border-bottom:none;}
+.prod-list-title{flex:1;font-size:13px;color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.prod-list-meta{font-size:11px;color:var(--text3);width:80px;text-align:right;}
+.prod-list-price{font-size:13px;color:var(--accent);font-weight:600;width:90px;text-align:right;}
+</style>
+
+<!-- KPIs -->
+<div class="g3" style="margin-bottom:20px;">
+  <div class="card" style="padding:20px;text-align:center;">
+    <div class="kpi-label">Status da Loja</div>
+    <div style="margin:12px 0;">
+      {% if config.is_active %}
+      <span class="badge b-green" style="font-size:14px;padding:6px 16px;">ATIVA</span>
+      {% else %}
+      <span class="badge" style="font-size:14px;padding:6px 16px;background:var(--bg2);color:var(--text3);">INATIVA</span>
+      {% endif %}
+    </div>
+    {% if config.is_active and config.slug %}
+    <a href="/loja/{{ config.slug }}" target="_blank" class="loja-preview">sellvance.com.br/loja/{{ config.slug }}</a>
+    {% else %}
+    <div style="font-size:12px;color:var(--text3);">Ative a loja para gerar o link</div>
+    {% endif %}
+  </div>
+  <div class="card" style="padding:20px;text-align:center;">
+    <div class="kpi-label">Visitas (30 dias)</div>
+    <div class="kpi-value" style="color:var(--accent);">{{ views_30d }}</div>
+  </div>
+  <div class="card" style="padding:20px;text-align:center;">
+    <div class="kpi-label">Cliques WhatsApp (30 dias)</div>
+    <div class="kpi-value" style="color:#25D366;">{{ clicks_30d }}</div>
+    {% if views_30d > 0 %}
+    <div style="font-size:12px;color:var(--text3);margin-top:4px;">{{ (clicks_30d / views_30d * 100)|round(1) }}% conversao</div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Configuracao -->
+<div class="card" style="margin-bottom:20px;padding:20px;">
+  <div class="sec-title" style="margin-bottom:16px;">Configurar Loja</div>
+  <form method="POST" action="/mini-loja/save">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div>
+        <label class="form-label">Nome da Loja</label>
+        <input class="form-input" name="store_name" value="{{ config.store_name }}" placeholder="Minha Loja" required>
+      </div>
+      <div>
+        <label class="form-label">Slug (URL)</label>
+        <input class="form-input" name="slug" value="{{ config.slug }}" placeholder="minha-loja" style="font-family:monospace;">
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">sellvance.com.br/loja/<strong>{{ config.slug }}</strong></div>
+      </div>
+      <div>
+        <label class="form-label">WhatsApp (com DDD)</label>
+        <input class="form-input" name="whatsapp" value="{{ config.whatsapp }}" placeholder="5511999999999">
+      </div>
+      <div>
+        <label class="form-label">URL do Logo</label>
+        <input class="form-input" name="logo_url" value="{{ config.logo_url }}" placeholder="https://...">
+      </div>
+      <div>
+        <label class="form-label">Cor do Tema</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="color" name="accent_color" value="{{ config.accent_color or '#6c63ff' }}" style="width:42px;height:36px;border:none;cursor:pointer;border-radius:6px;">
+          <span style="font-size:12px;color:var(--text2);">{{ config.accent_color or '#6c63ff' }}</span>
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Texto do Banner</label>
+        <input class="form-input" name="banner_text" value="{{ config.banner_text }}" placeholder="Frete gratis acima de R$99!">
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:16px;">
+      <label class="toggle-sw">
+        <input type="checkbox" name="is_active" value="1" {% if config.is_active %}checked{% endif %}>
+        <span class="toggle-track"></span>
+      </label>
+      <span style="font-size:13px;color:var(--text);">Loja ativa (visivel ao publico)</span>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px;">
+      <button type="submit" class="btn btn-primary" style="background:var(--accent);color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-weight:600;">Salvar Configuracoes</button>
+      {% if config.is_active and config.slug %}
+      <a href="/loja/{{ config.slug }}" target="_blank" class="btn" style="padding:10px 24px;border:1px solid var(--border);border-radius:8px;color:var(--text2);text-decoration:none;">Abrir Loja →</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<!-- Produtos -->
+<div class="card" style="padding:20px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div class="sec-title" style="margin:0;">Produtos na Loja ({{ products|length }})</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="addAll()" class="btn btn-sm" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;">Adicionar Todos</button>
+    </div>
+  </div>
+
+  {% if products %}
+  {% for p in products %}
+  <div class="prod-list-item">
+    <label class="toggle-sw">
+      <input type="checkbox" {% if p.loja_visible %}checked{% endif %} onchange="toggleProduct({{ p.id }}, this.checked)">
+      <span class="toggle-track"></span>
+    </label>
+    <div class="prod-list-title">{{ p.title }}</div>
+    <div class="prod-list-meta">{{ p.platform }}</div>
+    <div class="prod-list-price">R$ {{ "%.2f"|format(p.price or 0)|replace(".",",") }}</div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div style="text-align:center;padding:30px;color:var(--text3);">
+    <div style="font-size:32px;margin-bottom:8px;">📦</div>
+    <div>Nenhum produto encontrado. Sincronize um marketplace primeiro.</div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function toggleProduct(mpId, visible) {
+  fetch('/api/mini-loja/toggle-product', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({mp_product_id:mpId, visible:visible})
+  });
+}
+function addAll() {
+  fetch('/api/mini-loja/add-all', {method:'POST'})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.ok) window.location.reload();
+    });
+}
+</script>
+{% endblock %}
