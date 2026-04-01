@@ -1,35 +1,20 @@
 import sqlite3
 import os
 from auth import hash_password
-from db_pg import connect_pg, is_pg
 
 # Railway usa /data como volume persistente; localmente usa o diretório atual
 DATA_DIR = os.environ.get('RAILWAY_VOLUME_MOUNT_PATH', os.path.dirname(os.path.abspath(__file__)))
 DB_PATH  = os.path.join(DATA_DIR, 'sellvance.db')
 
 def get_db():
-    if is_pg():
-        return connect_pg()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA journal_mode=WAL')
     return conn
 
 def init_db():
-    print(f"[init_db] Checking DB_PATH={DB_PATH}, exists={os.path.exists(DB_PATH)}")
-    if is_pg():
-        # PostgreSQL: check if tables already exist
-        _chk = get_db()
-        _tables = [r[0] for r in _chk.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
-        _chk.close()
-        if 'users' in _tables:
-            print(f"[init_db] PostgreSQL: tables already exist. Skipping init.")
-            return
-    elif os.path.exists(DB_PATH):
-        print(f"[init_db] DB already exists, size={os.path.getsize(DB_PATH)} bytes. Skipping init.")
+    if os.path.exists(DB_PATH):
         return  # já inicializado
-    print(f"[init_db] DB does not exist. Creating fresh database...")
 
     db = get_db()
 
@@ -128,19 +113,14 @@ def init_db():
     ''')
 
     # ── Organização demo ──────────────────────────────────────
-    _org  = os.environ.get('ADMIN_ORG_NAME', 'Minha Empresa')
-    _mail = os.environ.get('ADMIN_EMAIL', 'admin@sellvance.com.br')
-    _name = os.environ.get('ADMIN_NAME', 'Administrador')
-    _pwd  = os.environ.get('ADMIN_PASSWORD', '')
-    if not _pwd:
-        import secrets as _s; _pwd = _s.token_urlsafe(16)
-        print('[SELLVANCE] Senha gerada: ' + _pwd + ' (salve agora)')
-    db.execute('INSERT INTO organizations (name, plan) VALUES (?, ?)', (_org, 'growth'))
-    org_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-    db.execute('INSERT INTO users (org_id, org_name, name, email, password_hash) VALUES (?, ?, ?, ?, ?)',
-               (org_id, _org, _name, _mail, hash_password(_pwd)))
-    print('[SELLVANCE] Admin: ' + _mail)
+    db.execute("INSERT INTO organizations (name, plan) VALUES ('Primeplas Coolers', 'growth')")
+    org_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
+    # ── Usuário admin ─────────────────────────────────────────
+    db.execute('''
+        INSERT INTO users (org_id, org_name, name, email, password_hash)
+        VALUES (?, 'Primeplas Coolers', 'José Augusto', 'admin@sellvance.com', ?)
+    ''', (org_id, hash_password('sellvance123')))
 
     # ── Contatos demo ─────────────────────────────────────────
     contacts_data = [
@@ -247,10 +227,8 @@ def init_db():
 def migrate_db():
     """Adiciona tabelas novas sem recriar o banco."""
     db = get_db()
-    existing = [r[0] for r in db.execute(
-        "SELECT name FROM sqlite_master WHERE type=\'table\'").fetchall()]
+    existing = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
     db.close()
-    print(f"[migrate_db] Existing tables: {existing}")
 
     if 'whatsapp_campaigns' not in existing:
         db = get_db()
@@ -322,6 +300,45 @@ def migrate_db():
             );
         ''')
 
+    if 'vulnerability_scores' not in existing:
+        db = get_db()
+        db.executescript('''
+            CREATE TABLE IF NOT EXISTS vulnerability_scores (
+                id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id               INTEGER NOT NULL,
+                platform             TEXT NOT NULL,
+                external_id          TEXT,
+                product_title        TEXT DEFAULT '',
+                score                INTEGER DEFAULT 0,
+                is_commodity         INTEGER DEFAULT 0,
+                price_vulnerable     INTEGER DEFAULT 0,
+                china_manufacturable INTEGER DEFAULT 0,
+                delivery_advantage   INTEGER DEFAULT 0,
+                brand_strength       INTEGER DEFAULT 0,
+                factors_json         TEXT DEFAULT '{}',
+                recommendations_json TEXT DEFAULT '[]',
+                last_calculated      TEXT DEFAULT (datetime('now')),
+                UNIQUE(org_id, platform, external_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS vulnerability_alerts (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id          INTEGER NOT NULL,
+                platform        TEXT NOT NULL,
+                product_ext_id  TEXT,
+                alert_type      TEXT DEFAULT 'new_competitor',
+                title           TEXT NOT NULL,
+                description     TEXT DEFAULT '',
+                severity        TEXT DEFAULT 'medium',
+                competitor_name TEXT DEFAULT '',
+                competitor_price REAL DEFAULT 0,
+                is_read         INTEGER DEFAULT 0,
+                created_at      TEXT DEFAULT (datetime('now'))
+            );
+        ''')
+        db.commit()
+        db.close()
+
         # Seed WhatsApp campaigns
         org_id = db.execute('SELECT id FROM organizations LIMIT 1').fetchone()[0]
         wa_camps = [
@@ -377,202 +394,23 @@ def migrate_db():
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
                 (s[0], s[1], s[2], s[3], qty, reserved, min_s, cost, price, daily, days, status))
 
-        # Seed API integrations (INSERT OR IGNORE to preserve real OAuth-connected integrations)
+        # Seed API integrations
         integrations = [
             (org_id, 'meta_ads', 'disconnected', None, None),
             (org_id, 'google_ads', 'disconnected', None, None),
             (org_id, 'tiktok_ads', 'disconnected', None, None),
-            (org_id, 'mercado_livre', 'disconnected', None, None),
-            (org_id, 'amazon', 'disconnected', None, None),
-            (org_id, 'tiktok_shop', 'disconnected', None, None),
+            (org_id, 'mercado_livre', 'connected', 'ML-123456', 'Primeplas Coolers'),
+            (org_id, 'amazon', 'connected', 'AMZ-789012', 'Primeplas BR'),
+            (org_id, 'tiktok_shop', 'connected', 'TTS-345678', 'PrimeplasShop'),
         ]
         for i in integrations:
-            db.execute('INSERT OR IGNORE INTO api_integrations (org_id,platform,status,account_id,account_name) VALUES (?,?,?,?,?)', i)
-
-
-    # Deduplicate orders with external_id (from sync)
-    try:
-        db.execute('''
-            DELETE FROM orders WHERE id NOT IN (
-                SELECT MIN(id) FROM orders
-                WHERE external_id IS NOT NULL AND external_id != ''
-                GROUP BY org_id, marketplace, external_id
-            ) AND external_id IS NOT NULL AND external_id != ''
-        ''')
-        deduped = db.execute("SELECT changes()").fetchone()[0]
-        if deduped > 0:
-            print(f"[migrate] Removed {deduped} duplicate orders")
-    except Exception as e:
-        print(f"[migrate] Dedup error (ok on first run): {e}")
-
-    # Create unique index to prevent future duplicates
-    try:
-        db.execute('''CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_external
-                      ON orders(org_id, marketplace, external_id)
-                      WHERE external_id IS NOT NULL AND external_id != \'\'  ''')
-        print("[migrate] Created unique index on orders.external_id")
-    except Exception as e:
-        print(f"[migrate] Index already exists or error: {e}")
+            db.execute('INSERT INTO api_integrations (org_id,platform,status,account_id,account_name) VALUES (?,?,?,?,?)', i)
 
         db.commit()
         print('✅ Migração concluída!')
-
-    # ── Sync engine tables ────────────────────────────────────
-    if 'mp_products' not in existing:
-        db2 = get_db()
-        db2.executescript("""
-            CREATE TABLE IF NOT EXISTS mp_products (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                org_id        INTEGER NOT NULL,
-                platform      TEXT NOT NULL,
-                external_id   TEXT NOT NULL,
-                title         TEXT,
-                price         REAL DEFAULT 0,
-                stock_qty     INTEGER DEFAULT 0,
-                rating        REAL DEFAULT 0,
-                reviews       INTEGER DEFAULT 0,
-                sold_qty      INTEGER DEFAULT 0,
-                thumbnail_url TEXT,
-                listing_type  TEXT,
-                category      TEXT,
-                status        TEXT DEFAULT 'active',
-                last_synced   TEXT DEFAULT (datetime('now')),
-                UNIQUE(org_id, platform, external_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS mp_competitors (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                org_id          INTEGER NOT NULL,
-                platform        TEXT NOT NULL DEFAULT 'mercado_livre',
-                seller_id       TEXT NOT NULL,
-                nickname        TEXT DEFAULT '',
-                rating          REAL DEFAULT 0,
-                completed_sales INTEGER DEFAULT 0,
-                price           REAL DEFAULT 0,
-                stock           INTEGER DEFAULT 0,
-                badge           TEXT DEFAULT '',
-                fulfillment     INTEGER DEFAULT 0,
-                sponsored       INTEGER DEFAULT 0,
-                sold_qty        INTEGER DEFAULT 0,
-                power_status    TEXT DEFAULT '',
-                last_synced     TEXT DEFAULT (datetime('now')),
-                UNIQUE(org_id, platform, seller_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS mp_account_health (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                org_id        INTEGER NOT NULL,
-                platform      TEXT NOT NULL,
-                score         INTEGER DEFAULT 0,
-                level         TEXT,
-                metrics_json  TEXT DEFAULT '{}',
-                alerts_json   TEXT DEFAULT '[]',
-                last_synced   TEXT DEFAULT (datetime('now')),
-                UNIQUE(org_id, platform)
-            );
-
-            CREATE TABLE IF NOT EXISTS mp_returns (
-                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-                org_id              INTEGER NOT NULL,
-                platform            TEXT NOT NULL,
-                total_orders        INTEGER DEFAULT 0,
-                total_returns       INTEGER DEFAULT 0,
-                return_rate         REAL DEFAULT 0,
-                reasons_json        TEXT DEFAULT '[]',
-                avg_resolution_days REAL DEFAULT 0,
-                refunded_revenue    REAL DEFAULT 0,
-                trend               TEXT DEFAULT 'stable',
-                last_synced         TEXT DEFAULT (datetime('now')),
-                UNIQUE(org_id, platform)
-            );
-
-            CREATE TABLE IF NOT EXISTS mp_ads (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                org_id        INTEGER NOT NULL,
-                platform      TEXT NOT NULL,
-                external_id   TEXT NOT NULL,
-                name          TEXT,
-                type          TEXT DEFAULT 'product_ads',
-                spend         REAL DEFAULT 0,
-                revenue       REAL DEFAULT 0,
-                clicks        INTEGER DEFAULT 0,
-                impressions   INTEGER DEFAULT 0,
-                conversions   INTEGER DEFAULT 0,
-                acos          REAL DEFAULT 0,
-                status        TEXT DEFAULT 'active',
-                last_synced   TEXT DEFAULT (datetime('now')),
-                UNIQUE(org_id, platform, external_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS sync_log (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                org_id          INTEGER NOT NULL,
-                platform        TEXT NOT NULL,
-                sync_type       TEXT NOT NULL,
-                status          TEXT DEFAULT 'running',
-                records_synced  INTEGER DEFAULT 0,
-                error_message   TEXT,
-                started_at      TEXT DEFAULT (datetime('now')),
-                finished_at     TEXT
-            );
-        """)
-        db2.commit()
-        db2.close()
-        print('\u2705 Tabelas de sync criadas!')
-
     else:
         print('✅ Banco já migrado.')
     db.close()
-
-    # ── Performance indexes (idempotent) ──────────────────────────────────
-    _idx_db = get_db()
-    _indexes = [
-        "CREATE INDEX IF NOT EXISTS idx_contacts_org    ON contacts(org_id)",
-        "CREATE INDEX IF NOT EXISTS idx_contacts_rfm    ON contacts(org_id, rfm_segment)",
-        "CREATE INDEX IF NOT EXISTS idx_orders_org      ON orders(org_id)",
-        "CREATE INDEX IF NOT EXISTS idx_orders_date     ON orders(ordered_at)",
-        "CREATE INDEX IF NOT EXISTS idx_orders_org_mp   ON orders(org_id, marketplace)",
-        "CREATE INDEX IF NOT EXISTS idx_adcamp_org      ON ad_campaigns(org_id)",
-        "CREATE INDEX IF NOT EXISTS idx_camdaily_org    ON campaign_daily(org_id)",
-        "CREATE INDEX IF NOT EXISTS idx_mp_prod_org     ON mp_products(org_id, platform)",
-        "CREATE INDEX IF NOT EXISTS idx_mp_comp_org     ON mp_competitors(org_id, platform)",
-        "CREATE INDEX IF NOT EXISTS idx_api_integ_org   ON api_integrations(org_id)",
-    ]
-    for _idx_sql in _indexes:
-        try:
-            _idx_db.execute(_idx_sql)
-            _idx_db.commit()
-        except Exception as _e:
-            pass  # index already exists
-    _idx_db.close()
-    print("[migrate_db] Indexes ensured.")
-
-    if 'mp_competitors' not in existing:
-        db = get_db()
-        db.executescript("""
-            CREATE TABLE IF NOT EXISTS mp_competitors (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                org_id          INTEGER NOT NULL,
-                platform        TEXT NOT NULL DEFAULT 'mercado_livre',
-                seller_id       TEXT NOT NULL,
-                nickname        TEXT DEFAULT '',
-                rating          REAL DEFAULT 0,
-                completed_sales INTEGER DEFAULT 0,
-                price           REAL DEFAULT 0,
-                stock           INTEGER DEFAULT 0,
-                badge           TEXT DEFAULT '',
-                fulfillment     INTEGER DEFAULT 0,
-                sponsored       INTEGER DEFAULT 0,
-                sold_qty        INTEGER DEFAULT 0,
-                power_status    TEXT DEFAULT '',
-                last_synced     TEXT DEFAULT (datetime('now')),
-                UNIQUE(org_id, platform, seller_id)
-            );
-        """)
-        db.commit()
-        db.close()
-        print('[migrate_db] Created mp_competitors table')
-
 
 def datetime_ago(days):
     from datetime import datetime, timedelta
