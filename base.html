@@ -155,6 +155,11 @@ canvas{max-height:220px!important;}
       <span class="nav-icon">🛡️</span> Vulnerabilidade
     </a>
     {% endif %}
+    {% if 'mini-loja' in plan_pages %}
+    <a href="/mini-loja" class="nav-item {% if page=='mini-loja' %}active{% endif %}">
+      <span class="nav-icon">🛍️</span> Mini Loja
+    </a>
+    {% endif %}
     {% if 'crm' in plan_pages %}
     <div class="nav-section">CRM</div>
     <a href="/crm" class="nav-item {% if page=='crm' %}active{% endif %}">
