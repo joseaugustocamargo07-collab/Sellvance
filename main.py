@@ -12,7 +12,7 @@ from functools import wraps
 PLAN_ACCESS = {
     'marketplaces': {
         'label': 'Marketplaces',
-        'pages': ['dashboard', 'marketplaces', 'crm', 'automacao', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
+        'pages': ['dashboard', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop'],
     },
     'marketing': {
@@ -22,12 +22,12 @@ PLAN_ACCESS = {
     },
     'completo': {
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
     'growth': {  # legacy — treat as completo
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
 }
@@ -2246,6 +2246,89 @@ def api_create_automation():
     db.commit()
     db.close()
     return jsonify({'ok': True})
+
+
+# ── Logistica & Fulfillment ──────────────────────────────────────────────────
+
+@app.route('/logistica')
+@login_required
+@plan_required('logistica')
+def logistica():
+    """Dashboard de logistica e rastreamento."""
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    shipments = [dict(r) for r in db.execute(
+        'SELECT * FROM shipments WHERE org_id=? ORDER BY created_at DESC', (org_id,)).fetchall()]
+    db.close()
+
+    # KPIs
+    total = len(shipments)
+    delivered = [s for s in shipments if s['status'] == 'delivered']
+    in_transit = [s for s in shipments if s['status'] == 'in_transit']
+    pending = [s for s in shipments if s['status'] == 'pending']
+    shipped = [s for s in shipments if s['status'] == 'shipped']
+    returned = [s for s in shipments if s['status'] == 'returned']
+
+    # Tempo medio de entrega (dias)
+    from datetime import datetime as _dt
+    delivery_days = []
+    for s in delivered:
+        if s['shipped_at'] and s['delivered_at']:
+            try:
+                d1 = _dt.strptime(s['shipped_at'], '%Y-%m-%d %H:%M:%S')
+                d2 = _dt.strptime(s['delivered_at'], '%Y-%m-%d %H:%M:%S')
+                delivery_days.append((d2 - d1).days)
+            except Exception:
+                pass
+    avg_delivery = round(sum(delivery_days) / len(delivery_days), 1) if delivery_days else 0
+
+    # Entregas por transportadora
+    carrier_stats = {}
+    for s in shipments:
+        c = s['carrier'] or 'Sem transportadora'
+        if c not in carrier_stats:
+            carrier_stats[c] = {'total': 0, 'delivered': 0, 'in_transit': 0, 'returned': 0, 'days': []}
+        carrier_stats[c]['total'] += 1
+        if s['status'] == 'delivered':
+            carrier_stats[c]['delivered'] += 1
+            if s['shipped_at'] and s['delivered_at']:
+                try:
+                    d1 = _dt.strptime(s['shipped_at'], '%Y-%m-%d %H:%M:%S')
+                    d2 = _dt.strptime(s['delivered_at'], '%Y-%m-%d %H:%M:%S')
+                    carrier_stats[c]['days'].append((d2 - d1).days)
+                except Exception:
+                    pass
+        elif s['status'] == 'in_transit':
+            carrier_stats[c]['in_transit'] += 1
+        elif s['status'] == 'returned':
+            carrier_stats[c]['returned'] += 1
+    for c in carrier_stats:
+        days = carrier_stats[c]['days']
+        carrier_stats[c]['avg_days'] = round(sum(days) / len(days), 1) if days else 0
+        t = carrier_stats[c]['total']
+        carrier_stats[c]['delivery_rate'] = round(carrier_stats[c]['delivered'] * 100 / t, 0) if t else 0
+
+    # Entregas por estado
+    state_counts = {}
+    for s in shipments:
+        st = s['dest_state'] or '??'
+        state_counts[st] = state_counts.get(st, 0) + 1
+    state_counts = dict(sorted(state_counts.items(), key=lambda x: -x[1]))
+
+    # Atrasados (in_transit alem da estimativa)
+    late_shipments = []
+    now_str = _dt.now().strftime('%Y-%m-%d %H:%M:%S')
+    for s in in_transit + shipped:
+        if s.get('estimated_delivery') and s['estimated_delivery'] < now_str:
+            late_shipments.append(s)
+
+    return render_template('logistica.html', page='logistica',
+                           shipments=shipments, total=total,
+                           delivered_count=len(delivered), in_transit_count=len(in_transit),
+                           pending_count=len(pending), shipped_count=len(shipped),
+                           returned_count=len(returned), avg_delivery=avg_delivery,
+                           carrier_stats=carrier_stats, state_counts=state_counts,
+                           late_count=len(late_shipments), late_shipments=late_shipments)
 
 
 # ── Mini Loja Virtual ────────────────────────────────────────────────────────
