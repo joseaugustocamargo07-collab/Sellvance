@@ -171,6 +171,12 @@ canvas{max-height:220px!important;}
       <span class="nav-icon">🤖</span> Automacao
     </a>
     {% endif %}
+    {% if 'logistica' in plan_pages %}
+    <div class="nav-section">Operacoes</div>
+    <a href="/logistica" class="nav-item {% if page=='logistica' %}active{% endif %}">
+      <span class="nav-icon">🚚</span> Logistica
+    </a>
+    {% endif %}
     <div class="nav-section">Conta</div>
     <a href="/integrations" class="nav-item {% if page=='integrations' %}active{% endif %}">
       <span class="nav-icon">🔗</span> Integrações
