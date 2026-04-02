@@ -141,6 +141,16 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
   <span id="play-icon">▶</span> <span id="play-text">Apresentacao</span>
 </button>
 
+<button class="play-btn" id="mute-btn" onclick="toggleMute()" style="display:none;right:180px;background:var(--card);border:1px solid var(--border);">
+  <span id="mute-icon">🔊</span> <span>Musica</span>
+</button>
+
+<div id="vol-ctrl" style="position:fixed;top:24px;right:260px;z-index:100;display:none;align-items:center;gap:8px;">
+  <span style="font-size:11px;color:var(--text2);">Vol</span>
+  <input type="range" min="0" max="100" value="35" id="vol-slider" oninput="changeVolume(this.value)"
+    style="width:80px;accent-color:var(--accent);height:4px;cursor:pointer;">
+</div>
+
 <div class="slides" id="slides">
 
   <!-- SLIDE 0: INTRO -->
@@ -520,7 +530,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 
 <script>
 const TOTAL_SLIDES = 13;
-const SLIDE_DURATION = 5000; // 5 seconds per slide
+const SLIDE_DURATION = 5000;
 let current = 0;
 let autoplay = false;
 let timer = null;
@@ -580,8 +590,10 @@ function toggleAutoplay(){
   document.getElementById('play-text').textContent = autoplay ? 'Pausar' : 'Apresentacao';
   if(autoplay){
     resetTimer();
+    startMusic();
   } else {
     clearTimeout(timer);
+    stopMusic();
   }
 }
 
@@ -590,7 +602,316 @@ document.addEventListener('keydown', e => {
   if(e.key==='ArrowRight' || e.key===' ') next();
   if(e.key==='ArrowLeft') prev();
   if(e.key==='p') toggleAutoplay();
+  if(e.key==='m') toggleMute();
 });
+
+// ═══════════════════════════════════════════════════════════════
+//  MUSIC ENGINE — Upbeat Corporate/Electronic Motivational Track
+//  100% synthesized, zero copyright issues
+// ═══════════════════════════════════════════════════════════════
+
+let audioCtx = null;
+let musicPlaying = false;
+let musicMuted = false;
+let masterGain = null;
+let allNodes = [];
+let musicInterval = null;
+
+// Musical constants
+const BPM = 128;
+const BEAT = 60 / BPM;
+const BAR = BEAT * 4;
+
+// Chord progression: I - vi - IV - V  (C major: C - Am - F - G)
+// Frequencies for chords
+const CHORDS = [
+  [130.81, 164.81, 196.00],  // C  (C3, E3, G3)
+  [110.00, 130.81, 164.81],  // Am (A2, C3, E3)
+  [87.31, 110.00, 130.81],   // F  (F2, A2, C3)
+  [98.00, 123.47, 146.83],   // G  (G2, B2, D3)
+];
+
+// Melody notes (pentatonic scale for upbeat feel)
+const MELODY_PATTERNS = [
+  // Pattern 1: ascending energy
+  [523.25, 587.33, 659.25, 783.99, 659.25, 523.25, 587.33, 659.25],
+  // Pattern 2: rhythmic bounce
+  [659.25, 523.25, 659.25, 783.99, 659.25, 587.33, 523.25, 587.33],
+  // Pattern 3: uplifting
+  [783.99, 659.25, 783.99, 880.00, 783.99, 659.25, 587.33, 659.25],
+  // Pattern 4: resolve
+  [880.00, 783.99, 659.25, 587.33, 523.25, 587.33, 659.25, 523.25],
+];
+
+// Arp patterns (sixteenth note arpeggios)
+const ARP_PATTERN = [0, 1, 2, 1, 0, 2, 1, 2];
+
+function createAudioCtx(){
+  if(audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.35;
+  masterGain.connect(audioCtx.destination);
+}
+
+// ── Synth helpers ──
+
+function playNote(freq, startTime, duration, type, gainVal, destination){
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, startTime);
+  gain.gain.linearRampToValueAtTime(gainVal, startTime + 0.02);
+  gain.gain.setValueAtTime(gainVal, startTime + duration * 0.7);
+  gain.gain.linearRampToValueAtTime(0, startTime + duration);
+  osc.connect(gain);
+  gain.connect(destination);
+  osc.start(startTime);
+  osc.stop(startTime + duration + 0.05);
+  allNodes.push(osc);
+  return osc;
+}
+
+function playSweepPad(freqs, startTime, duration, destination){
+  freqs.forEach(f => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = f * 2; // octave up for brightness
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(0.04, startTime + duration * 0.3);
+    gain.gain.setValueAtTime(0.04, startTime + duration * 0.6);
+    gain.gain.linearRampToValueAtTime(0, startTime + duration);
+    osc.connect(gain);
+    gain.connect(destination);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.1);
+    allNodes.push(osc);
+  });
+}
+
+function playKick(time, dest){
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(150, time);
+  osc.frequency.exponentialRampToValueAtTime(30, time + 0.12);
+  gain.gain.setValueAtTime(0.5, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+  osc.connect(gain);
+  gain.connect(dest);
+  osc.start(time);
+  osc.stop(time + 0.35);
+  allNodes.push(osc);
+}
+
+function playSnare(time, dest){
+  // Noise burst
+  const bufferSize = audioCtx.sampleRate * 0.1;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  const noiseGain = audioCtx.createGain();
+  noiseGain.gain.setValueAtTime(0.18, time);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = 3000;
+  noise.connect(filter);
+  filter.connect(noiseGain);
+  noiseGain.connect(dest);
+  noise.start(time);
+  noise.stop(time + 0.15);
+  allNodes.push(noise);
+
+  // Body tone
+  const osc = audioCtx.createOscillator();
+  const oscGain = audioCtx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(200, time);
+  osc.frequency.exponentialRampToValueAtTime(80, time + 0.05);
+  oscGain.gain.setValueAtTime(0.2, time);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+  osc.connect(oscGain);
+  oscGain.connect(dest);
+  osc.start(time);
+  osc.stop(time + 0.1);
+  allNodes.push(osc);
+}
+
+function playHihat(time, open, dest){
+  const bufferSize = audioCtx.sampleRate * (open ? 0.08 : 0.03);
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for(let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(open ? 0.08 : 0.05, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + (open ? 0.1 : 0.04));
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = 8000;
+  noise.connect(filter);
+  filter.connect(gain);
+  gain.connect(dest);
+  noise.start(time);
+  noise.stop(time + (open ? 0.15 : 0.06));
+  allNodes.push(noise);
+}
+
+// ── Schedule one 4-bar section ──
+
+function scheduleSection(startTime, sectionIndex){
+  const t = startTime;
+  const patIdx = sectionIndex % MELODY_PATTERNS.length;
+
+  for(let bar = 0; bar < 4; bar++){
+    const barTime = t + bar * BAR;
+    const chordIdx = bar % CHORDS.length;
+    const chord = CHORDS[chordIdx];
+
+    // ── Bass (root note, fat sub) ──
+    playNote(chord[0], barTime, BAR * 0.9, 'sawtooth', 0.09, masterGain);
+    playNote(chord[0] * 0.5, barTime, BAR * 0.9, 'sine', 0.12, masterGain);
+
+    // ── Pad (sustained chords) ──
+    playSweepPad(chord, barTime, BAR * 0.95, masterGain);
+
+    // ── Arpeggios (eighth notes) ──
+    for(let step = 0; step < 8; step++){
+      const noteTime = barTime + step * (BEAT / 2);
+      const arpIdx = ARP_PATTERN[step];
+      const arpFreq = chord[arpIdx] * 4; // 2 octaves up
+      playNote(arpFreq, noteTime, BEAT * 0.4, 'square', 0.025, masterGain);
+    }
+
+    // ── Melody (eighth notes, pentatonic) ──
+    const melodyNotes = MELODY_PATTERNS[patIdx];
+    for(let step = 0; step < 8; step++){
+      const noteTime = barTime + step * (BEAT / 2);
+      // Only play on certain steps for rhythm
+      if(step % 2 === 0 || step === 3 || step === 7){
+        playNote(melodyNotes[step], noteTime, BEAT * 0.35, 'sine', 0.06, masterGain);
+        // Slight detuned layer for richness
+        playNote(melodyNotes[step] * 1.002, noteTime, BEAT * 0.35, 'triangle', 0.03, masterGain);
+      }
+    }
+
+    // ── Drums ──
+    for(let beat = 0; beat < 4; beat++){
+      const beatTime = barTime + beat * BEAT;
+
+      // Kick: 1 and 3 (with variations)
+      if(beat === 0 || beat === 2){
+        playKick(beatTime, masterGain);
+      }
+      // Extra kick on "and" of beat 3 sometimes
+      if(beat === 2 && bar % 2 === 1){
+        playKick(beatTime + BEAT * 0.5, masterGain);
+      }
+
+      // Snare: 2 and 4
+      if(beat === 1 || beat === 3){
+        playSnare(beatTime, masterGain);
+      }
+
+      // Hi-hat: every eighth note
+      playHihat(beatTime, false, masterGain);
+      playHihat(beatTime + BEAT * 0.5, beat === 3, masterGain);
+    }
+
+    // ── Fill on last beat of section ──
+    if(bar === 3){
+      const fillStart = barTime + BEAT * 3;
+      for(let f = 0; f < 4; f++){
+        playSnare(fillStart + f * (BEAT / 4), masterGain);
+      }
+    }
+  }
+}
+
+// ── Main music loop ──
+
+let sectionCount = 0;
+let nextSectionTime = 0;
+
+function startMusic(){
+  if(musicPlaying) return;
+  createAudioCtx();
+  if(audioCtx.state === 'suspended') audioCtx.resume();
+  musicPlaying = true;
+  sectionCount = 0;
+  nextSectionTime = audioCtx.currentTime + 0.1;
+
+  // Schedule first sections ahead
+  scheduleSection(nextSectionTime, sectionCount);
+  nextSectionTime += 4 * BAR;
+  sectionCount++;
+  scheduleSection(nextSectionTime, sectionCount);
+  nextSectionTime += 4 * BAR;
+  sectionCount++;
+
+  // Keep scheduling ahead
+  musicInterval = setInterval(() => {
+    if(!musicPlaying) return;
+    if(audioCtx.currentTime > nextSectionTime - 4 * BAR){
+      scheduleSection(nextSectionTime, sectionCount);
+      nextSectionTime += 4 * BAR;
+      sectionCount++;
+
+      // Cleanup old nodes
+      allNodes = allNodes.filter(n => {
+        try{ return n.context.currentTime < nextSectionTime; }
+        catch(e){ return false; }
+      });
+    }
+  }, 1000);
+
+  // Fade in
+  masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+  masterGain.gain.linearRampToValueAtTime(0.35, audioCtx.currentTime + 1.5);
+
+  document.getElementById('mute-btn').style.display = 'flex';
+  document.getElementById('vol-ctrl').style.display = 'flex';
+}
+
+function stopMusic(){
+  if(!musicPlaying) return;
+  musicPlaying = false;
+  clearInterval(musicInterval);
+
+  if(masterGain && audioCtx){
+    masterGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.5);
+  }
+  // Stop all nodes after fade
+  setTimeout(() => {
+    allNodes.forEach(n => { try{ n.stop(); }catch(e){} });
+    allNodes = [];
+  }, 600);
+
+  document.getElementById('mute-btn').style.display = 'none';
+  document.getElementById('vol-ctrl').style.display = 'none';
+}
+
+function toggleMute(){
+  if(!musicPlaying) return;
+  musicMuted = !musicMuted;
+  if(masterGain){
+    masterGain.gain.linearRampToValueAtTime(musicMuted ? 0 : 0.35, audioCtx.currentTime + 0.2);
+  }
+  document.getElementById('mute-icon').textContent = musicMuted ? '🔇' : '🔊';
+}
+
+function changeVolume(val){
+  if(!masterGain || !audioCtx) return;
+  const v = val / 100;
+  masterGain.gain.linearRampToValueAtTime(musicMuted ? 0 : v, audioCtx.currentTime + 0.1);
+  if(!musicMuted) document.getElementById('vol-slider').dataset.vol = v;
+}
 </script>
 </body>
 </html>
