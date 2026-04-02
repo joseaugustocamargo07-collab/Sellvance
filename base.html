@@ -166,6 +166,11 @@ canvas{max-height:220px!important;}
       <span class="nav-icon">👥</span> Contatos & RFM
     </a>
     {% endif %}
+    {% if 'automacao' in plan_pages %}
+    <a href="/automacao" class="nav-item {% if page=='automacao' %}active{% endif %}">
+      <span class="nav-icon">🤖</span> Automacao
+    </a>
+    {% endif %}
     <div class="nav-section">Conta</div>
     <a href="/integrations" class="nav-item {% if page=='integrations' %}active{% endif %}">
       <span class="nav-icon">🔗</span> Integrações
