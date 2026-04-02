@@ -12,7 +12,7 @@ from functools import wraps
 PLAN_ACCESS = {
     'marketplaces': {
         'label': 'Marketplaces',
-        'pages': ['dashboard', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
+        'pages': ['dashboard', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'pagamentos', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop'],
     },
     'marketing': {
@@ -22,12 +22,12 @@ PLAN_ACCESS = {
     },
     'completo': {
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'pagamentos', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
     'growth': {  # legacy — treat as completo
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'pagamentos', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
 }
@@ -2512,6 +2512,136 @@ def mini_loja_add_all():
     db.commit()
     db.close()
     return jsonify({'ok': True, 'count': count})
+
+
+# ── Link de Pagamento ────────────────────────────────────────────────────────
+
+import string as _string_mod, random as _random_mod
+
+def _gen_pay_code(length=8):
+    return ''.join(_random_mod.choices(_string_mod.ascii_uppercase + _string_mod.digits, k=length))
+
+
+@app.route('/pagamentos')
+@login_required
+@plan_required('pagamentos')
+def pagamentos():
+    """Dashboard de Links de Pagamento."""
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    links = [dict(r) for r in db.execute(
+        'SELECT * FROM payment_links WHERE org_id=? ORDER BY created_at DESC', (org_id,)).fetchall()]
+    orders = [dict(r) for r in db.execute(
+        'SELECT * FROM payment_orders WHERE org_id=? ORDER BY created_at DESC LIMIT 20', (org_id,)).fetchall()]
+    # Produtos para o select
+    products = [dict(r) for r in db.execute(
+        'SELECT id, title, price FROM mp_products WHERE org_id=? AND status=? ORDER BY title', (org_id, 'active')).fetchall()]
+    db.close()
+
+    total_links = len(links)
+    paid_links = [l for l in links if l['status'] == 'paid']
+    pending_links = [l for l in links if l['status'] == 'pending']
+    total_revenue = sum(l['price'] for l in paid_links)
+    total_views = sum(l['views'] for l in links)
+
+    return render_template('pagamentos.html', page='pagamentos',
+                           links=links, orders=orders, products=products,
+                           total_links=total_links, paid_count=len(paid_links),
+                           pending_count=len(pending_links), total_revenue=total_revenue,
+                           total_views=total_views)
+
+
+@app.route('/api/pagamento/create', methods=['POST'])
+@login_required
+def api_create_payment():
+    org_id = session.get('org_id', 1)
+    data = request.get_json(silent=True) or {}
+    product_id = data.get('product_id')
+    product_title = data.get('product_title', '').strip()
+    price = float(data.get('price', 0))
+    description = data.get('description', '').strip()
+
+    if not product_title or price <= 0:
+        return jsonify({'ok': False, 'error': 'Titulo e preco obrigatorios'}), 400
+
+    code = _gen_pay_code()
+    db = get_db()
+    # Garantir codigo unico
+    while db.execute('SELECT id FROM payment_links WHERE code=?', (code,)).fetchone():
+        code = _gen_pay_code()
+    db.execute('''INSERT INTO payment_links (org_id,code,product_id,product_title,price,description)
+                  VALUES (?,?,?,?,?,?)''',
+               (org_id, code, product_id, product_title, price, description))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'code': code, 'url': f'/pay/{code}'})
+
+
+@app.route('/pay/<code>')
+def payment_page(code):
+    """Pagina publica de pagamento — sem login."""
+    db = get_db()
+    link = db.execute('SELECT pl.*, mlc.store_name, mlc.whatsapp, mlc.accent_color, mlc.logo_url '
+                      'FROM payment_links pl '
+                      'LEFT JOIN mini_loja_config mlc ON pl.org_id = mlc.org_id '
+                      'WHERE pl.code=? AND pl.is_active=1', (code,)).fetchone()
+    if not link:
+        db.close()
+        return render_template('mini_loja_404.html'), 404
+    link = dict(link)
+    # Incrementar views
+    db.execute('UPDATE payment_links SET views=views+1 WHERE code=?', (code,))
+    db.commit()
+    db.close()
+    return render_template('payment_public.html', link=link)
+
+
+@app.route('/api/pay/<code>/order', methods=['POST'])
+def api_submit_order(code):
+    """Submeter pedido via link de pagamento."""
+    db = get_db()
+    link = db.execute('SELECT * FROM payment_links WHERE code=? AND is_active=1', (code,)).fetchone()
+    if not link:
+        db.close()
+        return jsonify({'ok': False, 'error': 'Link invalido'}), 404
+
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    phone = data.get('phone', '').strip()
+    email = data.get('email', '').strip()
+    address = data.get('address', '').strip()
+    city = data.get('city', '').strip()
+    state = data.get('state', '').strip()
+    cep = data.get('cep', '').strip()
+    notes = data.get('notes', '').strip()
+
+    if not name or not phone:
+        db.close()
+        return jsonify({'ok': False, 'error': 'Nome e telefone obrigatorios'}), 400
+
+    db.execute('''INSERT INTO payment_orders
+        (org_id,payment_link_id,customer_name,customer_phone,customer_email,address,city,state,cep,notes,total)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+        (link['org_id'], link['id'], name, phone, email, address, city, state, cep, notes, link['price']))
+
+    # Atualizar link com dados do cliente
+    db.execute('UPDATE payment_links SET customer_name=?, customer_phone=?, customer_email=?, status=? WHERE id=?',
+               (name, phone, email, 'pending', link['id']))
+    db.commit()
+    db.close()
+
+    # Montar link WhatsApp de notificacao
+    wa_number = ''
+    try:
+        db2 = get_db()
+        mlc = db2.execute('SELECT whatsapp FROM mini_loja_config WHERE org_id=?', (link['org_id'],)).fetchone()
+        if mlc and mlc['whatsapp']:
+            wa_number = mlc['whatsapp']
+        db2.close()
+    except Exception:
+        pass
+
+    return jsonify({'ok': True, 'whatsapp': wa_number, 'product': link['product_title']})
 
 
 # ── Vulnerability Score ──────────────────────────────────────────────────────
