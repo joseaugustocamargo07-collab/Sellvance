@@ -2248,6 +2248,14 @@ def api_create_automation():
     return jsonify({'ok': True})
 
 
+# ── Apresentacao (publica) ───────────────────────────────────────────────────
+
+@app.route('/apresentacao')
+def apresentacao():
+    """Pagina de apresentacao publica do Sellvance."""
+    return render_template('apresentacao.html')
+
+
 # ── Logistica & Fulfillment ──────────────────────────────────────────────────
 
 @app.route('/logistica')
