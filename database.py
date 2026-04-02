@@ -398,6 +398,67 @@ def migrate_db():
         db.commit()
         db.close()
 
+    if 'payment_links' not in existing:
+        db = get_db()
+        db.executescript('''
+            CREATE TABLE IF NOT EXISTS payment_links (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id          INTEGER NOT NULL,
+                code            TEXT NOT NULL UNIQUE,
+                product_id      INTEGER,
+                product_title   TEXT DEFAULT '',
+                price           REAL DEFAULT 0,
+                description     TEXT DEFAULT '',
+                customer_name   TEXT DEFAULT '',
+                customer_phone  TEXT DEFAULT '',
+                customer_email  TEXT DEFAULT '',
+                status          TEXT DEFAULT 'pending',
+                payment_method  TEXT DEFAULT '',
+                is_active       INTEGER DEFAULT 1,
+                views           INTEGER DEFAULT 0,
+                created_at      TEXT DEFAULT (datetime('now')),
+                paid_at         TEXT
+            );
+            CREATE TABLE IF NOT EXISTS payment_orders (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id          INTEGER NOT NULL,
+                payment_link_id INTEGER REFERENCES payment_links(id),
+                customer_name   TEXT DEFAULT '',
+                customer_phone  TEXT DEFAULT '',
+                customer_email  TEXT DEFAULT '',
+                address         TEXT DEFAULT '',
+                city            TEXT DEFAULT '',
+                state           TEXT DEFAULT '',
+                cep             TEXT DEFAULT '',
+                notes           TEXT DEFAULT '',
+                total           REAL DEFAULT 0,
+                status          TEXT DEFAULT 'pending',
+                created_at      TEXT DEFAULT (datetime('now'))
+            );
+        ''')
+        # Seed payment links
+        import random, string
+        _oid3 = db.execute('SELECT id FROM organizations LIMIT 1').fetchone()
+        if _oid3:
+            _oid3 = _oid3[0]
+            _products = db.execute('SELECT id, title, price FROM mp_products WHERE org_id=? LIMIT 10', (_oid3,)).fetchall()
+            _pnames = ['Maria Silva', 'Joao Santos', 'Ana Costa', 'Pedro Oliveira', 'Carla Lima',
+                       'Lucas Souza', 'Julia Ferreira', 'Rafael Almeida']
+            _pstatuses = ['paid', 'paid', 'paid', 'pending', 'pending', 'expired']
+            for i, p in enumerate(_products[:6]):
+                code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+                status = _pstatuses[i % len(_pstatuses)]
+                name = _pnames[i % len(_pnames)]
+                phone = f'5511{random.randint(90000000, 99999999)}'
+                paid_at = datetime_ago(-random.randint(1, 15)) if status == 'paid' else None
+                db.execute('''INSERT INTO payment_links
+                    (org_id,code,product_id,product_title,price,customer_name,customer_phone,status,views,paid_at,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+                    (_oid3, code, p['id'], p['title'], p['price'], name, phone,
+                     status, random.randint(1, 20), paid_at, datetime_ago(-random.randint(1, 20))))
+        db.commit()
+        db.close()
+
     if 'vulnerability_scores' not in existing:
         db = get_db()
         db.executescript('''
