@@ -474,6 +474,80 @@ def migrate_db():
                 (org_id,name,subject,segment,status,sent,delivered,opened,clicked,converted,unsubscribed,revenue,scheduled_at,sent_at)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''', e)
 
+    if 'shipments' not in existing:
+        db2 = get_db()
+        db2.executescript('''
+            CREATE TABLE IF NOT EXISTS shipments (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id          INTEGER NOT NULL,
+                order_id        INTEGER,
+                tracking_code   TEXT DEFAULT '',
+                carrier         TEXT DEFAULT '',
+                status          TEXT DEFAULT 'pending',
+                origin_city     TEXT DEFAULT '',
+                dest_city       TEXT DEFAULT '',
+                dest_state      TEXT DEFAULT '',
+                customer_name   TEXT DEFAULT '',
+                shipped_at      TEXT,
+                delivered_at    TEXT,
+                estimated_delivery TEXT,
+                last_update     TEXT DEFAULT (datetime('now')),
+                created_at      TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS shipment_events (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                shipment_id INTEGER REFERENCES shipments(id),
+                status      TEXT NOT NULL,
+                location    TEXT DEFAULT '',
+                description TEXT DEFAULT '',
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
+        ''')
+        # Seed shipments
+        from datetime import datetime, timedelta
+        import random
+        _oid2 = db2.execute('SELECT id FROM organizations LIMIT 1').fetchone()
+        if _oid2:
+            _oid2 = _oid2[0]
+            _carriers = ['Correios', 'Jadlog', 'Loggi', 'Azul Cargo', 'Total Express']
+            _cities = [
+                ('Sao Paulo', 'SP'), ('Rio de Janeiro', 'RJ'), ('Belo Horizonte', 'MG'),
+                ('Curitiba', 'PR'), ('Porto Alegre', 'RS'), ('Salvador', 'BA'),
+                ('Recife', 'PE'), ('Fortaleza', 'CE'), ('Brasilia', 'DF'),
+                ('Manaus', 'AM'), ('Goiania', 'GO'), ('Campinas', 'SP'),
+            ]
+            _statuses = ['delivered', 'delivered', 'delivered', 'in_transit', 'in_transit', 'shipped', 'pending', 'returned']
+            _names = ['Maria Silva', 'Joao Santos', 'Ana Costa', 'Pedro Oliveira', 'Carla Lima',
+                      'Lucas Souza', 'Julia Ferreira', 'Rafael Almeida', 'Beatriz Rocha', 'Marcos Ribeiro',
+                      'Fernanda Gomes', 'Bruno Cardoso', 'Patricia Araujo', 'Diego Martins', 'Camila Barbosa',
+                      'Thiago Correia', 'Amanda Vieira', 'Eduardo Nascimento', 'Larissa Mendes', 'Gustavo Dias']
+            _now = datetime.now()
+            _shipments = []
+            for i in range(35):
+                status = random.choice(_statuses)
+                carrier = random.choice(_carriers)
+                dest = random.choice(_cities)
+                days_ago = random.randint(0, 30)
+                created = _now - timedelta(days=days_ago)
+                shipped = created + timedelta(hours=random.randint(2, 24)) if status != 'pending' else None
+                est_delivery = (shipped + timedelta(days=random.randint(3, 12))) if shipped else (created + timedelta(days=7))
+                delivered = (shipped + timedelta(days=random.randint(2, 8))) if status == 'delivered' else None
+                tracking = f'{carrier[:2].upper()}{random.randint(100000000, 999999999)}BR' if status != 'pending' else ''
+                name = random.choice(_names)
+                db2.execute('''INSERT INTO shipments
+                    (org_id,tracking_code,carrier,status,origin_city,dest_city,dest_state,customer_name,
+                     shipped_at,delivered_at,estimated_delivery,last_update,created_at)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+                    (_oid2, tracking, carrier, status, 'Sao Paulo',
+                     dest[0], dest[1], name,
+                     shipped.strftime('%Y-%m-%d %H:%M:%S') if shipped else None,
+                     delivered.strftime('%Y-%m-%d %H:%M:%S') if delivered else None,
+                     est_delivery.strftime('%Y-%m-%d %H:%M:%S'),
+                     _now.strftime('%Y-%m-%d %H:%M:%S'),
+                     created.strftime('%Y-%m-%d %H:%M:%S')))
+        db2.commit()
+        db2.close()
+
         # Seed Stock
         skus = [
             (org_id, 'PPL-32L-AZ', 'Cooler 32L Azul', 'mercado_livre', 48, 12, 15, 89.90, 219.90, 4.2, 'ok'),
