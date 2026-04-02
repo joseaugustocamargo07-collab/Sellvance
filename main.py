@@ -12,7 +12,7 @@ from functools import wraps
 PLAN_ACCESS = {
     'marketplaces': {
         'label': 'Marketplaces',
-        'pages': ['dashboard', 'marketplaces', 'crm', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
+        'pages': ['dashboard', 'marketplaces', 'crm', 'automacao', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop'],
     },
     'marketing': {
@@ -22,12 +22,12 @@ PLAN_ACCESS = {
     },
     'completo': {
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
     'growth': {  # legacy — treat as completo
         'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'vulnerability', 'mini-loja', 'integrations', 'settings'],
         'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
     },
 }
@@ -2175,6 +2175,78 @@ def disconnect_integration(platform):
     org_id = session.get('org_id', 1)
     do_disconnect(org_id, platform)
     return redirect(url_for('integrations'))
+
+# ── CRM Automacao ────────────────────────────────────────────────────────────
+
+@app.route('/automacao')
+@login_required
+@plan_required('crm')
+def crm_automacao():
+    """Dashboard de automacoes CRM."""
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    automations = [dict(r) for r in db.execute(
+        'SELECT * FROM crm_automations WHERE org_id=? ORDER BY executions DESC', (org_id,)).fetchall()]
+    # Totais
+    total_exec = sum(a['executions'] for a in automations)
+    total_conv = sum(a['conversions'] for a in automations)
+    total_rev = sum(a['revenue'] for a in automations)
+    active_count = sum(1 for a in automations if a['is_active'])
+    # Campanhas WA e Email recentes
+    wa_camps = [dict(r) for r in db.execute(
+        'SELECT * FROM whatsapp_campaigns WHERE org_id=? ORDER BY id DESC LIMIT 5', (org_id,)).fetchall()]
+    email_camps = [dict(r) for r in db.execute(
+        'SELECT * FROM email_campaigns WHERE org_id=? ORDER BY id DESC LIMIT 5', (org_id,)).fetchall()]
+    # Contatos por segmento
+    segments = {}
+    for row in db.execute(
+        'SELECT rfm_segment, COUNT(*) as cnt FROM contacts WHERE org_id=? GROUP BY rfm_segment', (org_id,)).fetchall():
+        segments[row['rfm_segment']] = row['cnt']
+    db.close()
+    return render_template('crm_automacao.html', page='automacao',
+                           automations=automations, wa_camps=wa_camps, email_camps=email_camps,
+                           segments=segments, total_exec=total_exec, total_conv=total_conv,
+                           total_rev=total_rev, active_count=active_count)
+
+
+@app.route('/api/automacao/toggle/<int:auto_id>', methods=['POST'])
+@login_required
+def api_toggle_automation(auto_id):
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    row = db.execute('SELECT is_active FROM crm_automations WHERE id=? AND org_id=?', (auto_id, org_id)).fetchone()
+    if not row:
+        db.close()
+        return jsonify({'ok': False}), 404
+    new_status = 0 if row['is_active'] else 1
+    db.execute('UPDATE crm_automations SET is_active=? WHERE id=? AND org_id=?', (new_status, auto_id, org_id))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'is_active': new_status})
+
+
+@app.route('/api/automacao/create', methods=['POST'])
+@login_required
+def api_create_automation():
+    org_id = session.get('org_id', 1)
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    trigger_type = data.get('trigger_type', 'segment_enter')
+    segment = data.get('segment', 'all')
+    channel = data.get('channel', 'whatsapp')
+    message = data.get('message_template', '').strip()
+    subject = data.get('subject', '').strip()
+    delay = int(data.get('delay_hours', 0))
+    if not name or not message:
+        return jsonify({'ok': False, 'error': 'Nome e mensagem obrigatorios'}), 400
+    db = get_db()
+    db.execute(
+        "INSERT INTO crm_automations (org_id,name,trigger_type,segment,channel,message_template,subject,delay_hours) VALUES (?,?,?,?,?,?,?,?)",
+        (org_id, name, trigger_type, segment, channel, message, subject, delay))
+    db.commit()
+    db.close()
+    return jsonify({'ok': True})
+
 
 # ── Mini Loja Virtual ────────────────────────────────────────────────────────
 
