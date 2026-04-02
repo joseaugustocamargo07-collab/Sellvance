@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ link.product_title }} — {{ link.store_name or 'Loja' }}</title>
+<style>
+:root{--accent:{{ link.accent_color or '#6c63ff' }};}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#f5f5f7;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.container{width:100%;max-width:480px;}
+.header{text-align:center;margin-bottom:24px;}
+.store-name{font-size:14px;color:#888;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+.product-card{background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.08);padding:28px;margin-bottom:20px;}
+.product-title{font-size:20px;font-weight:800;color:#1a1a2e;margin-bottom:8px;}
+.product-desc{font-size:14px;color:#666;line-height:1.6;margin-bottom:16px;}
+.price-tag{background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff;border-radius:12px;padding:16px;text-align:center;margin-bottom:20px;}
+.price-label{font-size:12px;opacity:.8;margin-bottom:4px;}
+.price-val{font-size:32px;font-weight:900;}
+.price-sub{font-size:12px;opacity:.7;margin-top:4px;}
+.form-section{margin-bottom:20px;}
+.sec-label{font-size:13px;font-weight:700;color:#1a1a2e;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:12px;color:#888;margin-bottom:4px;font-weight:600;}
+.field input, .field textarea, .field select{width:100%;padding:11px 14px;border:2px solid #e8e8f0;border-radius:10px;font-size:14px;color:#1a1a2e;outline:none;transition:border .2s;font-family:inherit;}
+.field input:focus, .field textarea:focus, .field select:focus{border-color:var(--accent);}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.row3{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;}
+.btn-submit{width:100%;padding:14px;background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff;font-size:16px;font-weight:700;border:none;border-radius:12px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-submit:hover{opacity:.9;transform:translateY(-1px);}
+.btn-submit:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.secure{text-align:center;margin-top:16px;font-size:12px;color:#aaa;display:flex;align-items:center;justify-content:center;gap:6px;}
+.success-box{display:none;background:#fff;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,.08);padding:40px 28px;text-align:center;}
+.success-icon{font-size:64px;margin-bottom:16px;}
+.success-title{font-size:20px;font-weight:800;color:#1a1a2e;margin-bottom:8px;}
+.success-msg{font-size:14px;color:#666;line-height:1.6;margin-bottom:20px;}
+.btn-wa{display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:#25d366;color:#fff;font-size:14px;font-weight:700;border:none;border-radius:10px;cursor:pointer;text-decoration:none;}
+.btn-wa:hover{background:#1ebe5d;}
+.powered{text-align:center;margin-top:20px;font-size:11px;color:#bbb;}
+.powered a{color:#999;text-decoration:underline;}
+{% if link.status == 'paid' %}
+.paid-badge{background:#10b981;color:#fff;padding:8px 16px;border-radius:8px;text-align:center;font-weight:700;margin-bottom:16px;}
+{% endif %}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    {% if link.logo_url %}<img src="{{ link.logo_url }}" alt="" style="height:40px;margin-bottom:8px;">{% endif %}
+    <div class="store-name">{{ link.store_name or 'Loja Virtual' }}</div>
+  </div>
+
+  {% if link.status == 'paid' %}
+  <div class="product-card">
+    <div class="paid-badge">✅ Este link ja foi utilizado</div>
+    <div class="product-title">{{ link.product_title }}</div>
+    <p style="font-size:14px;color:#666;margin-top:8px;">Este pedido ja foi realizado. Se precisar de ajuda, entre em contato com a loja.</p>
+  </div>
+  {% else %}
+
+  <div class="product-card" id="form-area">
+    <div class="product-title">{{ link.product_title }}</div>
+    {% if link.description %}
+    <div class="product-desc">{{ link.description }}</div>
+    {% endif %}
+
+    <div class="price-tag">
+      <div class="price-label">Valor total</div>
+      <div class="price-val">R$ {{ '{:,.2f}'.format(link.price).replace(',','X').replace('.',',').replace('X','.') }}</div>
+      <div class="price-sub">Pagamento via WhatsApp/Pix</div>
+    </div>
+
+    <div class="form-section">
+      <div class="sec-label">👤 Seus dados</div>
+      <div class="field">
+        <label>Nome completo *</label>
+        <input id="f-name" placeholder="Seu nome" required>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>WhatsApp *</label>
+          <input id="f-phone" placeholder="(11) 99999-9999" required>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input id="f-email" type="email" placeholder="seu@email.com">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="sec-label">📍 Endereco de entrega</div>
+      <div class="field">
+        <label>Endereco</label>
+        <input id="f-address" placeholder="Rua, numero, complemento">
+      </div>
+      <div class="row3">
+        <div class="field">
+          <label>Cidade</label>
+          <input id="f-city" placeholder="Cidade">
+        </div>
+        <div class="field">
+          <label>Estado</label>
+          <select id="f-state">
+            <option value="">UF</option>
+            <option>AC</option><option>AL</option><option>AP</option><option>AM</option><option>BA</option>
+            <option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option>
+            <option>MT</option><option>MS</option><option>MG</option><option>PA</option><option>PB</option>
+            <option>PR</option><option>PE</option><option>PI</option><option>RN</option><option>RS</option>
+            <option>RJ</option><option>RO</option><option>RR</option><option>SC</option><option>SP</option>
+            <option>SE</option><option>TO</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>CEP</label>
+          <input id="f-cep" placeholder="00000-000">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <div class="field">
+        <label>Observacoes</label>
+        <textarea id="f-notes" rows="2" placeholder="Alguma observacao sobre o pedido?"></textarea>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="btn-submit" onclick="submitOrder()">
+      🛒 Finalizar Pedido
+    </button>
+    <div class="secure">🔒 Seus dados estao protegidos</div>
+  </div>
+
+  <div class="success-box" id="success-area">
+    <div class="success-icon">🎉</div>
+    <div class="success-title">Pedido Enviado!</div>
+    <div class="success-msg">Seu pedido de <strong id="s-product"></strong> foi registrado com sucesso. Entraremos em contato para combinar o pagamento.</div>
+    <a class="btn-wa" id="s-wa-btn" href="#" target="_blank" style="display:none;">
+      📱 Falar no WhatsApp
+    </a>
+  </div>
+
+  {% endif %}
+
+  <div class="powered">Powered by <a href="https://www.sellvance.com.br" target="_blank">Sellvance</a></div>
+</div>
+
+<script>
+function submitOrder(){
+  const name = document.getElementById('f-name').value.trim();
+  const phone = document.getElementById('f-phone').value.trim();
+  if(!name || !phone){ alert('Preencha nome e WhatsApp.'); return; }
+
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  const body = {
+    name, phone,
+    email: document.getElementById('f-email').value.trim(),
+    address: document.getElementById('f-address').value.trim(),
+    city: document.getElementById('f-city').value.trim(),
+    state: document.getElementById('f-state').value,
+    cep: document.getElementById('f-cep').value.trim(),
+    notes: document.getElementById('f-notes').value.trim(),
+  };
+
+  fetch('/api/pay/{{ link.code }}/order', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if(d.ok){
+      document.getElementById('form-area').style.display = 'none';
+      document.getElementById('success-area').style.display = 'block';
+      document.getElementById('s-product').textContent = d.product || '';
+      if(d.whatsapp){
+        const waBtn = document.getElementById('s-wa-btn');
+        const msg = encodeURIComponent('Ola! Acabei de fazer um pedido de ' + (d.product||'') + ' pelo link de pagamento. Gostaria de combinar o pagamento.');
+        waBtn.href = 'https://wa.me/' + d.whatsapp + '?text=' + msg;
+        waBtn.style.display = 'inline-flex';
+      }
+    } else {
+      alert(d.error || 'Erro ao enviar pedido');
+      btn.disabled = false;
+      btn.innerHTML = '🛒 Finalizar Pedido';
+    }
+  })
+  .catch(()=>{
+    alert('Erro de conexao. Tente novamente.');
+    btn.disabled = false;
+    btn.innerHTML = '🛒 Finalizar Pedido';
+  });
+}
+</script>
+</body>
+</html>
