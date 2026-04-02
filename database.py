@@ -300,6 +300,67 @@ def migrate_db():
             );
         ''')
 
+    if 'crm_automations' not in existing:
+        db = get_db()
+        db.executescript('''
+            CREATE TABLE IF NOT EXISTS crm_automations (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id       INTEGER NOT NULL,
+                name         TEXT NOT NULL,
+                trigger_type TEXT NOT NULL,
+                segment      TEXT DEFAULT 'all',
+                channel      TEXT DEFAULT 'whatsapp',
+                message_template TEXT DEFAULT '',
+                subject      TEXT DEFAULT '',
+                is_active    INTEGER DEFAULT 1,
+                delay_hours  INTEGER DEFAULT 0,
+                executions   INTEGER DEFAULT 0,
+                conversions  INTEGER DEFAULT 0,
+                revenue      REAL DEFAULT 0,
+                last_executed TEXT,
+                created_at   TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS crm_automation_log (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                org_id        INTEGER NOT NULL,
+                automation_id INTEGER REFERENCES crm_automations(id),
+                contact_id    INTEGER,
+                channel       TEXT,
+                status        TEXT DEFAULT 'sent',
+                created_at    TEXT DEFAULT (datetime('now'))
+            );
+        ''')
+        # Seed automations
+        org_id_row = db.execute('SELECT id FROM organizations LIMIT 1').fetchone()
+        if org_id_row:
+            _oid = org_id_row[0]
+            _autos = [
+                (_oid, 'Reativacao Champions', 'segment_enter', 'champion', 'whatsapp',
+                 'Ola {nome}! Voce e um dos nossos clientes especiais. Temos uma oferta EXCLUSIVA com 15% OFF so para voce! Use o cupom: CHAMPION15. Valido ate amanha!',
+                 '', 1, 0, 156, 42, 8940.00),
+                (_oid, 'Recuperar At Risk', 'segment_enter', 'at_risk', 'whatsapp',
+                 'Ola {nome}, sentimos sua falta! Faz tempo que voce nao nos visita. Preparamos uma oferta especial com 20% OFF! Cupom: VOLTEI20',
+                 '', 1, 24, 89, 23, 3450.00),
+                (_oid, 'Boas-vindas Novo Cliente', 'new_customer', 'new', 'email',
+                 'Bem-vindo a nossa loja, {nome}! Obrigado pela primeira compra. Como agradecimento, ganhe 10% OFF na proxima compra com o cupom BEMVINDO10.',
+                 'Bem-vindo! Seu cupom de 10% OFF esta aqui', 1, 0, 234, 67, 5120.00),
+                (_oid, 'Pos-compra Avaliacao', 'post_purchase', 'all', 'whatsapp',
+                 'Ola {nome}! Recebeu seu pedido? Deixe sua avaliacao e ganhe um cupom de 5% para a proxima compra! Avalie aqui: {link_avaliacao}',
+                 '', 1, 72, 312, 89, 4230.00),
+                (_oid, 'Reengajamento 90 dias', 'segment_enter', 'lost', 'email',
+                 'Ola {nome}, sentimos muito sua falta! Ja faz mais de 90 dias desde sua ultima compra. Que tal voltar? Temos novidades incriveis e um cupom especial de 25% OFF: SAUDADE25',
+                 'Sentimos sua falta! 25% OFF para voce voltar', 1, 0, 45, 8, 890.00),
+                (_oid, 'Upsell Loyal', 'segment_enter', 'loyal', 'email',
+                 'Ola {nome}! Como cliente fiel, voce tem acesso antecipado aos nossos lancamentos. Confira as novidades antes de todo mundo!',
+                 'Acesso antecipado: novos produtos so para voce', 1, 48, 178, 34, 6780.00),
+            ]
+            for a in _autos:
+                db.execute(
+                    "INSERT INTO crm_automations (org_id,name,trigger_type,segment,channel,message_template,subject,is_active,delay_hours,executions,conversions,revenue) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    a)
+        db.commit()
+        db.close()
+
     if 'mini_loja_config' not in existing:
         db = get_db()
         db.executescript('''
