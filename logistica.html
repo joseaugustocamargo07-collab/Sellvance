@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Logistica{% endblock %}
+{% block topbar_title %}Logistica & Fulfillment{% endblock %}
+{% block content %}
+
+<!-- KPI Cards -->
+<div class="grid g4" style="margin-bottom:20px;">
+  <div class="card">
+    <div class="card-title">📦 Total Envios</div>
+    <div class="kpi-val">{{ total }}</div>
+    <div class="kpi-chg">ultimos 30 dias</div>
+  </div>
+  <div class="card">
+    <div class="card-title">✅ Entregues</div>
+    <div class="kpi-val" style="color:var(--green);">{{ delivered_count }}</div>
+    <div class="kpi-chg up">{{ '%.0f'|format(delivered_count*100/total if total else 0) }}% taxa de entrega</div>
+  </div>
+  <div class="card">
+    <div class="card-title">🚚 Em Transito</div>
+    <div class="kpi-val" style="color:var(--blue);">{{ in_transit_count + shipped_count }}</div>
+    {% if late_count > 0 %}
+    <div class="kpi-chg dn">⚠️ {{ late_count }} atrasados</div>
+    {% else %}
+    <div class="kpi-chg up">Todos no prazo</div>
+    {% endif %}
+  </div>
+  <div class="card">
+    <div class="card-title">⏱️ Tempo Medio</div>
+    <div class="kpi-val">{{ avg_delivery }}<span style="font-size:14px;color:var(--text2);"> dias</span></div>
+    <div class="kpi-chg">da postagem a entrega</div>
+  </div>
+</div>
+
+<!-- Status overview bar -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-title">📊 Visao Geral dos Status</div>
+  <div style="display:flex;gap:4px;height:32px;border-radius:8px;overflow:hidden;margin-top:8px;">
+    {% if delivered_count %}
+    <div style="flex:{{ delivered_count }};background:var(--green);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">
+      ✅ {{ delivered_count }}
+    </div>
+    {% endif %}
+    {% if in_transit_count %}
+    <div style="flex:{{ in_transit_count }};background:var(--blue);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">
+      🚚 {{ in_transit_count }}
+    </div>
+    {% endif %}
+    {% if shipped_count %}
+    <div style="flex:{{ shipped_count }};background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">
+      📮 {{ shipped_count }}
+    </div>
+    {% endif %}
+    {% if pending_count %}
+    <div style="flex:{{ pending_count }};background:var(--yellow);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">
+      ⏳ {{ pending_count }}
+    </div>
+    {% endif %}
+    {% if returned_count %}
+    <div style="flex:{{ returned_count }};background:var(--red);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;">
+      ↩️ {{ returned_count }}
+    </div>
+    {% endif %}
+  </div>
+  <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap;">
+    <span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:var(--green);"></span> Entregue ({{ delivered_count }})
+    </span>
+    <span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:var(--blue);"></span> Em Transito ({{ in_transit_count }})
+    </span>
+    <span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:var(--accent);"></span> Enviado ({{ shipped_count }})
+    </span>
+    <span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:var(--yellow);"></span> Pendente ({{ pending_count }})
+    </span>
+    <span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:4px;">
+      <span style="width:10px;height:10px;border-radius:50%;background:var(--red);"></span> Devolvido ({{ returned_count }})
+    </span>
+  </div>
+</div>
+
+<div class="grid g21" style="margin-bottom:20px;">
+  <!-- Transportadoras -->
+  <div class="card">
+    <div class="card-title">🏢 Performance por Transportadora</div>
+    <table class="tbl" style="margin-top:8px;">
+      <thead>
+        <tr>
+          <th>Transportadora</th>
+          <th>Envios</th>
+          <th>Entregues</th>
+          <th>Em Transito</th>
+          <th>Devolvidos</th>
+          <th>Tempo Medio</th>
+          <th>Taxa Entrega</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for name, stats in carrier_stats.items() %}
+        <tr>
+          <td style="font-weight:600;">
+            {% if 'Correios' in name %}📮{% elif 'Jadlog' in name %}📦{% elif 'Loggi' in name %}🛵{% elif 'Azul' in name %}✈️{% else %}🚛{% endif %}
+            {{ name }}
+          </td>
+          <td>{{ stats.total }}</td>
+          <td><span style="color:var(--green);">{{ stats.delivered }}</span></td>
+          <td><span style="color:var(--blue);">{{ stats.in_transit }}</span></td>
+          <td>
+            {% if stats.returned > 0 %}<span style="color:var(--red);">{{ stats.returned }}</span>
+            {% else %}<span style="color:var(--text2);">0</span>{% endif %}
+          </td>
+          <td>
+            {% if stats.avg_days > 0 %}
+            <span style="font-weight:600;color:{% if stats.avg_days <= 4 %}var(--green){% elif stats.avg_days <= 6 %}var(--yellow){% else %}var(--red){% endif %};">
+              {{ stats.avg_days }} dias
+            </span>
+            {% else %}<span style="color:var(--text2);">—</span>{% endif %}
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div class="prog" style="flex:1;margin:0;">
+                <div class="prog-fill" style="width:{{ stats.delivery_rate }}%;background:{% if stats.delivery_rate >= 80 %}var(--green){% elif stats.delivery_rate >= 60 %}var(--yellow){% else %}var(--red){% endif %};"></div>
+              </div>
+              <span style="font-size:12px;font-weight:600;">{{ stats.delivery_rate|int }}%</span>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Destinos por estado -->
+  <div class="card">
+    <div class="card-title">📍 Destinos por Estado</div>
+    {% for state, cnt in state_counts.items() %}
+    <div style="display:flex;align-items:center;gap:10px;padding:6px 0;{% if not loop.last %}border-bottom:1px solid var(--border);{% endif %}">
+      <div style="background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;font-weight:700;min-width:32px;text-align:center;">{{ state }}</div>
+      <div style="flex:1;">
+        <div class="prog" style="margin:0;">
+          <div class="prog-fill" style="width:{{ (cnt*100/(state_counts.values()|max)) if state_counts.values()|max else 0 }}%;background:var(--accent);"></div>
+        </div>
+      </div>
+      <span style="font-size:13px;font-weight:600;min-width:28px;text-align:right;">{{ cnt }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Alertas de atraso -->
+{% if late_shipments %}
+<div class="card" style="margin-bottom:20px;border-color:rgba(239,68,68,.3);">
+  <div class="card-title" style="color:var(--red);">⚠️ Envios Atrasados ({{ late_count }})</div>
+  <table class="tbl" style="margin-top:8px;">
+    <thead>
+      <tr><th>Rastreio</th><th>Cliente</th><th>Destino</th><th>Transportadora</th><th>Previsao</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for s in late_shipments %}
+      <tr>
+        <td style="font-family:monospace;font-size:12px;">{{ s.tracking_code }}</td>
+        <td>{{ s.customer_name }}</td>
+        <td>{{ s.dest_city }}/{{ s.dest_state }}</td>
+        <td>{{ s.carrier }}</td>
+        <td style="color:var(--red);font-weight:600;">{{ s.estimated_delivery[:10] if s.estimated_delivery else '—' }}</td>
+        <td><span class="badge b-red">Atrasado</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Tabela completa de envios -->
+<div class="card">
+  <div class="card-title" style="justify-content:space-between;">
+    <span>📋 Todos os Envios</span>
+    <div style="display:flex;gap:8px;">
+      <select id="filter-status" class="form-select" style="width:auto;padding:4px 10px;font-size:11px;" onchange="filterShipments()">
+        <option value="">Todos os status</option>
+        <option value="delivered">Entregue</option>
+        <option value="in_transit">Em Transito</option>
+        <option value="shipped">Enviado</option>
+        <option value="pending">Pendente</option>
+        <option value="returned">Devolvido</option>
+      </select>
+      <input id="filter-search" class="form-input" style="width:200px;padding:4px 10px;font-size:11px;" placeholder="Buscar rastreio ou cliente..." oninput="filterShipments()">
+    </div>
+  </div>
+  <table class="tbl" id="shipments-table" style="margin-top:10px;">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Rastreio</th>
+        <th>Cliente</th>
+        <th>Destino</th>
+        <th>Transportadora</th>
+        <th>Enviado em</th>
+        <th>Previsao</th>
+        <th>Entregue em</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in shipments %}
+      <tr data-status="{{ s.status }}" data-search="{{ s.tracking_code|lower }} {{ s.customer_name|lower }}">
+        <td>
+          {% if s.status=='delivered' %}<span class="badge b-green">✅ Entregue</span>
+          {% elif s.status=='in_transit' %}<span class="badge b-blue">🚚 Em Transito</span>
+          {% elif s.status=='shipped' %}<span class="badge b-purple">📮 Enviado</span>
+          {% elif s.status=='pending' %}<span class="badge b-yellow">⏳ Pendente</span>
+          {% elif s.status=='returned' %}<span class="badge b-red">↩️ Devolvido</span>
+          {% else %}<span class="badge">{{ s.status }}</span>{% endif %}
+        </td>
+        <td style="font-family:monospace;font-size:12px;">{{ s.tracking_code or '—' }}</td>
+        <td style="font-weight:600;">{{ s.customer_name }}</td>
+        <td>{{ s.dest_city }}/{{ s.dest_state }}</td>
+        <td>{{ s.carrier or '—' }}</td>
+        <td style="font-size:12px;color:var(--text2);">{{ s.shipped_at[:10] if s.shipped_at else '—' }}</td>
+        <td style="font-size:12px;">{{ s.estimated_delivery[:10] if s.estimated_delivery else '—' }}</td>
+        <td style="font-size:12px;{% if s.delivered_at %}color:var(--green);font-weight:600;{% else %}color:var(--text2);{% endif %}">
+          {{ s.delivered_at[:10] if s.delivered_at else '—' }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function filterShipments(){
+  const status = document.getElementById('filter-status').value;
+  const search = document.getElementById('filter-search').value.toLowerCase();
+  document.querySelectorAll('#shipments-table tbody tr').forEach(tr => {
+    const matchStatus = !status || tr.dataset.status === status;
+    const matchSearch = !search || tr.dataset.search.includes(search);
+    tr.style.display = (matchStatus && matchSearch) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}
