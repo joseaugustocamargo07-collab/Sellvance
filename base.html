@@ -160,6 +160,11 @@ canvas{max-height:220px!important;}
       <span class="nav-icon">🛍️</span> Mini Loja
     </a>
     {% endif %}
+    {% if 'pagamentos' in plan_pages %}
+    <a href="/pagamentos" class="nav-item {% if page=='pagamentos' %}active{% endif %}">
+      <span class="nav-icon">💳</span> Pagamentos
+    </a>
+    {% endif %}
     {% if 'crm' in plan_pages %}
     <div class="nav-section">CRM</div>
     <a href="/crm" class="nav-item {% if page=='crm' %}active{% endif %}">
