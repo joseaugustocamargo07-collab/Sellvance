@@ -413,7 +413,7 @@ def _marketplaces_inner():
             elif _mp == 'mercado_livre':
                 from sync_mercadolivre import sync_all as _sf
             elif _mp == 'shopee':
-                from sync_shopee import sync_all as _sf
+                from shopee_api import sync_all as _sf
             else:
                 return
             run_sync_if_needed(_oid, _mp, _sf, max_age=60)
@@ -1307,11 +1307,15 @@ def force_sync():
                 return jsonify({'status': 'error', 'records_synced': 0, 'platform': mp,
                                 'error': str(e), 'trace': _tb_amz.format_exc()[:500], 'debug': debug_info})
         if mp == 'shopee':
-            from sync_shopee import sync_all as shopee_sync_all
-            from sync_base import log_sync
-            records = shopee_sync_all(org_id)
-            log_sync(org_id, mp, 'full', 'success', records_synced=records or 0)
-            return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp})
+            from shopee_api import sync_all as shopee_sync_all
+            result = shopee_sync_all(org_id)
+            records = result.get('products', 0) + result.get('orders', 0)
+            try:
+                from sync_base import log_sync
+                log_sync(org_id, mp, 'full', 'success', records_synced=records)
+            except Exception:
+                pass
+            return jsonify({'status': 'ok', 'records_synced': records, 'platform': mp, 'detail': result})
         return jsonify({'status': 'error', 'error': f'Unknown platform: {mp}'})
     except Exception as e:
         import traceback
@@ -1444,6 +1448,107 @@ def simulate_amazon_data():
                         'message': f'Simulacao Amazon: {prod_count} produtos, {order_count} pedidos (8 meses)'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e), 'trace': _tb.format_exc()[:800]})
+
+
+# ── Shopee OAuth ─────────────────────────────────────────────────────────────
+
+@app.route('/api/shopee/auth')
+@login_required
+def shopee_auth():
+    """Redirect seller to Shopee authorization page."""
+    from shopee_api import get_auth_url
+    url = get_auth_url()
+    return redirect(url)
+
+
+@app.route('/api/shopee/callback')
+def shopee_callback():
+    """Handle OAuth callback from Shopee."""
+    code = request.args.get('code', '')
+    shop_id = request.args.get('shop_id', '')
+
+    if not code or not shop_id:
+        return jsonify({'ok': False, 'error': 'Missing code or shop_id',
+                        'params': dict(request.args)}), 400
+
+    from shopee_api import get_access_token, get_shop_info
+    # Exchange code for access token
+    token_resp = get_access_token(code, shop_id)
+    if 'error' in token_resp and not token_resp.get('access_token'):
+        return jsonify({'ok': False, 'error': 'Token exchange failed', 'details': token_resp}), 400
+
+    access_token = token_resp.get('access_token', '')
+    refresh_token = token_resp.get('refresh_token', '')
+    expire_in = token_resp.get('expire_in', 14400)
+    import time as _time_mod
+    expire_ts = int(_time_mod.time()) + expire_in
+
+    # Get shop info
+    shop_info = get_shop_info(access_token, int(shop_id))
+    shop_name = ''
+    if shop_info.get('response'):
+        shop_name = shop_info['response'].get('shop_name', f'Shop {shop_id}')
+
+    # Save to DB
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    creds = {
+        'shop_id': int(shop_id),
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'expire_in_ts': expire_ts,
+    }
+    existing = db.execute("SELECT id FROM api_integrations WHERE org_id=? AND platform='shopee'",
+                          (org_id,)).fetchone()
+    if existing:
+        db.execute("""UPDATE api_integrations SET status='connected', account_id=?, account_name=?,
+                      credentials_json=?, last_sync=datetime('now') WHERE id=?""",
+                   (str(shop_id), shop_name, json.dumps(creds), existing['id']))
+    else:
+        db.execute("""INSERT INTO api_integrations (org_id, platform, status, account_id, account_name, credentials_json)
+                      VALUES (?,?,?,?,?,?)""",
+                   (org_id, 'shopee', 'connected', str(shop_id), shop_name, json.dumps(creds)))
+    db.commit()
+    db.close()
+
+    return redirect('/integrations?shopee=connected')
+
+
+@app.route('/api/shopee/sync')
+@login_required
+def shopee_sync():
+    """Trigger manual sync of Shopee data."""
+    org_id = session.get('org_id', 1)
+    try:
+        from shopee_api import sync_all
+        result = sync_all(org_id)
+        return jsonify({'ok': True, **result})
+    except Exception as e:
+        import traceback
+        return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()[:500]})
+
+
+@app.route('/api/shopee/debug')
+@login_required
+def shopee_debug():
+    """Debug Shopee connection status."""
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    row = db.execute("SELECT * FROM api_integrations WHERE org_id=? AND platform='shopee'", (org_id,)).fetchone()
+    db.close()
+    if not row:
+        return jsonify({'status': 'not_connected'})
+    info = dict(row)
+    creds = json.loads(info.get('credentials_json', '{}'))
+    # Don't expose full tokens
+    safe_creds = {
+        'shop_id': creds.get('shop_id'),
+        'has_access_token': bool(creds.get('access_token')),
+        'has_refresh_token': bool(creds.get('refresh_token')),
+        'expire_ts': creds.get('expire_in_ts'),
+    }
+    info['credentials_json'] = safe_creds
+    return jsonify(info)
 
 
 @app.route('/api/simulate/shopee')
