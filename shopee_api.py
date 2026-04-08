@@ -15,8 +15,13 @@ PARTNER_KEY = os.environ.get('SHOPEE_PARTNER_KEY', 'shpk4b6547536367644165475949
 # Redirect URL for OAuth — Railway domain
 REDIRECT_URL = os.environ.get('SHOPEE_REDIRECT_URL', 'https://www.sellvance.com.br/api/shopee/callback')
 
-# Shopee API host (global — works for Brazil)
-API_HOST = 'https://partner.shopeemobile.com'
+# Shopee API host
+# For developing/test apps, use sandbox. For live apps, use production.
+_SHOPEE_ENV = os.environ.get('SHOPEE_ENV', 'sandbox')  # 'sandbox' or 'production'
+if _SHOPEE_ENV == 'sandbox':
+    API_HOST = 'https://partner.test-stable.shopeemobile.com'
+else:
+    API_HOST = 'https://partner.shopeemobile.com'
 
 
 # ── Signature helpers ────────────────────────────────────────────────────────
