@@ -10,8 +10,8 @@ import urllib.parse
 import os
 
 # ── Credentials ──────────────────────────────────────────────────────────────
-PARTNER_ID = int(os.environ.get('SHOPEE_PARTNER_ID', '1231479'))
-PARTNER_KEY = os.environ.get('SHOPEE_PARTNER_KEY', 'shpk5767646b4850554b7172744b6c566c786c636143575856427257706f7578')
+PARTNER_ID = int(os.environ.get('SHOPEE_PARTNER_ID', '1231483'))
+PARTNER_KEY = os.environ.get('SHOPEE_PARTNER_KEY', 'shpk4b6547536367644165475949961756c6f7749457254747468434a51504c53')
 # Redirect URL for OAuth — Railway domain
 REDIRECT_URL = os.environ.get('SHOPEE_REDIRECT_URL', 'https://www.sellvance.com.br/api/shopee/callback')
 
