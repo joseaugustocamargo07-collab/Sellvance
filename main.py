@@ -1461,6 +1461,56 @@ def shopee_auth():
     return redirect(url)
 
 
+@app.route('/api/shopee/auth-debug')
+@login_required
+def shopee_auth_debug():
+    """Debug: show auth URL components to diagnose sign issues."""
+    import hmac as _hmac, hashlib as _hashlib, time as _time
+    from shopee_api import PARTNER_ID, PARTNER_KEY, API_HOST, REDIRECT_URL
+    import urllib.parse as _up
+
+    path = '/api/v2/shop/auth_partner'
+    ts = int(_time.time())
+    redirect_url = REDIRECT_URL
+
+    # Method 1: full key as UTF-8 string (standard)
+    base1 = f'{PARTNER_ID}{path}{ts}'
+    sign1 = _hmac.new(PARTNER_KEY.encode('utf-8'), base1.encode('utf-8'), _hashlib.sha256).hexdigest()
+
+    # Method 2: key without shpk prefix as UTF-8
+    key_no_prefix = PARTNER_KEY[4:] if PARTNER_KEY.startswith('shpk') else PARTNER_KEY
+    sign2 = _hmac.new(key_no_prefix.encode('utf-8'), base1.encode('utf-8'), _hashlib.sha256).hexdigest()
+
+    # Method 3: hex-decoded key bytes (after removing shpk)
+    try:
+        key_bytes = bytes.fromhex(key_no_prefix)
+        sign3 = _hmac.new(key_bytes, base1.encode('utf-8'), _hashlib.sha256).hexdigest()
+    except Exception as e:
+        sign3 = f'error: {e}'
+
+    # Build URLs for each method
+    def build_url(sign):
+        params = {'partner_id': PARTNER_ID, 'timestamp': ts, 'sign': sign, 'redirect': redirect_url}
+        return f'{API_HOST}{path}?{_up.urlencode(params)}'
+
+    return jsonify({
+        'api_host': API_HOST,
+        'partner_id': PARTNER_ID,
+        'key_length': len(PARTNER_KEY),
+        'key_prefix': PARTNER_KEY[:8],
+        'path': path,
+        'timestamp': ts,
+        'base_string': base1,
+        'redirect': redirect_url,
+        'sign_method_1_full_key': sign1,
+        'sign_method_2_no_prefix': sign2,
+        'sign_method_3_hex_decoded': sign3,
+        'url_method_1': build_url(sign1),
+        'url_method_2': build_url(sign2),
+        'url_method_3': build_url(sign3),
+    })
+
+
 @app.route('/api/shopee/callback')
 def shopee_callback():
     """Handle OAuth callback from Shopee."""
