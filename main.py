@@ -1493,22 +1493,62 @@ def shopee_auth_debug():
         params = {'partner_id': PARTNER_ID, 'timestamp': ts, 'sign': sign, 'redirect': redirect_url}
         return f'{API_HOST}{path}?{_up.urlencode(params)}'
 
-    return jsonify({
-        'api_host': API_HOST,
-        'partner_id': PARTNER_ID,
-        'key_length': len(PARTNER_KEY),
-        'key_prefix': PARTNER_KEY[:8],
-        'path': path,
-        'timestamp': ts,
-        'base_string': base1,
-        'redirect': redirect_url,
-        'sign_method_1_full_key': sign1,
-        'sign_method_2_no_prefix': sign2,
-        'sign_method_3_hex_decoded': sign3,
-        'url_method_1': build_url(sign1),
-        'url_method_2': build_url(sign2),
-        'url_method_3': build_url(sign3),
-    })
+    url1 = build_url(sign1)
+    url2 = build_url(sign2)
+    url3 = build_url(sign3)
+
+    html = f'''<!DOCTYPE html>
+<html><head><title>Shopee Auth Debug</title>
+<style>
+body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; background: #f5f5f5; }}
+h1 {{ color: #ee4d2d; }}
+.card {{ background: white; border-radius: 12px; padding: 20px; margin: 20px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+.card h2 {{ margin-top: 0; }}
+a.btn {{ display: inline-block; padding: 12px 24px; background: #ee4d2d; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 8px 0; }}
+a.btn:hover {{ background: #d4431f; }}
+code {{ background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 13px; word-break: break-all; }}
+.info {{ color: #666; font-size: 14px; }}
+.success {{ color: green; }} .error {{ color: red; }}
+</style></head><body>
+<h1>🔧 Shopee Auth Debug</h1>
+<div class="card">
+  <h2>Configuracao</h2>
+  <p><b>API Host:</b> <code>{API_HOST}</code></p>
+  <p><b>Partner ID:</b> <code>{PARTNER_ID}</code></p>
+  <p><b>Key Length:</b> <code>{len(PARTNER_KEY)}</code></p>
+  <p><b>Key Prefix:</b> <code>{PARTNER_KEY[:8]}...</code></p>
+  <p><b>Timestamp:</b> <code>{ts}</code></p>
+  <p><b>Redirect:</b> <code>{redirect_url}</code></p>
+</div>
+
+<div class="card">
+  <h2>Metodo 1 — Chave completa como UTF-8</h2>
+  <p class="info">HMAC-SHA256 com a chave inteira (incluindo prefixo shpk)</p>
+  <p><b>Sign:</b> <code>{sign1}</code></p>
+  <a class="btn" href="{url1}" target="_blank">🔗 Testar Metodo 1</a>
+</div>
+
+<div class="card">
+  <h2>Metodo 2 — Chave sem prefixo shpk (UTF-8)</h2>
+  <p class="info">Remove os 4 primeiros caracteres "shpk" e usa o resto como string</p>
+  <p><b>Sign:</b> <code>{sign2}</code></p>
+  <a class="btn" href="{url2}" target="_blank">🔗 Testar Metodo 2</a>
+</div>
+
+<div class="card">
+  <h2>Metodo 3 — Chave hex-decoded (bytes)</h2>
+  <p class="info">Remove "shpk", interpreta o resto como hex e converte em bytes</p>
+  <p><b>Sign:</b> <code>{sign3}</code></p>
+  <a class="btn" href="{url3}" target="_blank">🔗 Testar Metodo 3</a>
+</div>
+
+<div class="card">
+  <h2>📋 Instrucoes</h2>
+  <p>Clique em cada botao acima. Se abrir a <b>pagina de login da Shopee</b>, o metodo esta correto ✅</p>
+  <p>Se aparecer <b>"Wrong sign"</b>, o metodo esta errado ❌</p>
+</div>
+</body></html>'''
+    return html, 200, {'Content-Type': 'text/html'}
 
 
 @app.route('/api/shopee/callback')
