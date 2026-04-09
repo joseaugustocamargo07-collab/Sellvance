@@ -1466,36 +1466,57 @@ def shopee_auth():
 def shopee_auth_debug():
     """Debug: show auth URL components to diagnose sign issues."""
     import hmac as _hmac, hashlib as _hashlib, time as _time
-    from shopee_api import PARTNER_ID, PARTNER_KEY, API_HOST, REDIRECT_URL
+    from shopee_api import PARTNER_ID, PARTNER_KEY, REDIRECT_URL
     import urllib.parse as _up
 
     path = '/api/v2/shop/auth_partner'
     ts = int(_time.time())
     redirect_url = REDIRECT_URL
 
-    # Method 1: full key as UTF-8 string (standard)
-    base1 = f'{PARTNER_ID}{path}{ts}'
-    sign1 = _hmac.new(PARTNER_KEY.encode('utf-8'), base1.encode('utf-8'), _hashlib.sha256).hexdigest()
+    SANDBOX_HOST = 'https://partner.test-stable.shopeemobile.com'
+    PROD_HOST = 'https://partner.shopeemobile.com'
 
-    # Method 2: key without shpk prefix as UTF-8
+    # Key variants
+    key_full = PARTNER_KEY
     key_no_prefix = PARTNER_KEY[4:] if PARTNER_KEY.startswith('shpk') else PARTNER_KEY
-    sign2 = _hmac.new(key_no_prefix.encode('utf-8'), base1.encode('utf-8'), _hashlib.sha256).hexdigest()
-
-    # Method 3: hex-decoded key bytes (after removing shpk)
     try:
-        key_bytes = bytes.fromhex(key_no_prefix)
-        sign3 = _hmac.new(key_bytes, base1.encode('utf-8'), _hashlib.sha256).hexdigest()
-    except Exception as e:
-        sign3 = f'error: {e}'
+        key_hex_bytes = bytes.fromhex(key_no_prefix)
+    except Exception:
+        key_hex_bytes = None
 
-    # Build URLs for each method
-    def build_url(sign):
+    base_str = f'{PARTNER_ID}{path}{ts}'
+
+    def compute_sign(key_bytes):
+        return _hmac.new(key_bytes, base_str.encode('utf-8'), _hashlib.sha256).hexdigest()
+
+    sign_full = compute_sign(key_full.encode('utf-8'))
+    sign_nopfx = compute_sign(key_no_prefix.encode('utf-8'))
+    sign_hex = compute_sign(key_hex_bytes) if key_hex_bytes else 'error'
+
+    def build_url(host, sign):
         params = {'partner_id': PARTNER_ID, 'timestamp': ts, 'sign': sign, 'redirect': redirect_url}
-        return f'{API_HOST}{path}?{_up.urlencode(params)}'
+        return f'{host}{path}?{_up.urlencode(params)}'
 
-    url1 = build_url(sign1)
-    url2 = build_url(sign2)
-    url3 = build_url(sign3)
+    tests = [
+        ('1', 'PRODUCAO + Chave completa (shpk...)', 'Host de producao com chave inteira como UTF-8', PROD_HOST, sign_full, '#28a745'),
+        ('2', 'PRODUCAO + Sem prefixo shpk', 'Host de producao, remove shpk, usa resto como UTF-8', PROD_HOST, sign_nopfx, '#17a2b8'),
+        ('3', 'PRODUCAO + Hex-decoded', 'Host de producao, remove shpk, hex-decode em bytes', PROD_HOST, sign_hex, '#6f42c1'),
+        ('4', 'SANDBOX + Chave completa (shpk...)', 'Host sandbox com chave inteira como UTF-8', SANDBOX_HOST, sign_full, '#ee4d2d'),
+        ('5', 'SANDBOX + Sem prefixo shpk', 'Host sandbox, remove shpk, usa resto como UTF-8', SANDBOX_HOST, sign_nopfx, '#fd7e14'),
+        ('6', 'SANDBOX + Hex-decoded', 'Host sandbox, remove shpk, hex-decode em bytes', SANDBOX_HOST, sign_hex, '#e83e8c'),
+    ]
+
+    cards_html = ''
+    for num, title, desc, host, sign, color in tests:
+        url = build_url(host, sign)
+        cards_html += f'''
+<div class="card">
+  <h2 style="color:{color}">Teste {num} — {title}</h2>
+  <p class="info">{desc}</p>
+  <p><b>Host:</b> <code>{host}</code></p>
+  <p><b>Sign:</b> <code>{sign[:20]}...</code></p>
+  <a class="btn" style="background:{color}" href="{url}" target="_blank">🔗 Testar #{num}</a>
+</div>'''
 
     html = f'''<!DOCTYPE html>
 <html><head><title>Shopee Auth Debug</title>
@@ -1504,48 +1525,35 @@ body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; pad
 h1 {{ color: #ee4d2d; }}
 .card {{ background: white; border-radius: 12px; padding: 20px; margin: 20px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
 .card h2 {{ margin-top: 0; }}
-a.btn {{ display: inline-block; padding: 12px 24px; background: #ee4d2d; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 8px 0; }}
-a.btn:hover {{ background: #d4431f; }}
+a.btn {{ display: inline-block; padding: 12px 24px; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 8px 0; font-size: 16px; }}
+a.btn:hover {{ opacity: 0.85; }}
 code {{ background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 13px; word-break: break-all; }}
 .info {{ color: #666; font-size: 14px; }}
-.success {{ color: green; }} .error {{ color: red; }}
+.highlight {{ background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 10px 0; border-radius: 4px; }}
 </style></head><body>
-<h1>🔧 Shopee Auth Debug</h1>
+<h1>🔧 Shopee Auth Debug — 6 Testes</h1>
+
 <div class="card">
   <h2>Configuracao</h2>
-  <p><b>API Host:</b> <code>{API_HOST}</code></p>
   <p><b>Partner ID:</b> <code>{PARTNER_ID}</code></p>
   <p><b>Key Length:</b> <code>{len(PARTNER_KEY)}</code></p>
   <p><b>Key Prefix:</b> <code>{PARTNER_KEY[:8]}...</code></p>
   <p><b>Timestamp:</b> <code>{ts}</code></p>
   <p><b>Redirect:</b> <code>{redirect_url}</code></p>
+  <p><b>Base String:</b> <code>{base_str[:40]}...</code></p>
+  <div class="highlight">
+    <b>⚠️ Problema provavel:</b> Suas credenciais sao de <b>producao</b>, mas estavamos usando o host de <b>sandbox</b>.
+    Os testes 1-3 usam o host de producao. Se um deles funcionar, confirma o diagnostico!
+  </div>
 </div>
 
-<div class="card">
-  <h2>Metodo 1 — Chave completa como UTF-8</h2>
-  <p class="info">HMAC-SHA256 com a chave inteira (incluindo prefixo shpk)</p>
-  <p><b>Sign:</b> <code>{sign1}</code></p>
-  <a class="btn" href="{url1}" target="_blank">🔗 Testar Metodo 1</a>
-</div>
-
-<div class="card">
-  <h2>Metodo 2 — Chave sem prefixo shpk (UTF-8)</h2>
-  <p class="info">Remove os 4 primeiros caracteres "shpk" e usa o resto como string</p>
-  <p><b>Sign:</b> <code>{sign2}</code></p>
-  <a class="btn" href="{url2}" target="_blank">🔗 Testar Metodo 2</a>
-</div>
-
-<div class="card">
-  <h2>Metodo 3 — Chave hex-decoded (bytes)</h2>
-  <p class="info">Remove "shpk", interpreta o resto como hex e converte em bytes</p>
-  <p><b>Sign:</b> <code>{sign3}</code></p>
-  <a class="btn" href="{url3}" target="_blank">🔗 Testar Metodo 3</a>
-</div>
+{cards_html}
 
 <div class="card">
   <h2>📋 Instrucoes</h2>
-  <p>Clique em cada botao acima. Se abrir a <b>pagina de login da Shopee</b>, o metodo esta correto ✅</p>
-  <p>Se aparecer <b>"Wrong sign"</b>, o metodo esta errado ❌</p>
+  <p>Clique em cada botao. Se abrir a <b>pagina de login da Shopee</b> = ✅ correto</p>
+  <p>Se aparecer <b>"Wrong sign"</b> ou erro = ❌ errado</p>
+  <p><b>Comece pelo Teste 1</b> (mais provavel de funcionar).</p>
 </div>
 </body></html>'''
     return html, 200, {'Content-Type': 'text/html'}
