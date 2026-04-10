@@ -1559,6 +1559,126 @@ code {{ background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 13px;
     return html, 200, {'Content-Type': 'text/html'}
 
 
+@app.route('/api/shopee/server-test')
+@login_required
+def shopee_server_test():
+    """Server-side test: make direct HTTP requests to Shopee API to debug sign issues."""
+    import hmac as _hmac, hashlib as _hashlib, time as _time
+    from shopee_api import PARTNER_ID, PARTNER_KEY, REDIRECT_URL
+    import urllib.parse as _up
+    import urllib.request as _ur
+    import urllib.error as _ue
+
+    SANDBOX = 'https://partner.test-stable.shopeemobile.com'
+    path = '/api/v2/shop/auth_partner'
+    ts = int(_time.time())
+
+    results = []
+
+    # Test multiple approaches
+    key_full = PARTNER_KEY
+    key_nopfx = PARTNER_KEY[4:] if PARTNER_KEY.startswith('shpk') else PARTNER_KEY
+    try:
+        key_hex = bytes.fromhex(key_nopfx)
+    except Exception:
+        key_hex = None
+
+    # Also try: what if base_string needs redirect?
+    base_normal = f'{PARTNER_ID}{path}{ts}'
+    base_with_redirect = f'{PARTNER_ID}{path}{ts}{REDIRECT_URL}'
+
+    test_cases = [
+        ('Chave completa + base normal', key_full.encode(), base_normal),
+        ('Sem shpk + base normal', key_nopfx.encode(), base_normal),
+        ('Hex-decoded + base normal', key_hex, base_normal),
+        ('Chave completa + base com redirect', key_full.encode(), base_with_redirect),
+        ('Sem shpk + base com redirect', key_nopfx.encode(), base_with_redirect),
+        ('Hex-decoded + base com redirect', key_hex, base_with_redirect),
+    ]
+
+    for label, key_bytes, base_str in test_cases:
+        if key_bytes is None:
+            results.append({'test': label, 'error': 'key_bytes is None'})
+            continue
+        sign = _hmac.new(key_bytes, base_str.encode(), _hashlib.sha256).hexdigest()
+        params = {'partner_id': PARTNER_ID, 'timestamp': ts, 'sign': sign, 'redirect': REDIRECT_URL}
+        url = f'{SANDBOX}{path}?{_up.urlencode(params)}'
+        try:
+            req = _ur.Request(url, headers={'User-Agent': 'Sellvance/1.0'})
+            with _ur.urlopen(req, timeout=10) as resp:
+                body = resp.read().decode()
+                results.append({
+                    'test': label,
+                    'status': resp.status,
+                    'base_string': base_str[:60] + '...',
+                    'sign': sign[:16] + '...',
+                    'response': body[:500],
+                    'result': '✅ SUCCESS' if resp.status == 200 else f'⚠️ {resp.status}'
+                })
+        except _ue.HTTPError as e:
+            body = e.read().decode() if hasattr(e, 'read') else str(e)
+            results.append({
+                'test': label,
+                'status': e.code,
+                'base_string': base_str[:60] + '...',
+                'sign': sign[:16] + '...',
+                'response': body[:500],
+                'result': f'❌ HTTP {e.code}'
+            })
+        except Exception as e:
+            results.append({
+                'test': label,
+                'error': str(e)[:200],
+                'base_string': base_str[:60] + '...',
+                'sign': sign[:16] + '...',
+                'result': f'❌ {type(e).__name__}'
+            })
+
+    # Build HTML
+    cards = ''
+    for i, r in enumerate(results, 1):
+        color = '#28a745' if '✅' in r.get('result', '') else '#dc3545'
+        resp_text = r.get('response', r.get('error', 'N/A'))
+        cards += f'''
+<div class="card">
+  <h3 style="color:{color}">Teste {i}: {r['test']}</h3>
+  <p><b>Resultado:</b> {r.get('result','?')}</p>
+  <p><b>Base string:</b> <code>{r.get('base_string','?')}</code></p>
+  <p><b>Sign:</b> <code>{r.get('sign','?')}</code></p>
+  <p><b>Resposta Shopee:</b></p>
+  <pre style="background:#f8f9fa;padding:10px;border-radius:6px;overflow-x:auto;font-size:12px">{resp_text}</pre>
+</div>'''
+
+    # Also show server time info
+    import datetime as _dt
+    server_time = _dt.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+
+    html = f'''<!DOCTYPE html>
+<html><head><title>Shopee Server Test</title>
+<style>
+body {{ font-family: Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; background: #f5f5f5; }}
+h1 {{ color: #ee4d2d; }}
+.card {{ background: white; border-radius: 12px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+code {{ background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 12px; word-break: break-all; }}
+pre {{ white-space: pre-wrap; word-break: break-all; }}
+.info {{ background: #e8f4fd; padding: 15px; border-radius: 8px; margin: 15px 0; }}
+</style></head><body>
+<h1>🔬 Shopee Server-Side Test</h1>
+<div class="info">
+  <p><b>Server Time:</b> {server_time}</p>
+  <p><b>Timestamp usado:</b> {ts}</p>
+  <p><b>Partner ID:</b> {PARTNER_ID}</p>
+  <p><b>Key (primeiros 12):</b> {PARTNER_KEY[:12]}...</p>
+  <p><b>Key length:</b> {len(PARTNER_KEY)}</p>
+  <p><b>Redirect:</b> {REDIRECT_URL}</p>
+  <p><b>Host:</b> {SANDBOX}</p>
+  <p>Estes testes sao feitos <b>direto do servidor Railway</b>, nao pelo browser.</p>
+</div>
+{cards}
+</body></html>'''
+    return html, 200, {'Content-Type': 'text/html'}
+
+
 @app.route('/api/shopee/callback')
 def shopee_callback():
     """Handle OAuth callback from Shopee."""
