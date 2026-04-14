@@ -1461,6 +1461,68 @@ def shopee_auth():
     return redirect(url)
 
 
+@app.route('/api/server-ip')
+def server_ip():
+    """Return the public outbound IP of this server (for Shopee IP whitelist)."""
+    import urllib.request as _ur
+    services = [
+        'https://api.ipify.org',
+        'https://icanhazip.com',
+        'https://ifconfig.me/ip',
+        'https://checkip.amazonaws.com',
+    ]
+    ips = {}
+    for svc in services:
+        try:
+            req = _ur.Request(svc, headers={'User-Agent': 'curl/7.68.0'})
+            with _ur.urlopen(req, timeout=5) as r:
+                ips[svc] = r.read().decode().strip()
+        except Exception as e:
+            ips[svc] = f'error: {e}'
+
+    html = f'''<!DOCTYPE html>
+<html><head><title>Server Outbound IP</title>
+<style>
+body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f5f5f5; }}
+h1 {{ color: #ee4d2d; }}
+.card {{ background: white; border-radius: 12px; padding: 24px; margin: 20px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+.big-ip {{ font-size: 32px; font-weight: 900; color: #ee4d2d; font-family: 'Courier New', monospace; text-align: center; padding: 20px; background: #fff3cd; border-radius: 8px; margin: 15px 0; }}
+code {{ background: #eee; padding: 4px 8px; border-radius: 4px; }}
+table {{ width: 100%; border-collapse: collapse; }}
+td {{ padding: 8px; border-bottom: 1px solid #eee; }}
+</style></head><body>
+<h1>🌐 Railway Server Outbound IP</h1>
+<div class="card">
+  <p>Este e o IP publico que o Railway usa para fazer chamadas para outros servicos (como a API da Shopee).</p>
+  <p><b>Use este IP no campo "APP IP Address Management" do Shopee Open Platform.</b></p>
+</div>
+<div class="card">
+  <h2>IPs detectados:</h2>
+  <table>'''
+    for svc, ip in ips.items():
+        html += f'<tr><td><code>{svc}</code></td><td><b>{ip}</b></td></tr>'
+
+    # Pick the most common IP
+    valid_ips = [v for v in ips.values() if not v.startswith('error')]
+    if valid_ips:
+        most_common = max(set(valid_ips), key=valid_ips.count)
+        html += f'''</table>
+</div>
+<div class="card">
+  <h2>✅ IP para usar no whitelist:</h2>
+  <div class="big-ip">{most_common}</div>
+  <p style="color:#856404;background:#fff3cd;padding:12px;border-radius:6px;">
+    ⚠️ <b>Atencao:</b> O Railway usa IPs dinamicos que podem mudar ao reiniciar ou fazer deploy.
+    Se a API da Shopee comecar a falhar no futuro, volte aqui para pegar o novo IP e atualizar no whitelist.
+  </p>
+</div>'''
+    else:
+        html += '</table></div><div class="card"><p>Nao foi possivel detectar o IP. Tente novamente.</p></div>'
+
+    html += '</body></html>'
+    return html, 200, {'Content-Type': 'text/html'}
+
+
 @app.route('/api/shopee/auth-debug')
 @login_required
 def shopee_auth_debug():
