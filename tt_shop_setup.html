@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}TikTok Shop{% endblock %}
+{% block content %}
+<style>
+.tt{max-width:760px;margin:20px auto;}
+.tt-hero{background:linear-gradient(135deg,#ff0050,#000);border-radius:16px;padding:32px;margin-bottom:24px;color:#fff;}
+.tt-hero h1{font-size:26px;font-weight:900;margin-bottom:4px;}
+.tt-hero p{font-size:14px;opacity:.85;}
+.tt-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px;margin-bottom:20px;}
+.tt-card h2{font-size:18px;font-weight:800;margin-bottom:8px;}
+.tt-card p{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px;}
+.tt-btn{background:linear-gradient(135deg,#ff0050,#c4024a);color:#fff;padding:14px 28px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:14px;text-decoration:none;display:inline-block;}
+.tt-btn:hover{transform:translateY(-1px);}
+.tt-btn-secondary{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border);padding:12px 22px;border-radius:10px;font-weight:600;cursor:pointer;margin-left:8px;font-size:13px;text-decoration:none;display:inline-block;}
+.tt-status{padding:14px 18px;border-radius:10px;margin-bottom:16px;font-size:13px;font-weight:600;}
+.tt-status.connected{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981;}
+.tt-status.error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;}
+.tt-status.pending{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b;}
+.tt-status.nokey{background:rgba(108,99,255,.08);border:1px solid rgba(108,99,255,.3);color:var(--accent);}
+.tt-step{display:flex;gap:14px;padding:12px 0;border-bottom:1px solid var(--border);}
+.tt-step:last-child{border-bottom:none;}
+.tt-step-num{flex-shrink:0;width:28px;height:28px;background:#ff0050;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;}
+.tt-step-content{flex:1;}
+.tt-step-content h4{font-size:14px;font-weight:700;margin-bottom:3px;}
+.tt-step-content p{font-size:12px;color:var(--text2);margin:0;line-height:1.5;}
+.tt-code{font-family:monospace;background:var(--bg2);padding:3px 6px;border-radius:4px;font-size:11px;color:var(--accent);}
+</style>
+
+<div class="tt">
+  <div class="tt-hero">
+    <h1>🎵 TikTok Shop</h1>
+    <p>Conecte sua loja TikTok Shop para sincronizar produtos, pedidos e ativar pricing IA.</p>
+  </div>
+
+  <div id="tt-status" class="tt-status pending">Verificando status...</div>
+
+  <div class="tt-card" id="tt-actions">
+    <h2>Conectar</h2>
+    <p>O TikTok Shop usa OAuth 2.0. Voce sera redirecionado para autorizar o Sellvance.</p>
+    <div id="btn-area">
+      <a href="/oauth/tiktok_shop/start" class="tt-btn">🔗 Conectar TikTok Shop</a>
+    </div>
+  </div>
+
+  <div class="tt-card">
+    <h2>Como configurar (apenas primeira vez do sistema)</h2>
+    <p>Para o Sellvance conseguir falar com o TikTok Shop, o ADMIN precisa cadastrar um App na plataforma de parceiros e configurar as env vars no Railway.</p>
+
+    <div class="tt-step">
+      <div class="tt-step-num">1</div>
+      <div class="tt-step-content">
+        <h4>Criar conta de Partner</h4>
+        <p>Acesse <a href="https://partner.tiktokshop.com" target="_blank" style="color:var(--accent);">partner.tiktokshop.com</a> e registre-se como developer</p>
+      </div>
+    </div>
+
+    <div class="tt-step">
+      <div class="tt-step-num">2</div>
+      <div class="tt-step-content">
+        <h4>Criar um App</h4>
+        <p>Em "My Apps" → "Create App". Escolher "Marketing" como categoria.</p>
+      </div>
+    </div>
+
+    <div class="tt-step">
+      <div class="tt-step-num">3</div>
+      <div class="tt-step-content">
+        <h4>Configurar URLs</h4>
+        <p>Redirect URI: <span class="tt-code">https://www.sellvance.com.br/oauth/tiktok_shop/callback</span></p>
+      </div>
+    </div>
+
+    <div class="tt-step">
+      <div class="tt-step-num">4</div>
+      <div class="tt-step-content">
+        <h4>Permissoes necessarias</h4>
+        <p>product.info, product.update, order.info, logistics.info, promotion.info</p>
+      </div>
+    </div>
+
+    <div class="tt-step">
+      <div class="tt-step-num">5</div>
+      <div class="tt-step-content">
+        <h4>Copiar App Key + App Secret</h4>
+        <p>Na pagina do app, copie os dois valores e configure no Railway como env vars:</p>
+        <p style="margin-top:6px;"><span class="tt-code">TIKTOK_SHOP_APP_KEY=...</span></p>
+        <p><span class="tt-code">TIKTOK_SHOP_APP_SECRET=...</span></p>
+      </div>
+    </div>
+
+    <div class="tt-step">
+      <div class="tt-step-num">6</div>
+      <div class="tt-step-content">
+        <h4>Aguardar aprovacao</h4>
+        <p>TikTok Shop aprova apps em 3-5 dias uteis. Ate la use em modo sandbox.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="tt-card" id="sync-area" style="display:none;">
+    <h2>Sincronizar dados</h2>
+    <p>Apos conectar, clique para puxar produtos e pedidos do TikTok Shop.</p>
+    <button class="tt-btn" onclick="syncNow()">🔄 Sincronizar agora</button>
+    <button class="tt-btn-secondary" onclick="disconnect()" style="background:rgba(239,68,68,.1);color:#ef4444;border-color:rgba(239,68,68,.3);">Desconectar</button>
+    <div id="sync-result" style="margin-top:16px;font-size:13px;"></div>
+  </div>
+</div>
+
+<script>
+async function loadStatus(){
+  const r = await fetch('/admin/tt/status');
+  const d = await r.json();
+  const statusEl = document.getElementById('tt-status');
+  const syncArea = document.getElementById('sync-area');
+
+  if (!d.configured) {
+    statusEl.className = 'tt-status nokey';
+    statusEl.innerHTML = '⚙️ App Key do TikTok Shop ainda nao configurado no servidor. Contate o admin.';
+    document.getElementById('btn-area').innerHTML = '<em style="color:var(--text2);">Aguardando configuracao do admin</em>';
+    return;
+  }
+
+  const creds = d.credentials || {};
+  if (creds.status === 'connected') {
+    statusEl.className = 'tt-status connected';
+    statusEl.innerHTML = `✅ Conectado ${creds.shop_name ? '— ' + creds.shop_name : ''} ${creds.last_sync ? '(ultimo sync: ' + creds.last_sync + ')' : ''}`;
+    syncArea.style.display = 'block';
+    document.getElementById('btn-area').style.display = 'none';
+  } else {
+    statusEl.className = 'tt-status pending';
+    statusEl.innerHTML = '⏸️ Nao conectado. Clique em "Conectar TikTok Shop" abaixo.';
+  }
+}
+
+async function syncNow(){
+  const resultEl = document.getElementById('sync-result');
+  resultEl.innerHTML = '🔄 Sincronizando...';
+  const r = await fetch('/admin/tt/sync', {method: 'POST'});
+  const d = await r.json();
+  resultEl.innerHTML = JSON.stringify(d, null, 2);
+}
+
+async function disconnect(){
+  if (!confirm('Desconectar TikTok Shop?')) return;
+  await fetch('/admin/tt/disconnect', {method: 'POST'});
+  location.reload();
+}
+
+loadStatus();
+
+if (location.search.includes('connected=1')) {
+  alert('✅ TikTok Shop conectado com sucesso!');
+}
+</script>
+{% endblock %}

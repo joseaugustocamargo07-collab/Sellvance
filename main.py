@@ -158,7 +158,7 @@ def ensure_db_ready():
             try:
                 import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent, buybox_monitor
                 import fraud_detector, content_ai, cohort_analytics, billing
-                import whatsapp_api, push_notifications
+                import whatsapp_api, push_notifications, tiktok_shop_api
                 telemetry.ensure_tables()
                 feature_flags.ensure_tables()
                 pricing_ai.ensure_tables()
@@ -171,6 +171,7 @@ def ensure_db_ready():
                 billing.ensure_tables()
                 whatsapp_api.ensure_tables()
                 push_notifications.ensure_tables()
+                tiktok_shop_api.ensure_tables()
                 # Gerar chaves VAPID na primeira execucao
                 try:
                     push_notifications.get_or_create_vapid_keys()
@@ -4400,6 +4401,101 @@ def admin_demo_pricing_csv():
                      mimetype='text/csv',
                      as_attachment=True,
                      download_name='pricing_rules_demo.csv')
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  TIKTOK SHOP API
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/oauth/tiktok_shop/start')
+@login_required
+def oauth_tiktok_shop_start():
+    """Inicia fluxo OAuth do TikTok Shop."""
+    import tiktok_shop_api as _tt
+    if not _tt.is_configured():
+        return jsonify({
+            'ok': False,
+            'error': 'TIKTOK_SHOP_APP_KEY nao configurado no Railway. Configure as env vars.'
+        }), 500
+    # State = org_id pra reconhecer no callback
+    import secrets
+    state = f"{session.get('org_id', 1)}:{secrets.token_urlsafe(16)}"
+    session['tt_state'] = state
+    return redirect(_tt.get_auth_url(state))
+
+
+@app.route('/oauth/tiktok_shop/callback')
+def oauth_tiktok_shop_callback():
+    """Callback do OAuth TikTok Shop."""
+    import tiktok_shop_api as _tt
+    code = request.args.get('code') or request.args.get('auth_code')
+    state = request.args.get('state', '')
+    if not code:
+        return 'Missing auth code', 400
+
+    # Valida state
+    expected_state = session.get('tt_state')
+    if expected_state and state != expected_state:
+        return 'State mismatch', 403
+
+    try:
+        org_id = int(state.split(':')[0]) if state else session.get('org_id', 1)
+    except Exception:
+        org_id = session.get('org_id', 1)
+
+    result = _tt.exchange_auth_code(code)
+    if not result['ok']:
+        return f"Erro ao trocar token: {result.get('error')}", 400
+
+    _tt.save_credentials(org_id, result['data'])
+    return redirect('/settings/tiktok_shop?connected=1')
+
+
+@app.route('/settings/tiktok_shop')
+@login_required
+def settings_tiktok_shop():
+    """Pagina de setup do TikTok Shop."""
+    return render_template('tt_shop_setup.html')
+
+
+@app.route('/admin/tt/status')
+@login_required
+def admin_tt_status():
+    """Status da conexao TikTok Shop."""
+    import tiktok_shop_api as _tt
+    org_id = session.get('org_id', 1)
+    creds = _tt.get_credentials(org_id) or {}
+    # Remove tokens por seguranca
+    if 'access_token' in creds:
+        creds['access_token'] = '***' if creds['access_token'] else ''
+    if 'refresh_token' in creds:
+        creds['refresh_token'] = '***' if creds['refresh_token'] else ''
+    return jsonify({
+        'ok': True,
+        'configured': _tt.is_configured(),
+        'credentials': creds,
+    })
+
+
+@app.route('/admin/tt/sync', methods=['POST'])
+@login_required
+def admin_tt_sync():
+    """Dispara sync de produtos e pedidos do TikTok Shop."""
+    import tiktok_shop_api as _tt
+    org_id = session.get('org_id', 1)
+    prods = _tt.sync_products(org_id)
+    orders = _tt.sync_orders(org_id)
+    return jsonify({'ok': True, 'products': prods, 'orders': orders})
+
+
+@app.route('/admin/tt/disconnect', methods=['POST'])
+@login_required
+def admin_tt_disconnect():
+    """Desconecta TikTok Shop."""
+    import tiktok_shop_api as _tt
+    org_id = session.get('org_id', 1)
+    _tt.disconnect(org_id)
+    return jsonify({'ok': True})
 
 
 @app.route('/admin/pricing/import', methods=['POST'])
