@@ -154,8 +154,6 @@ def ensure_db_ready():
                 auto_insights.ensure_tables()
                 whatsapp_agent.ensure_tables()
                 telemetry.register_request_hooks(app)
-                from health_monitor import register_routes as _hm_register
-                _hm_register(app)
                 print("[startup] auto-improvement modules loaded")
             except Exception as _e:
                 print(f"[startup] auto-improvement bootstrap warning: {_e}")
@@ -166,6 +164,58 @@ def ensure_db_ready():
 @app.route('/health')
 def health():
     return jsonify({'status': 'healthy', 'app': 'Sellvance CRM'}), 200
+
+
+@app.route('/healthz')
+def healthz():
+    """Health check simples para Railway/load balancers."""
+    import time as _t
+    return jsonify({'status': 'ok', 'ts': int(_t.time())}), 200
+
+
+@app.route('/healthz/deep')
+def healthz_deep():
+    """Health check profundo com error rate e DB status."""
+    import time as _t
+    from database import get_db as _gdb
+    result = {'status': 'ok', 'ts': int(_t.time()), 'checks': {}}
+    try:
+        _d = _gdb()
+        _d.execute('SELECT 1').fetchone()
+        _d.close()
+        result['checks']['database'] = 'ok'
+    except Exception as _e:
+        result['checks']['database'] = f'error: {str(_e)[:100]}'
+        result['status'] = 'degraded'
+    try:
+        _d = _gdb()
+        _total = _d.execute(
+            "SELECT COUNT(*) c FROM events_log WHERE event_type='request' AND created_at > datetime('now', '-5 minutes')"
+        ).fetchone()
+        _errors = _d.execute(
+            "SELECT COUNT(*) c FROM events_log WHERE event_type='request' AND status_code >= 500 AND created_at > datetime('now', '-5 minutes')"
+        ).fetchone()
+        _d.close()
+        _t_c = _total['c'] if _total else 0
+        _e_c = _errors['c'] if _errors else 0
+        _rate = (_e_c / _t_c) if _t_c > 0 else 0
+        result['checks']['error_rate'] = {
+            'total': _t_c, 'errors': _e_c, 'rate': round(_rate, 4), 'ok': _rate <= 0.05
+        }
+        if _rate > 0.05:
+            result['status'] = 'degraded'
+    except Exception as _e:
+        result['checks']['error_rate'] = 'unavailable'
+    try:
+        _d = _gdb()
+        _stuck = _d.execute(
+            "SELECT COUNT(*) c FROM api_integrations WHERE status='connected' AND (last_sync IS NULL OR last_sync < datetime('now', '-6 hours'))"
+        ).fetchone()
+        _d.close()
+        result['checks']['stale_syncs'] = _stuck['c'] if _stuck else 0
+    except Exception:
+        result['checks']['stale_syncs'] = 'unknown'
+    return jsonify(result), 200 if result['status'] == 'ok' else 503
 
 @app.route('/')
 @app.route('/dashboard')
