@@ -275,6 +275,114 @@ def sales_page():
     return render_template('vendas.html')
 
 
+@app.route('/api/integrations/status')
+@login_required
+def api_integrations_status():
+    """Diagnostico consolidado de todas as integracoes do org.
+    Retorna contagens de produtos/pedidos por plataforma, data do ultimo sync,
+    e status da conexao. Util pra saber se os dados estao fluindo de verdade."""
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    result = {}
+    platforms = ['mercado_livre', 'shopee', 'amazon', 'tiktok_shop']
+    for p in platforms:
+        info = {}
+        # Status da integracao
+        integ = db.execute(
+            "SELECT status, account_name, last_sync FROM api_integrations WHERE org_id=? AND platform=?",
+            (org_id, p)
+        ).fetchone()
+        if integ:
+            info['connected'] = integ['status'] == 'connected'
+            info['account_name'] = integ['account_name']
+            info['last_sync'] = integ['last_sync']
+        else:
+            info['connected'] = False
+            info['account_name'] = None
+            info['last_sync'] = None
+
+        # Produtos
+        try:
+            prod = db.execute(
+                "SELECT COUNT(*) c FROM mp_products WHERE org_id=? AND platform=?",
+                (org_id, p)
+            ).fetchone()
+            info['products'] = prod['c'] if prod else 0
+        except Exception:
+            info['products'] = 'n/a'
+
+        # Pedidos
+        try:
+            ord = db.execute(
+                "SELECT COUNT(*) c, COALESCE(SUM(revenue), 0) rev FROM orders WHERE org_id=? AND channel=?",
+                (org_id, p)
+            ).fetchone()
+            info['orders'] = ord['c'] if ord else 0
+            info['revenue'] = round(ord['rev'] if ord else 0, 2)
+        except Exception:
+            info['orders'] = 'n/a'
+            info['revenue'] = 'n/a'
+
+        # Ultimo sync_log
+        try:
+            sl = db.execute(
+                "SELECT status, finished_at, items_synced, error FROM sync_log WHERE org_id=? AND platform=? ORDER BY id DESC LIMIT 1",
+                (org_id, p)
+            ).fetchone()
+            if sl:
+                info['last_sync_status'] = sl['status']
+                info['last_sync_finished'] = sl['finished_at']
+                info['last_sync_items'] = sl['items_synced']
+                info['last_sync_error'] = sl['error']
+            else:
+                info['last_sync_status'] = None
+        except Exception:
+            info['last_sync_status'] = 'n/a'
+
+        result[p] = info
+
+    # Totais gerais
+    try:
+        totals = db.execute(
+            "SELECT COUNT(*) products FROM mp_products WHERE org_id=?", (org_id,)
+        ).fetchone()
+        orders_total = db.execute(
+            "SELECT COUNT(*) c, COALESCE(SUM(revenue), 0) rev FROM orders WHERE org_id=?", (org_id,)
+        ).fetchone()
+        contacts_total = db.execute(
+            "SELECT COUNT(*) c FROM contacts WHERE org_id=?", (org_id,)
+        ).fetchone()
+        result['_totals'] = {
+            'products': totals['products'] if totals else 0,
+            'orders': orders_total['c'] if orders_total else 0,
+            'revenue': round(orders_total['rev'] if orders_total else 0, 2),
+            'contacts': contacts_total['c'] if contacts_total else 0,
+        }
+    except Exception as _e:
+        result['_totals'] = {'error': str(_e)[:200]}
+
+    db.close()
+    return jsonify(result)
+
+
+@app.route('/api/ml/sync-now', methods=['GET', 'POST'])
+@login_required
+def api_ml_sync_now():
+    """Dispara sync do Mercado Livre imediatamente (bypass de cache)."""
+    org_id = session.get('org_id', 1)
+    try:
+        from sync_mercadolivre import sync_all as ml_sync
+        total = ml_sync(org_id)
+        return jsonify({'ok': True, 'items_synced': total})
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'ok': False,
+            'error': str(e)[:500],
+            'traceback': traceback.format_exc()[:2000],
+        }), 500
+
+
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
