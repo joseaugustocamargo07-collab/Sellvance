@@ -4353,6 +4353,13 @@ def admin_scheduler_status():
 #  PRICING RULES CSV IMPORT/EXPORT
 # ══════════════════════════════════════════════════════════════════════════
 
+@app.route('/settings/pricing')
+@login_required
+def settings_pricing():
+    """Pagina visual de importacao de regras de pricing."""
+    return render_template('pricing_import.html')
+
+
 @app.route('/admin/pricing/import', methods=['POST'])
 @login_required
 def admin_pricing_import():
@@ -4401,6 +4408,13 @@ def admin_pricing_sample():
 # ══════════════════════════════════════════════════════════════════════════
 #  WHATSAPP BUSINESS API CREDENTIALS
 # ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/settings/whatsapp')
+@login_required
+def settings_whatsapp():
+    """Pagina visual de configuracao do WhatsApp Business."""
+    return render_template('wa_setup.html')
+
 
 @app.route('/admin/wa/credentials', methods=['GET', 'POST'])
 @login_required

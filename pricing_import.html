@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block title %}Importar Regras de Pricing{% endblock %}
+{% block content %}
+<style>
+.pi{max-width:820px;margin:20px auto;}
+.pi-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:28px;margin-bottom:20px;}
+.pi-card h2{font-size:20px;font-weight:800;margin-bottom:8px;color:var(--text);}
+.pi-card p{font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.5;}
+.pi-drop{border:2px dashed var(--border);border-radius:14px;padding:40px;text-align:center;cursor:pointer;transition:all .2s;}
+.pi-drop:hover{border-color:var(--accent);background:rgba(108,99,255,.03);}
+.pi-drop.dragover{border-color:var(--accent);background:rgba(108,99,255,.08);}
+.pi-drop input{display:none;}
+.pi-drop .icon{font-size:48px;margin-bottom:12px;}
+.pi-btn{background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;padding:13px 28px;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px;text-decoration:none;display:inline-block;}
+.pi-btn:hover{opacity:.9;}
+.pi-btn-secondary{background:rgba(255,255,255,.05);color:var(--text);border:1px solid var(--border);padding:13px 24px;border-radius:10px;font-weight:600;cursor:pointer;margin-left:8px;font-size:14px;text-decoration:none;display:inline-block;}
+.pi-result{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:16px;font-size:13px;}
+.pi-result.ok{border-color:rgba(16,185,129,.4);}
+.pi-result.err{border-color:rgba(239,68,68,.4);}
+.pi-stat{display:inline-block;padding:4px 10px;border-radius:100px;font-size:11px;font-weight:700;margin-right:6px;}
+.pi-stat.green{background:rgba(16,185,129,.15);color:#10b981;}
+.pi-stat.yellow{background:rgba(245,158,11,.15);color:#f59e0b;}
+.pi-stat.red{background:rgba(239,68,68,.15);color:#ef4444;}
+.pi-errors{max-height:200px;overflow-y:auto;margin-top:10px;font-size:12px;color:var(--text2);font-family:monospace;}
+.pi-errors div{padding:3px 0;border-bottom:1px solid var(--border);}
+.pi-example{background:var(--bg2);padding:12px;border-radius:8px;font-family:monospace;font-size:11px;color:var(--text2);white-space:pre;overflow-x:auto;}
+</style>
+
+<div class="pi">
+  <h1 style="font-size:26px;font-weight:900;margin-bottom:8px;">💰 Regras de Precificacao</h1>
+  <p style="color:var(--text2);margin-bottom:24px;">Importe via CSV as regras de preco minimo/maximo, margem e estrategia para cada SKU.</p>
+
+  <div class="pi-card">
+    <h2>Upload CSV</h2>
+    <p>Arraste o arquivo ou clique para selecionar. Formato esperado:</p>
+    <div class="pi-example">sku,marketplace,min_price,max_price,cost_price,target_margin,strategy,auto_apply
+SKU001,mercado_livre,49.90,89.90,30.00,0.25,buybox,1
+SKU002,amazon,99.00,149.00,60.00,0.30,match,0</div>
+
+    <label class="pi-drop" id="drop">
+      <div class="icon">📁</div>
+      <div><strong>Arraste seu CSV aqui</strong> ou clique para selecionar</div>
+      <div style="margin-top:8px;color:var(--text2);font-size:12px;">Modo upsert — atualiza existentes e cria novos</div>
+      <input type="file" id="file-input" accept=".csv">
+    </label>
+
+    <div style="margin-top:16px;">
+      <a href="/admin/pricing/sample-csv" class="pi-btn-secondary">⬇️ Baixar exemplo</a>
+      <a href="/admin/pricing/export" class="pi-btn-secondary">⬇️ Exportar atuais</a>
+    </div>
+
+    <div id="result"></div>
+  </div>
+
+  <div class="pi-card">
+    <h2>Estrategias disponiveis</h2>
+    <ul style="list-style:none;padding:0;">
+      <li style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;"><strong style="color:var(--accent);">buybox</strong> — fica ligeiramente abaixo do Buy Box do competidor</li>
+      <li style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;"><strong style="color:var(--accent);">match</strong> — alinha com o preco do competidor</li>
+      <li style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;"><strong style="color:var(--accent);">premium</strong> — fica 5% acima (para produtos diferenciados)</li>
+      <li style="padding:8px 0;font-size:13px;"><strong style="color:var(--accent);">aggressive</strong> — fica 5% abaixo</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const drop = document.getElementById('drop');
+const input = document.getElementById('file-input');
+const resultEl = document.getElementById('result');
+
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+drop.addEventListener('drop', e => {
+  e.preventDefault();
+  drop.classList.remove('dragover');
+  if(e.dataTransfer.files.length) upload(e.dataTransfer.files[0]);
+});
+input.addEventListener('change', () => { if(input.files.length) upload(input.files[0]); });
+
+async function upload(file){
+  resultEl.innerHTML = '<div class="pi-result">📤 Enviando...</div>';
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const r = await fetch('/admin/pricing/import?mode=upsert', { method: 'POST', body: form });
+    const d = await r.json();
+    if(d.ok){
+      resultEl.innerHTML = `
+        <div class="pi-result ok">
+          <div>
+            <span class="pi-stat green">✓ ${d.inserted} novas</span>
+            <span class="pi-stat green">↻ ${d.updated} atualizadas</span>
+            ${d.errors && d.errors.length ? `<span class="pi-stat yellow">⚠ ${d.errors.length} erros</span>` : ''}
+          </div>
+          ${d.errors && d.errors.length ? '<div class="pi-errors">' + d.errors.map(e => '<div>'+e+'</div>').join('') + '</div>' : ''}
+        </div>`;
+    } else {
+      resultEl.innerHTML = `<div class="pi-result err">❌ ${d.error || 'Erro desconhecido'}</div>`;
+    }
+  } catch(e){
+    resultEl.innerHTML = `<div class="pi-result err">❌ ${e.message}</div>`;
+  }
+}
+</script>
+{% endblock %}
