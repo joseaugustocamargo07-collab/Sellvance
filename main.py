@@ -2058,6 +2058,17 @@ def shopee_debug():
         'expire_ts': creds.get('expire_in_ts'),
     }
     info['credentials_json'] = safe_creds
+    # SECURITY: config_json pode conter account_password — NAO expor.
+    # So retornamos chaves neutras, sem valores sensiveis.
+    try:
+        raw_config = json.loads(info.get('config_json', '{}') or '{}')
+        safe_config_keys = {
+            k: ('***' if any(s in k.lower() for s in ('password', 'pass', 'secret', 'token', 'key', 'auth')) else v)
+            for k, v in raw_config.items()
+        }
+        info['config_json'] = safe_config_keys
+    except Exception:
+        info['config_json'] = {}
     info['config'] = config
     return jsonify(info)
 
