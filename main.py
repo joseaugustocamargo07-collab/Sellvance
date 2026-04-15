@@ -2050,6 +2050,59 @@ def shopee_sync():
         return jsonify({'ok': False, 'error': str(e), 'trace': traceback.format_exc()[:500]})
 
 
+@app.route('/api/shopee/raw-probe')
+@login_required
+def shopee_raw_probe():
+    """Chama cada endpoint critico da Shopee e retorna a resposta crua.
+    Facilita descobrir exatamente por que o sync esta voltando 0 itens."""
+    org_id = session.get('org_id', 1)
+    db = get_db()
+    row = db.execute(
+        "SELECT credentials_json FROM api_integrations WHERE org_id=? AND platform='shopee'",
+        (org_id,)).fetchone()
+    db.close()
+    if not row:
+        return jsonify({'ok': False, 'error': 'shopee nao conectado'})
+
+    creds = json.loads(row['credentials_json'] or '{}')
+    access_token = creds.get('access_token', '')
+    shop_id = int(creds.get('shop_id', 0))
+    if not access_token or not shop_id:
+        return jsonify({'ok': False, 'error': 'credentials sem access_token/shop_id'})
+
+    import shopee_api as _sh
+    results = {}
+    # 1. Shop Info
+    try:
+        results['shop_info'] = _sh.get_shop_info(access_token, shop_id)
+    except Exception as e:
+        results['shop_info'] = {'exception': str(e)}
+    # 2. Item List
+    try:
+        results['item_list'] = _sh.get_item_list(access_token, shop_id, page_size=10)
+    except Exception as e:
+        results['item_list'] = {'exception': str(e)}
+    # 3. Order List (ultimos 30 dias)
+    try:
+        import time as _t
+        to_ts = int(_t.time())
+        from_ts = to_ts - 30 * 86400
+        results['order_list'] = _sh.get_order_list(
+            access_token, shop_id, from_ts, to_ts, order_status='COMPLETED'
+        )
+    except Exception as e:
+        results['order_list'] = {'exception': str(e)}
+
+    # Meta info
+    results['_meta'] = {
+        'shop_id': shop_id,
+        'partner_id_runtime': _sh._get_partner_id(),
+        'api_host_runtime': _sh._get_api_host(),
+        'env': os.environ.get('SHOPEE_ENV', 'sandbox'),
+    }
+    return jsonify(results)
+
+
 @app.route('/api/shopee/debug')
 @login_required
 def shopee_debug():
