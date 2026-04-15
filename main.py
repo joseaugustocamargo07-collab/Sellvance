@@ -145,6 +145,19 @@ def ensure_db_ready():
                 print(f"[startup] DB size={_os.path.getsize(DB_PATH)} bytes")
             init_db()
             migrate_db()
+            # Bootstrap modulos de auto-melhoria (telemetria, flags, pricing, insights)
+            try:
+                import telemetry, feature_flags, pricing_ai, auto_insights
+                telemetry.ensure_tables()
+                feature_flags.ensure_tables()
+                pricing_ai.ensure_tables()
+                auto_insights.ensure_tables()
+                telemetry.register_request_hooks(app)
+                from health_monitor import register_routes as _hm_register
+                _hm_register(app)
+                print("[startup] auto-improvement modules loaded")
+            except Exception as _e:
+                print(f"[startup] auto-improvement bootstrap warning: {_e}")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -3881,6 +3894,121 @@ def report_marketplaces():
     date_end = request.args.get('date_end', '')
     buf, filename, mimetype = generate_marketplaces_report(org_id, mp, fmt, date_start=date_start, date_end=date_end)
     return send_file(buf, as_attachment=True, download_name=filename, mimetype=mimetype)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  ADMIN / AUTO-IMPROVEMENT ENDPOINTS
+#  Rotas internas para controlar feature flags, ver insights e disparar IA.
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/admin/insights')
+@login_required
+def admin_insights():
+    """Lista insights gerados pela IA de auto-melhoria."""
+    import auto_insights
+    status = request.args.get('status', 'new')
+    insights = auto_insights.get_recent_insights(status=status, limit=100)
+    return jsonify({'ok': True, 'insights': insights, 'count': len(insights)})
+
+
+@app.route('/admin/insights/run', methods=['POST'])
+@login_required
+def admin_insights_run():
+    """Dispara analise manual (normalmente roda via cron a cada 6h)."""
+    import auto_insights
+    auto_insights.run_all()
+    return jsonify({'ok': True, 'msg': 'analise disparada'})
+
+
+@app.route('/admin/insights/<int:insight_id>/review', methods=['POST'])
+@login_required
+def admin_insight_review(insight_id):
+    """Marca um insight como revisado."""
+    import auto_insights
+    auto_insights.mark_reviewed(insight_id, 'reviewed')
+    return jsonify({'ok': True})
+
+
+@app.route('/admin/flags')
+@login_required
+def admin_flags():
+    """Lista todas as feature flags."""
+    import feature_flags
+    return jsonify({'ok': True, 'flags': feature_flags.all_flags()})
+
+
+@app.route('/admin/flags/<flag_name>', methods=['POST'])
+@login_required
+def admin_flag_update(flag_name):
+    """Atualiza uma feature flag (enabled, rollout_pct, whitelist)."""
+    import feature_flags
+    data = request.get_json() or {}
+    try:
+        feature_flags.set_flag(
+            flag_name,
+            enabled=data.get('enabled'),
+            rollout_pct=data.get('rollout_pct'),
+            whitelist=data.get('whitelist'),
+        )
+        return jsonify({'ok': True, 'flag': flag_name})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@app.route('/admin/flags/<flag_name>/rollback', methods=['POST'])
+@login_required
+def admin_flag_rollback(flag_name):
+    """Rollback instantaneo de uma feature flag."""
+    import feature_flags
+    feature_flags.rollback(flag_name)
+    return jsonify({'ok': True, 'msg': f'{flag_name} rolled back'})
+
+
+@app.route('/admin/pricing/suggest', methods=['POST'])
+@login_required
+def admin_pricing_suggest():
+    """Retorna sugestao de preco para um SKU especifico."""
+    import pricing_ai
+    data = request.get_json() or {}
+    org_id = session.get('org_id', 1)
+    sku = data.get('sku')
+    marketplace = data.get('marketplace', 'mercado_livre')
+    if not sku:
+        return jsonify({'ok': False, 'error': 'sku required'}), 400
+    suggestion = pricing_ai.suggest_price(org_id, sku, marketplace)
+    return jsonify({'ok': True, 'suggestion': suggestion})
+
+
+@app.route('/admin/pricing/run-batch', methods=['POST'])
+@login_required
+def admin_pricing_run_batch():
+    """Roda pricing AI em todos os SKUs com auto_apply=1."""
+    import pricing_ai
+    org_id = session.get('org_id', 1)
+    result = pricing_ai.run_pricing_batch(org_id)
+    return jsonify({'ok': True, 'result': result})
+
+
+@app.route('/admin/pricing/stats')
+@login_required
+def admin_pricing_stats():
+    """Estatisticas do pricing AI."""
+    import pricing_ai
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'stats': pricing_ai.get_pricing_stats(org_id)})
+
+
+@app.route('/admin/telemetry/events')
+@login_required
+def admin_telemetry_events():
+    """Ultimos eventos de telemetria."""
+    import telemetry
+    org_id = session.get('org_id', 1)
+    event_type = request.args.get('type')
+    limit = int(request.args.get('limit', 100))
+    events = telemetry.get_recent_events(org_id=org_id, limit=limit, event_type=event_type)
+    return jsonify({'ok': True, 'events': events, 'count': len(events)})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
