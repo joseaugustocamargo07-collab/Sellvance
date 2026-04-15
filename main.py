@@ -68,12 +68,21 @@ def inject_plan():
     """Make plan info available in all templates."""
     plan = session.get('plan', 'completo')
     plan_cfg = PLAN_ACCESS.get(plan, PLAN_ACCESS['completo'])
-    return {
+    ctx = {
         'user_plan': plan,
         'plan_label': plan_cfg['label'],
         'plan_pages': plan_cfg['pages'],
         'plan_integrations': plan_cfg.get('integrations', []),
+        'trial_status': None,
     }
+    # Injetar trial_status se logado
+    try:
+        if session.get('user_id') and session.get('org_id'):
+            import billing as _billing
+            ctx['trial_status'] = _billing.get_trial_status(session['org_id'])
+    except Exception:
+        pass
+    return ctx
 
 
 # ── Filtro Jinja2 para formato monetario brasileiro ──────────────────────────
@@ -149,6 +158,7 @@ def ensure_db_ready():
             try:
                 import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent, buybox_monitor
                 import fraud_detector, content_ai, cohort_analytics, billing
+                import whatsapp_api, push_notifications
                 telemetry.ensure_tables()
                 feature_flags.ensure_tables()
                 pricing_ai.ensure_tables()
@@ -159,6 +169,13 @@ def ensure_db_ready():
                 content_ai.ensure_tables()
                 cohort_analytics.ensure_tables()
                 billing.ensure_tables()
+                whatsapp_api.ensure_tables()
+                push_notifications.ensure_tables()
+                # Gerar chaves VAPID na primeira execucao
+                try:
+                    push_notifications.get_or_create_vapid_keys()
+                except Exception:
+                    pass
                 telemetry.register_request_hooks(app)
                 # Inicia scheduler in-process para tarefas periodicas
                 try:
@@ -4330,6 +4347,209 @@ def admin_scheduler_status():
     """Status do scheduler in-process."""
     import background_scheduler
     return jsonify({'ok': True, 'scheduler': background_scheduler.get_status()})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  PRICING RULES CSV IMPORT/EXPORT
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/admin/pricing/import', methods=['POST'])
+@login_required
+def admin_pricing_import():
+    """Importa regras de pricing via CSV."""
+    import pricing_rules_import as _pri
+    org_id = session.get('org_id', 1)
+    csv_content = None
+
+    # Aceita tanto upload de arquivo quanto payload JSON
+    if 'file' in request.files:
+        f = request.files['file']
+        csv_content = f.read().decode('utf-8', errors='replace')
+    else:
+        data = request.get_json() or {}
+        csv_content = data.get('csv', '')
+
+    if not csv_content:
+        return jsonify({'ok': False, 'error': 'CSV vazio'}), 400
+
+    mode = request.args.get('mode', 'upsert')
+    result = _pri.import_rules(org_id, csv_content, mode=mode)
+    return jsonify(result)
+
+
+@app.route('/admin/pricing/export')
+@login_required
+def admin_pricing_export():
+    """Exporta regras atuais em CSV."""
+    import pricing_rules_import as _pri
+    org_id = session.get('org_id', 1)
+    csv_data = _pri.export_rules(org_id)
+    from flask import Response
+    return Response(csv_data, mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=pricing_rules.csv'})
+
+
+@app.route('/admin/pricing/sample-csv')
+def admin_pricing_sample():
+    """Baixa um CSV de exemplo."""
+    import pricing_rules_import as _pri
+    from flask import Response
+    return Response(_pri.sample_csv(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=pricing_rules_exemplo.csv'})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  WHATSAPP BUSINESS API CREDENTIALS
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/admin/wa/credentials', methods=['GET', 'POST'])
+@login_required
+def admin_wa_credentials():
+    """Salva/consulta credenciais do WhatsApp Business."""
+    import whatsapp_api as _wa
+    org_id = session.get('org_id', 1)
+
+    if request.method == 'GET':
+        creds = _wa.get_credentials(org_id) or {}
+        # Nunca retornar access_token em plaintext na leitura
+        if 'access_token' in creds:
+            creds['access_token'] = '***' if creds['access_token'] else ''
+        if 'app_secret' in creds:
+            creds['app_secret'] = '***' if creds['app_secret'] else ''
+        return jsonify({'ok': True, 'credentials': creds})
+
+    # POST
+    data = request.get_json() or {}
+    result = _wa.save_credentials(
+        org_id,
+        phone_number_id=data.get('phone_number_id'),
+        access_token=data.get('access_token'),
+        app_secret=data.get('app_secret'),
+        verify_token=data.get('verify_token'),
+    )
+    return jsonify(result)
+
+
+@app.route('/admin/wa/test', methods=['POST'])
+@login_required
+def admin_wa_test():
+    """Envia mensagem de teste."""
+    import whatsapp_api as _wa
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    to = data.get('to')
+    text = data.get('text', 'Teste do Sellvance — mensagem enviada via WhatsApp Cloud API')
+    if not to:
+        return jsonify({'ok': False, 'error': 'campo "to" obrigatorio'}), 400
+    result = _wa.send_message(org_id, to, text)
+    return jsonify(result)
+
+
+# Webhook publico da Meta para receber mensagens do WhatsApp
+@app.route('/api/wa/webhook', methods=['GET', 'POST'])
+def api_wa_webhook():
+    """
+    GET: verificacao (Meta envia hub.challenge na primeira config)
+    POST: mensagens recebidas
+    """
+    import whatsapp_api as _wa
+    if request.method == 'GET':
+        mode = request.args.get('hub.mode')
+        token = request.args.get('hub.verify_token')
+        challenge = request.args.get('hub.challenge')
+        # Aceita qualquer verify_token configurado em qualquer org
+        db = get_db()
+        valid = db.execute(
+            'SELECT 1 FROM whatsapp_credentials WHERE verify_token=? LIMIT 1',
+            (token,)
+        ).fetchone()
+        db.close()
+        if mode == 'subscribe' and valid:
+            return challenge or '', 200
+        return 'forbidden', 403
+
+    # POST
+    body_bytes = request.get_data()
+    try:
+        body = json.loads(body_bytes)
+    except Exception:
+        return jsonify({'ok': False}), 400
+
+    parsed = _wa.parse_webhook_message(body)
+    if not parsed:
+        return jsonify({'ok': True})  # nao e mensagem, pode ser status
+
+    org_id = _wa.find_org_by_phone_number_id(parsed.get('phone_number_id'))
+    if not org_id:
+        return jsonify({'ok': True})
+
+    # Log inbound
+    db = get_db()
+    db.execute(
+        '''INSERT INTO whatsapp_message_log
+           (org_id, direction, from_phone, message_id, content, status)
+           VALUES (?, 'in', ?, ?, ?, 'received')''',
+        (org_id, parsed.get('from'), parsed.get('message_id'), parsed.get('text', '')[:1000])
+    )
+    db.commit()
+    db.close()
+
+    # Passar pro agente
+    import whatsapp_agent as _wag
+    _wag.handle_incoming_message(
+        org_id,
+        parsed.get('from'),
+        parsed.get('name'),
+        parsed.get('text', '')
+    )
+    return jsonify({'ok': True})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  PUSH NOTIFICATIONS (PWA)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/push/public-key')
+def api_push_public_key():
+    """Retorna a chave publica VAPID para o client subscribir."""
+    import push_notifications as _pn
+    key = _pn.get_public_key()
+    if not key:
+        return jsonify({'ok': False, 'error': 'VAPID keys nao disponiveis'}), 500
+    return jsonify({'ok': True, 'public_key': key})
+
+
+@app.route('/api/push/subscribe', methods=['POST'])
+@login_required
+def api_push_subscribe():
+    """Salva subscription do service worker."""
+    import push_notifications as _pn
+    org_id = session.get('org_id', 1)
+    user_id = session.get('user_id')
+    data = request.get_json() or {}
+    result = _pn.save_subscription(
+        org_id, user_id, data,
+        user_agent=request.headers.get('User-Agent', '')
+    )
+    return jsonify(result)
+
+
+@app.route('/admin/push/send', methods=['POST'])
+@login_required
+def admin_push_send():
+    """Envia push notification de teste."""
+    import push_notifications as _pn
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    title = data.get('title', 'Sellvance')
+    body = data.get('body', 'Notificacao de teste')
+    url = data.get('url', '/dashboard')
+    scope = data.get('scope', 'user')  # 'user' ou 'org'
+    if scope == 'org':
+        result = _pn.send_to_org(org_id, title, body, url)
+    else:
+        result = _pn.send_to_user(org_id, session.get('user_id'), title, body, url)
+    return jsonify(result)
 
 
 @app.route('/manifest.json')

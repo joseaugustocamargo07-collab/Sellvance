@@ -1,0 +1,17 @@
+{# Banner de status de trial — include no topo do base.html #}
+{% if trial_status and trial_status.active %}
+  {% if trial_status.status == 'trialing' and trial_status.days_left <= 3 %}
+    <div id="trial-banner" style="background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;padding:10px 20px;text-align:center;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
+      <span>⏰ Seu trial termina em {{ trial_status.days_left }} dia{{ 's' if trial_status.days_left != 1 else '' }}!</span>
+      <a href="/billing/upgrade" style="background:#fff;color:#ef4444;padding:6px 14px;border-radius:6px;text-decoration:none;font-weight:800;">Assinar agora — R$ {{ trial_status.price }}/mes</a>
+    </div>
+  {% elif trial_status.status == 'trialing' %}
+    <div id="trial-banner" style="background:rgba(108,99,255,.15);color:#8b88ff;padding:8px 20px;text-align:center;font-size:12px;font-weight:600;border-bottom:1px solid rgba(108,99,255,.3);">
+      🎁 Trial ativo — {{ trial_status.days_left }} dias restantes no plano {{ trial_status.label }}
+    </div>
+  {% endif %}
+{% elif trial_status and trial_status.status == 'expired' %}
+  <div id="trial-banner" style="background:#ef4444;color:#fff;padding:12px 20px;text-align:center;font-size:13px;font-weight:700;">
+    ⚠️ Seu trial expirou. <a href="/billing/upgrade" style="color:#fff;text-decoration:underline;">Assinar agora</a> para continuar usando.
+  </div>
+{% endif %}

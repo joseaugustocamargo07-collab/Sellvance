@@ -228,6 +228,15 @@ def handle_incoming_message(org_id, contact_phone, contact_name, text):
     except Exception:
         pass
 
+    # Enviar a resposta real via Meta API se credenciais configuradas
+    try:
+        from whatsapp_api import send_message as _wa_send, get_credentials as _wa_creds
+        creds = _wa_creds(org_id)
+        if creds and creds.get('status') == 'connected' and not (response.get('handoff') or response['confidence'] < 0.6):
+            _wa_send(org_id, contact_phone, response['text'])
+    except Exception:
+        pass
+
     return response
 
 
