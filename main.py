@@ -4360,6 +4360,48 @@ def settings_pricing():
     return render_template('pricing_import.html')
 
 
+# ══════════════════════════════════════════════════════════════════════════
+#  DEMO / SIMULACAO — popular org com dados realistas
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/settings/demo')
+@login_required
+def settings_demo():
+    """Pagina visual para popular dados de simulacao."""
+    return render_template('demo_seed.html')
+
+
+@app.route('/admin/demo/seed', methods=['POST'])
+@login_required
+def admin_demo_seed():
+    """Popula org com dados simulados (produtos, pedidos, clientes, etc)."""
+    import sample_data_seeder as _seed
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    force = bool(data.get('force', False))
+    result = _seed.seed_all(org_id, force=force)
+    return jsonify({'ok': True, 'result': result})
+
+
+@app.route('/admin/demo/clear', methods=['POST'])
+@login_required
+def admin_demo_clear():
+    """Limpa dados simulados."""
+    import sample_data_seeder as _seed
+    org_id = session.get('org_id', 1)
+    result = _seed.clear_all(org_id)
+    return jsonify(result)
+
+
+@app.route('/admin/demo/pricing-csv')
+def admin_demo_pricing_csv():
+    """Serve o CSV de demo de pricing rules."""
+    return send_file('sample_data/pricing_rules_demo.csv',
+                     mimetype='text/csv',
+                     as_attachment=True,
+                     download_name='pricing_rules_demo.csv')
+
+
 @app.route('/admin/pricing/import', methods=['POST'])
 @login_required
 def admin_pricing_import():

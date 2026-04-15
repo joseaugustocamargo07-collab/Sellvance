@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% block title %}Simulacao / Demo{% endblock %}
+{% block content %}
+<style>
+.ds{max-width:820px;margin:20px auto;}
+.ds-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:32px;margin-bottom:20px;}
+.ds-card h2{font-size:22px;font-weight:800;margin-bottom:8px;}
+.ds-card p{font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:20px;}
+.ds-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:20px 0;}
+.ds-stat{background:var(--bg2);padding:16px;border-radius:10px;text-align:center;}
+.ds-stat .n{font-size:28px;font-weight:900;color:var(--accent);}
+.ds-stat .l{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-top:2px;}
+.ds-btn{background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;padding:14px 28px;border:none;border-radius:10px;font-weight:800;cursor:pointer;font-size:15px;}
+.ds-btn:hover{transform:translateY(-1px);}
+.ds-btn:disabled{opacity:.5;cursor:wait;}
+.ds-btn-danger{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);padding:10px 22px;border-radius:10px;font-weight:700;cursor:pointer;font-size:13px;margin-left:8px;}
+.ds-warning{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:14px 18px;font-size:13px;color:#f59e0b;margin-bottom:20px;}
+.ds-result{margin-top:20px;background:var(--bg2);padding:16px;border-radius:10px;font-family:monospace;font-size:13px;color:var(--text);white-space:pre-wrap;display:none;}
+.ds-result.show{display:block;}
+.ds-check{display:inline-flex;align-items:center;gap:6px;color:#10b981;margin-right:12px;font-size:13px;}
+</style>
+
+<div class="ds">
+  <h1 style="font-size:28px;font-weight:900;margin-bottom:8px;">🎬 Simulacao Completa</h1>
+  <p style="color:var(--text2);margin-bottom:24px;">Popule sua conta com dados realistas para testar todas as features sem precisar conectar marketplaces reais.</p>
+
+  <div class="ds-warning">
+    ⚠️ Este e um modo de demonstracao. Os dados gerados sao simulados (nomes ficticios, pedidos, etc).
+    Use apenas para testar o sistema antes de conectar seus marketplaces reais.
+  </div>
+
+  <div class="ds-card">
+    <h2>📦 O que sera criado</h2>
+    <div class="ds-grid">
+      <div class="ds-stat"><div class="n">42</div><div class="l">Produtos</div></div>
+      <div class="ds-stat"><div class="n">120</div><div class="l">Clientes (CRM)</div></div>
+      <div class="ds-stat"><div class="n">380</div><div class="l">Pedidos (90 dias)</div></div>
+      <div class="ds-stat"><div class="n">8</div><div class="l">Campanhas Ads</div></div>
+      <div class="ds-stat"><div class="n">60</div><div class="l">Precos Competidor</div></div>
+      <div class="ds-stat"><div class="n">15</div><div class="l">Buy Box Snapshots</div></div>
+      <div class="ds-stat"><div class="n">3</div><div class="l">Alertas Fraude</div></div>
+      <div class="ds-stat"><div class="n">3</div><div class="l">Insights Pendentes</div></div>
+    </div>
+
+    <p style="font-size:12px;color:var(--text2);">
+      Produtos distribuidos em: Eletronicos, Beleza, Casa, Fitness, Moda, Infantil.
+      Marketplaces: Mercado Livre, Amazon, Shopee, TikTok Shop.
+    </p>
+
+    <button class="ds-btn" id="btn-seed" onclick="seed(false)">🚀 Popular dados simulados</button>
+    <button class="ds-btn-danger" onclick="seed(true)">♻️ Resetar e repovoar</button>
+
+    <div id="result" class="ds-result"></div>
+  </div>
+
+  <div class="ds-card">
+    <h2>💰 Importar Pricing Rules (CSV)</h2>
+    <p>Junto com a simulacao, baixe nosso CSV de exemplo com 42 produtos ja configurados com regras de preco minimo/maximo e estrategia de Buy Box.</p>
+    <a href="/admin/demo/pricing-csv" class="ds-btn" style="text-decoration:none;display:inline-block;">⬇️ Baixar CSV de demo</a>
+    <a href="/settings/pricing" class="ds-btn-danger" style="text-decoration:none;display:inline-block;background:rgba(108,99,255,.1);color:var(--accent);border-color:rgba(108,99,255,.3);">📤 Ir para upload</a>
+  </div>
+
+  <div class="ds-card">
+    <h2>🧹 Limpar dados simulados</h2>
+    <p>Quando for conectar seus marketplaces reais, voce pode limpar os dados de demo antes.</p>
+    <button class="ds-btn-danger" onclick="clearAll()">🗑️ Limpar tudo</button>
+  </div>
+
+  <div class="ds-card">
+    <h2>📋 Depois de popular, explore:</h2>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="/dashboard" class="ds-check">✓ Dashboard</a>
+      <a href="/crm" class="ds-check">✓ CRM</a>
+      <a href="/traffic" class="ds-check">✓ Trafego Pago</a>
+      <a href="/ranking" class="ds-check">✓ Ranking</a>
+      <a href="/admin" class="ds-check">✓ Auto-melhoria</a>
+    </div>
+  </div>
+</div>
+
+<script>
+async function seed(force){
+  const btn = document.getElementById('btn-seed');
+  const resultEl = document.getElementById('result');
+  btn.disabled = true;
+  btn.textContent = force ? 'Resetando e populando...' : 'Populando...';
+  resultEl.className = 'ds-result show';
+  resultEl.textContent = 'Gerando dados...';
+
+  try {
+    const r = await fetch('/admin/demo/seed', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({force})
+    });
+    const d = await r.json();
+    if(d.ok){
+      let msg = '✅ Dados populados com sucesso!\n\n';
+      for(const [k,v] of Object.entries(d.result)){
+        msg += `  ${k.padEnd(22, ' ')} ${v}\n`;
+      }
+      msg += '\n👉 Acesse /dashboard para ver os KPIs em acao';
+      resultEl.textContent = msg;
+    } else {
+      resultEl.textContent = '❌ Erro: ' + (d.error || 'desconhecido');
+    }
+  } catch(e){
+    resultEl.textContent = '❌ Erro: ' + e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = '🚀 Popular dados simulados';
+}
+
+async function clearAll(){
+  if(!confirm('Tem certeza? Isto vai apagar TODOS os dados da sua org (produtos, pedidos, clientes, etc).')) return;
+  const r = await fetch('/admin/demo/clear', {method: 'POST'});
+  const d = await r.json();
+  alert(d.ok ? '✅ Dados limpos' : '❌ Erro');
+}
+</script>
+{% endblock %}
