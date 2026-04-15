@@ -148,12 +148,16 @@ def ensure_db_ready():
             # Bootstrap modulos de auto-melhoria (telemetria, flags, pricing, insights)
             try:
                 import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent, buybox_monitor
+                import fraud_detector, content_ai, cohort_analytics
                 telemetry.ensure_tables()
                 feature_flags.ensure_tables()
                 pricing_ai.ensure_tables()
                 auto_insights.ensure_tables()
                 whatsapp_agent.ensure_tables()
                 buybox_monitor.ensure_tables()
+                fraud_detector.ensure_tables()
+                content_ai.ensure_tables()
+                cohort_analytics.ensure_tables()
                 telemetry.register_request_hooks(app)
                 print("[startup] auto-improvement modules loaded")
             except Exception as _e:
@@ -4114,6 +4118,87 @@ def admin_buybox_status():
     org_id = session.get('org_id', 1)
     marketplace = request.args.get('mp')
     return jsonify({'ok': True, 'status': buybox_monitor.get_current_status(org_id, marketplace)})
+
+
+@app.route('/admin/fraud/score', methods=['POST'])
+@login_required
+def admin_fraud_score():
+    """Analisa uma devolucao e retorna score + decisao."""
+    import fraud_detector
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    result = fraud_detector.score_return(org_id, data)
+    return jsonify({'ok': True, 'result': result})
+
+
+@app.route('/admin/fraud/pending')
+@login_required
+def admin_fraud_pending():
+    """Lista devolucoes aguardando revisao manual."""
+    import fraud_detector
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'pending': fraud_detector.get_pending_reviews(org_id)})
+
+
+@app.route('/admin/fraud/stats')
+@login_required
+def admin_fraud_stats():
+    """Estatisticas de fraud detection."""
+    import fraud_detector
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'stats': fraud_detector.get_stats(org_id)})
+
+
+@app.route('/admin/fraud/resolve/<int:score_id>', methods=['POST'])
+@login_required
+def admin_fraud_resolve(score_id):
+    """Resolve uma revisao (approve ou block)."""
+    import fraud_detector
+    data = request.get_json() or {}
+    decision = data.get('decision', 'approve')
+    if decision not in ('approve', 'block'):
+        return jsonify({'ok': False, 'error': 'invalid decision'}), 400
+    fraud_detector.resolve_review(score_id, decision, reviewer='admin')
+    return jsonify({'ok': True})
+
+
+@app.route('/admin/content/generate', methods=['POST'])
+@login_required
+def admin_content_generate():
+    """Gera titulo/descricao/bullets/tags otimizados."""
+    import content_ai
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    marketplace = data.get('marketplace', 'mercado_livre')
+    result = content_ai.generate_full(org_id, data, marketplace, save=True)
+    return jsonify({'ok': True, 'content': result})
+
+
+@app.route('/admin/content/recent')
+@login_required
+def admin_content_recent():
+    """Lista ultimas geracoes de conteudo."""
+    import content_ai
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'generations': content_ai.get_recent_generations(org_id)})
+
+
+@app.route('/admin/cohorts')
+@login_required
+def admin_cohorts():
+    """Relatorio completo de cohort analytics."""
+    import cohort_analytics
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'report': cohort_analytics.compute_full_report(org_id)})
+
+
+@app.route('/admin/cohorts/monthly')
+@login_required
+def admin_cohorts_monthly():
+    """Apenas retencao mensal."""
+    import cohort_analytics
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'cohorts': cohort_analytics.get_monthly_cohorts(org_id)})
 
 
 @app.route('/api/wa/incoming', methods=['POST'])

@@ -14,7 +14,8 @@ KNOWN_FLAGS = {
     'buybox_monitor':       {'default': False, 'desc': 'Monitor de Buy Box em tempo real'},
     'fraud_detector':       {'default': False, 'desc': 'Deteccao de fraude em devolucoes'},
     'tiktok_live_sync':     {'default': False, 'desc': 'Sincronizacao com TikTok Shop Live'},
-    'ai_content_gen':       {'default': False, 'desc': 'Geracao de conteudo via IA'},
+    'ai_content_gen':       {'default': True,  'desc': 'Geracao de conteudo via IA'},
+    'cohort_analytics':     {'default': True,  'desc': 'Analise de coortes e retencao'},
     'auto_insights':        {'default': True,  'desc': 'Analises automaticas da plataforma'},
     'advanced_analytics':   {'default': True,  'desc': 'Analytics avancado com coortes'},
 }
