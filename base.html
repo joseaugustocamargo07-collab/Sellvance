@@ -11,11 +11,53 @@
 <title>Sellvance — {% block title %}{% endblock %}</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script>
+// PWA + Push Notifications
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      // Tenta registrar push subscription (precisa permissao)
+      if ('PushManager' in window && Notification.permission === 'granted') {
+        try {
+          const keyResp = await fetch('/api/push/public-key');
+          const keyData = await keyResp.json();
+          if (keyData.ok && keyData.public_key) {
+            // Convert base64url to Uint8Array
+            const padding = '='.repeat((4 - keyData.public_key.length % 4) % 4);
+            const base64 = (keyData.public_key + padding).replace(/-/g, '+').replace(/_/g, '/');
+            const rawData = atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+
+            const existing = await reg.pushManager.getSubscription();
+            const sub = existing || await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: outputArray
+            });
+            if (sub && !existing) {
+              await fetch('/api/push/subscribe', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(sub)
+              });
+            }
+          }
+        } catch(_) {}
+      }
+    } catch(_) {}
   });
 }
+
+// Helper para pedir permissao de push (chamar de um botao)
+window.enableSellvancePush = async function(){
+  if (!('Notification' in window)) return false;
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    location.reload();
+    return true;
+  }
+  return false;
+};
 </script>
 <style>
 :root {
