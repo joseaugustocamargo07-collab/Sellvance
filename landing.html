@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Sellvance — A plataforma de gestao para vendedores profissionais de marketplaces. IA de precificacao, analytics avancado e automacao de atendimento.">
+<meta name="theme-color" content="#6c63ff">
+<link rel="manifest" href="/manifest.json">
+<title>Sellvance — Venda mais nos marketplaces com IA</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:#0a0a0f;color:#e8e8f0;overflow-x:hidden;}
+a{color:inherit;text-decoration:none;}
+
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 32px;background:rgba(10,10,15,.85);backdrop-filter:blur(20px);border-bottom:1px solid rgba(108,99,255,.15);display:flex;align-items:center;justify-content:space-between;}
+.logo{font-size:22px;font-weight:900;background:linear-gradient(135deg,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.nav-links{display:flex;gap:28px;align-items:center;}
+.nav-links a{font-size:14px;color:#9090a8;transition:color .2s;}
+.nav-links a:hover{color:#fff;}
+.nav-cta{background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;padding:10px 22px;border-radius:10px;font-weight:700;font-size:14px;transition:transform .2s;}
+.nav-cta:hover{transform:translateY(-1px);}
+@media(max-width:720px){.nav-links{display:none;}.nav-cta{padding:8px 16px;}}
+
+.hero{padding:140px 24px 100px;text-align:center;background:radial-gradient(ellipse at top,rgba(108,99,255,.15),transparent 60%);}
+.hero-badge{display:inline-block;padding:8px 18px;background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.35);border-radius:100px;font-size:12px;font-weight:700;color:#8b88ff;margin-bottom:24px;letter-spacing:.5px;text-transform:uppercase;}
+.hero h1{font-size:clamp(36px,6vw,72px);font-weight:900;line-height:1.05;letter-spacing:-1.5px;margin-bottom:24px;max-width:900px;margin-left:auto;margin-right:auto;}
+.hero h1 span{background:linear-gradient(135deg,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.hero p{font-size:clamp(16px,2vw,20px);color:#9090a8;max-width:640px;margin:0 auto 40px;line-height:1.6;}
+.cta-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:60px;}
+.btn-primary{background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;padding:18px 36px;border-radius:12px;font-weight:800;font-size:16px;box-shadow:0 10px 40px rgba(108,99,255,.4);transition:transform .2s;border:none;cursor:pointer;}
+.btn-primary:hover{transform:translateY(-2px);}
+.btn-secondary{background:rgba(255,255,255,.05);color:#fff;padding:18px 36px;border-radius:12px;font-weight:700;font-size:16px;border:1px solid rgba(255,255,255,.1);transition:all .2s;}
+.btn-secondary:hover{background:rgba(255,255,255,.08);}
+.hero-social{display:flex;gap:32px;justify-content:center;flex-wrap:wrap;color:#6060a0;font-size:13px;}
+.hero-social span{display:flex;align-items:center;gap:6px;}
+
+.section{padding:100px 24px;max-width:1200px;margin:0 auto;}
+.section-label{text-align:center;font-size:12px;font-weight:800;color:#8b88ff;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px;}
+.section-title{text-align:center;font-size:clamp(28px,4vw,44px);font-weight:900;line-height:1.15;margin-bottom:16px;max-width:700px;margin-left:auto;margin-right:auto;}
+.section-sub{text-align:center;font-size:17px;color:#9090a8;max-width:600px;margin:0 auto 60px;line-height:1.6;}
+
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;}
+.feature{background:linear-gradient(135deg,#16161f,#1a1a28);border:1px solid #2a2a3d;border-radius:16px;padding:32px;transition:all .3s;}
+.feature:hover{border-color:#6c63ff;transform:translateY(-4px);}
+.feature-icon{font-size:36px;margin-bottom:16px;}
+.feature h3{font-size:20px;font-weight:800;margin-bottom:10px;}
+.feature p{font-size:14px;color:#9090a8;line-height:1.6;}
+
+.stats-bar{background:linear-gradient(135deg,#16161f,#1a1a28);border:1px solid #2a2a3d;border-radius:20px;padding:48px 32px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:24px;text-align:center;}
+.stat-val{font-size:clamp(32px,4vw,48px);font-weight:900;background:linear-gradient(135deg,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.stat-lbl{font-size:13px;color:#9090a8;margin-top:4px;}
+
+.plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;margin-top:20px;}
+.plan{background:#16161f;border:1px solid #2a2a3d;border-radius:20px;padding:36px 28px;position:relative;transition:all .3s;}
+.plan.featured{border-color:#6c63ff;transform:scale(1.03);background:linear-gradient(135deg,#1a1a28,#16161f);}
+.plan.featured::before{content:'MAIS POPULAR';position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#6c63ff,#ec4899);padding:5px 16px;border-radius:100px;font-size:10px;font-weight:800;letter-spacing:1px;}
+.plan h4{font-size:14px;color:#8b88ff;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;}
+.plan .price{font-size:42px;font-weight:900;margin:16px 0 4px;}
+.plan .price small{font-size:16px;color:#9090a8;font-weight:600;}
+.plan .desc{font-size:13px;color:#9090a8;margin-bottom:24px;}
+.plan ul{list-style:none;margin-bottom:28px;}
+.plan li{font-size:14px;padding:8px 0;color:#c0c0d0;display:flex;align-items:center;gap:8px;}
+.plan li::before{content:'✓';color:#10b981;font-weight:900;}
+.plan-btn{display:block;width:100%;text-align:center;padding:14px;border-radius:10px;font-weight:800;font-size:14px;transition:all .2s;}
+.plan.featured .plan-btn{background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;}
+.plan:not(.featured) .plan-btn{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.1);}
+.plan-btn:hover{transform:translateY(-2px);}
+
+.how-it-works{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:32px;margin-top:40px;}
+.step{text-align:center;position:relative;}
+.step-num{display:inline-flex;width:56px;height:56px;background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;border-radius:50%;align-items:center;justify-content:center;font-size:24px;font-weight:900;margin-bottom:16px;}
+.step h4{font-size:18px;font-weight:800;margin-bottom:8px;}
+.step p{font-size:14px;color:#9090a8;line-height:1.6;}
+
+.cta-final{background:linear-gradient(135deg,#16161f,#1a1a28);border:1px solid #6c63ff;border-radius:24px;padding:60px 32px;text-align:center;margin:60px auto;max-width:900px;}
+.cta-final h2{font-size:clamp(28px,4vw,40px);font-weight:900;margin-bottom:16px;}
+.cta-final p{font-size:17px;color:#9090a8;margin-bottom:32px;max-width:500px;margin-left:auto;margin-right:auto;}
+
+footer{padding:48px 24px;text-align:center;color:#5050a0;font-size:13px;border-top:1px solid #2a2a3d;}
+footer a{color:#8b88ff;}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="logo">Sellvance</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Precos</a>
+    <a href="#how">Como funciona</a>
+    <a href="/login">Entrar</a>
+  </div>
+  <a href="/signup" class="nav-cta">Comecar gratis</a>
+</nav>
+
+<section class="hero">
+  <div class="hero-badge">✨ Novidade — IA de precificacao com rollout gradual</div>
+  <h1>Venda mais nos marketplaces com <span>Inteligencia Artificial</span></h1>
+  <p>Sellvance conecta Mercado Livre, Shopee, Amazon e TikTok Shop em uma unica plataforma com IA que ajusta preco, monitora Buy Box e automatiza atendimento 24/7.</p>
+  <div class="cta-row">
+    <a href="/signup" class="btn-primary">🚀 Comecar gratis por 14 dias</a>
+    <a href="#how" class="btn-secondary">Como funciona</a>
+  </div>
+  <div class="hero-social">
+    <span>✅ Sem cartao de credito</span>
+    <span>⚡ Setup em 5 minutos</span>
+    <span>🔒 LGPD compliant</span>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="section-label">Features</div>
+  <h2 class="section-title">Tudo que voce precisa para escalar suas vendas</h2>
+  <p class="section-sub">Automacoes que os concorrentes cobram caro, incluidas no seu plano.</p>
+
+  <div class="features-grid">
+    <div class="feature">
+      <div class="feature-icon">💰</div>
+      <h3>IA de Precificacao Dinamica</h3>
+      <p>Ajusta precos automaticamente com base nos competidores, margem minima e Buy Box. Nunca mais perca venda por preco alto ou margem baixa.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📱</div>
+      <h3>Agente WhatsApp 24/7</h3>
+      <p>IA responde clientes em tempo real, classifica duvidas e transfere pra humano so quando necessario. Deflection rate ate 80%.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🎯</div>
+      <h3>Monitor de Buy Box</h3>
+      <p>Alerta em tempo real quando voce perde o Buy Box. Se ativar a IA, ela re-preca automaticamente para recuperar.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🛡️</div>
+      <h3>Detector de Fraude</h3>
+      <p>Analisa padroes de devolucao e bloqueia reembolsos suspeitos antes de voce perder dinheiro. Economize 8-12% de margem.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">✍️</div>
+      <h3>Conteudo gerado por IA</h3>
+      <p>Titulos, descricoes e tags otimizadas para cada marketplace. Score SEO automatico com recomendacoes.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📊</div>
+      <h3>Analytics de Coorte</h3>
+      <p>Retencao por mes de aquisicao, LTV por canal, churn rate. Saiba exatamente quais clientes valem a pena.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="stats-bar">
+    <div><div class="stat-val">+32%</div><div class="stat-lbl">ROAS medio com IA</div></div>
+    <div><div class="stat-val">80%</div><div class="stat-lbl">Deflection WhatsApp</div></div>
+    <div><div class="stat-val">5min</div><div class="stat-lbl">Setup inicial</div></div>
+    <div><div class="stat-val">24/7</div><div class="stat-lbl">Automacao ativa</div></div>
+  </div>
+</section>
+
+<section class="section" id="how">
+  <div class="section-label">Como funciona</div>
+  <h2 class="section-title">Configure em 5 minutos, veja resultado no primeiro dia</h2>
+
+  <div class="how-it-works">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h4>Conecte seus marketplaces</h4>
+      <p>OAuth seguro com Mercado Livre, Shopee, Amazon e TikTok Shop. Sincronizacao inicial em minutos.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h4>Defina regras de negocio</h4>
+      <p>Margem minima, preco maximo, estrategia de Buy Box. A IA respeita tudo automaticamente.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h4>Ative a automacao</h4>
+      <p>IA comeca a monitorar competidores, responder clientes e otimizar precos em tempo real.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <h4>Acompanhe no dashboard</h4>
+      <p>Todos os numeros em tempo real. Insights automaticos da IA sugerem proximas otimizacoes.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="pricing">
+  <div class="section-label">Planos</div>
+  <h2 class="section-title">Escolha o plano certo para sua operacao</h2>
+  <p class="section-sub">14 dias gratis em qualquer plano. Sem cartao de credito. Cancele quando quiser.</p>
+
+  <div class="plans-grid">
+    <div class="plan">
+      <h4>Marketplaces</h4>
+      <div class="price">R$ 197<small>/mes</small></div>
+      <div class="desc">Para quem quer centralizar a gestao dos marketplaces.</div>
+      <ul>
+        <li>Mercado Livre, Shopee, Amazon, TikTok Shop</li>
+        <li>CRM e automacao de clientes</li>
+        <li>Logistica e estoque unificados</li>
+        <li>Pagina de pagamento via Pix/WhatsApp</li>
+        <li>Analytics basico</li>
+        <li>Suporte via WhatsApp</li>
+      </ul>
+      <a href="/signup?plan=marketplaces" class="plan-btn">Comecar gratis</a>
+    </div>
+
+    <div class="plan featured">
+      <h4>Completo</h4>
+      <div class="price">R$ 397<small>/mes</small></div>
+      <div class="desc">Marketplaces + Marketing + todas as features de IA.</div>
+      <ul>
+        <li>Tudo do plano Marketplaces</li>
+        <li>IA de Precificacao Dinamica</li>
+        <li>Agente WhatsApp 24/7</li>
+        <li>Monitor de Buy Box + auto-reprice</li>
+        <li>Detector de Fraude em devolucoes</li>
+        <li>Trafego Pago (Meta, Google, TikTok Ads)</li>
+        <li>Analytics de coorte</li>
+        <li>Suporte prioritario</li>
+      </ul>
+      <a href="/signup?plan=completo" class="plan-btn">Comecar gratis</a>
+    </div>
+
+    <div class="plan">
+      <h4>Marketing</h4>
+      <div class="price">R$ 247<small>/mes</small></div>
+      <div class="desc">Para quem ja vende e quer escalar com trafego pago.</div>
+      <ul>
+        <li>Meta Ads, Google Ads, TikTok Ads</li>
+        <li>Ranking de campanhas por score</li>
+        <li>IA sugere pause/scale/optimize</li>
+        <li>ROAS por campanha e plataforma</li>
+        <li>Trafego pago no piloto automatico</li>
+        <li>Suporte via email</li>
+      </ul>
+      <a href="/signup?plan=marketing" class="plan-btn">Comecar gratis</a>
+    </div>
+  </div>
+</section>
+
+<div class="cta-final">
+  <h2>Pronto para vender mais nos marketplaces?</h2>
+  <p>14 dias gratis. Sem compromisso. Configure em minutos e comece a escalar hoje.</p>
+  <a href="/signup" class="btn-primary">🚀 Comecar meu teste gratis</a>
+</div>
+
+<footer>
+  © 2026 Sellvance • CNPJ XX.XXX.XXX/0001-XX •
+  <a href="/login">Entrar</a> •
+  <a href="/signup">Criar conta</a>
+</footer>
+
+</body>
+</html>

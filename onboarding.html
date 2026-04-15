@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6c63ff">
+<title>Bem-vindo ao Sellvance</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:#0a0a0f;color:#e8e8f0;min-height:100vh;padding:40px 20px;}
+.container{max-width:800px;margin:0 auto;}
+.logo{text-align:center;font-size:24px;font-weight:900;background:linear-gradient(135deg,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:32px;}
+.welcome{text-align:center;margin-bottom:40px;}
+.welcome h1{font-size:32px;font-weight:900;margin-bottom:8px;letter-spacing:-.5px;}
+.welcome p{font-size:16px;color:#9090a8;}
+.progress-bar{background:#16161f;border:1px solid #2a2a3d;border-radius:100px;height:8px;margin-bottom:32px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(135deg,#6c63ff,#ec4899);border-radius:100px;transition:width .4s;}
+
+.steps{display:flex;flex-direction:column;gap:16px;}
+.step{background:#16161f;border:1px solid #2a2a3d;border-radius:16px;padding:24px;display:flex;gap:20px;align-items:center;transition:all .3s;}
+.step.done{border-color:#10b981;opacity:.7;}
+.step.active{border-color:#6c63ff;background:linear-gradient(135deg,#1a1a28,#16161f);box-shadow:0 10px 40px rgba(108,99,255,.2);}
+.step-num{width:48px;height:48px;border-radius:50%;background:#2a2a3d;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:18px;flex-shrink:0;}
+.step.done .step-num{background:#10b981;}
+.step.active .step-num{background:linear-gradient(135deg,#6c63ff,#8b5cf6);}
+.step-content{flex:1;}
+.step h3{font-size:17px;font-weight:800;margin-bottom:4px;}
+.step p{font-size:13px;color:#9090a8;line-height:1.5;}
+.step-action{background:#6c63ff;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:transform .2s;border:none;cursor:pointer;white-space:nowrap;}
+.step-action:hover{transform:translateY(-1px);}
+.step.done .step-action{background:#10b981;}
+.step:not(.active):not(.done) .step-action{background:#2a2a3d;color:#9090a8;}
+
+.skip{text-align:center;margin-top:32px;}
+.skip a{color:#5050a0;font-size:13px;text-decoration:none;}
+.skip a:hover{color:#9090a8;}
+
+@media(max-width:640px){.step{flex-direction:column;text-align:center;}.step-action{width:100%;}}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo">Sellvance</div>
+
+  <div class="welcome">
+    <h1>Bem-vindo, {{ user_name }}! 🎉</h1>
+    <p>Vamos configurar sua conta em 4 passos rapidos.</p>
+  </div>
+
+  <div class="progress-bar">
+    <div class="progress-fill" style="width: {{ progress_pct }}%;"></div>
+  </div>
+
+  <div class="steps">
+
+    <div class="step {% if steps.marketplace %}done{% elif active_step == 1 %}active{% endif %}">
+      <div class="step-num">{% if steps.marketplace %}✓{% else %}1{% endif %}</div>
+      <div class="step-content">
+        <h3>Conecte seu primeiro marketplace</h3>
+        <p>Comece com Mercado Livre, Shopee ou Amazon. OAuth seguro, sem precisar senha.</p>
+      </div>
+      <a href="/integrations" class="step-action">
+        {% if steps.marketplace %}Ja conectado{% else %}Conectar agora →{% endif %}
+      </a>
+    </div>
+
+    <div class="step {% if steps.org_info %}done{% elif active_step == 2 %}active{% endif %}">
+      <div class="step-num">{% if steps.org_info %}✓{% else %}2{% endif %}</div>
+      <div class="step-content">
+        <h3>Complete os dados da sua loja</h3>
+        <p>Nome, logo, cor da marca. Usado nas paginas publicas (pagamento, mini-loja).</p>
+      </div>
+      <a href="/settings" class="step-action">
+        {% if steps.org_info %}Completo{% else %}Preencher →{% endif %}
+      </a>
+    </div>
+
+    <div class="step {% if steps.pricing_rule %}done{% elif active_step == 3 %}active{% endif %}">
+      <div class="step-num">{% if steps.pricing_rule %}✓{% else %}3{% endif %}</div>
+      <div class="step-content">
+        <h3>Defina sua primeira regra de precificacao</h3>
+        <p>Margem minima, preco maximo, estrategia. A IA vai respeitar tudo.</p>
+      </div>
+      <a href="/admin" class="step-action">
+        {% if steps.pricing_rule %}Configurado{% else %}Definir →{% endif %}
+      </a>
+    </div>
+
+    <div class="step {% if steps.whatsapp %}done{% elif active_step == 4 %}active{% endif %}">
+      <div class="step-num">{% if steps.whatsapp %}✓{% else %}4{% endif %}</div>
+      <div class="step-content">
+        <h3>Ative o agente WhatsApp</h3>
+        <p>IA responde clientes em tempo real. Opcional mas super recomendado.</p>
+      </div>
+      <a href="/admin" class="step-action">
+        {% if steps.whatsapp %}Ativo{% else %}Ativar →{% endif %}
+      </a>
+    </div>
+
+  </div>
+
+  <div class="skip">
+    <a href="/dashboard">Pular por agora e ir para o dashboard →</a>
+  </div>
+</div>
+
+</body>
+</html>

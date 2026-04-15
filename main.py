@@ -148,7 +148,7 @@ def ensure_db_ready():
             # Bootstrap modulos de auto-melhoria (telemetria, flags, pricing, insights)
             try:
                 import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent, buybox_monitor
-                import fraud_detector, content_ai, cohort_analytics
+                import fraud_detector, content_ai, cohort_analytics, billing
                 telemetry.ensure_tables()
                 feature_flags.ensure_tables()
                 pricing_ai.ensure_tables()
@@ -158,6 +158,7 @@ def ensure_db_ready():
                 fraud_detector.ensure_tables()
                 content_ai.ensure_tables()
                 cohort_analytics.ensure_tables()
+                billing.ensure_tables()
                 telemetry.register_request_hooks(app)
                 # Inicia scheduler in-process para tarefas periodicas
                 try:
@@ -229,6 +230,13 @@ def healthz_deep():
     return jsonify(result), 200 if result['status'] == 'ok' else 503
 
 @app.route('/')
+def root():
+    """Landing page publica ou dashboard se logado."""
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return render_template('landing.html')
+
+
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
@@ -296,6 +304,115 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    """Cria nova conta + organizacao + inicia trial de 14 dias."""
+    import billing as _billing
+    if request.method == 'GET':
+        plan = request.args.get('plan', 'completo')
+        if plan not in ('marketplaces', 'marketing', 'completo'):
+            plan = 'completo'
+        return render_template('signup.html', selected_plan=plan)
+
+    # POST
+    org_name = (request.form.get('org_name') or '').strip()
+    name = (request.form.get('name') or '').strip()
+    email = (request.form.get('email') or '').strip().lower()
+    password = request.form.get('password') or ''
+    phone = (request.form.get('phone') or '').strip()
+    plan = request.form.get('plan', 'completo')
+    if plan not in ('marketplaces', 'marketing', 'completo'):
+        plan = 'completo'
+
+    if not org_name or not name or not email or not password:
+        return render_template('signup.html', selected_plan=plan,
+                               error='Preencha todos os campos obrigatorios')
+    if len(password) < 8:
+        return render_template('signup.html', selected_plan=plan,
+                               error='Senha deve ter pelo menos 8 caracteres')
+
+    db = get_db()
+    existing = db.execute('SELECT id FROM users WHERE LOWER(email)=?', (email,)).fetchone()
+    if existing:
+        db.close()
+        return render_template('signup.html', selected_plan=plan,
+                               error='Email ja cadastrado. Tente fazer login.')
+
+    # Criar organizacao
+    cur = db.execute(
+        'INSERT INTO organizations (name, plan) VALUES (?, ?)',
+        (org_name, plan)
+    )
+    new_org_id = cur.lastrowid
+    # Criar usuario
+    cur2 = db.execute(
+        '''INSERT INTO users (org_id, org_name, name, email, password_hash)
+           VALUES (?, ?, ?, ?, ?)''',
+        (new_org_id, org_name, name, email, hash_password(password))
+    )
+    new_user_id = cur2.lastrowid
+    db.commit()
+    db.close()
+
+    # Inicia trial
+    _billing.start_trial(new_org_id, plan=plan, billing_email=email)
+
+    # Auto-login
+    session.permanent = True
+    session['user_id'] = new_user_id
+    session['user_name'] = name
+    session['org_id'] = new_org_id
+    session['org_name'] = org_name
+    session['plan'] = plan
+
+    try:
+        import telemetry as _tm
+        _tm.track('action', 'signup_completed', plan=plan, org=org_name)
+    except Exception:
+        pass
+
+    return redirect(url_for('onboarding'))
+
+
+@app.route('/onboarding')
+@login_required
+def onboarding():
+    """Wizard de primeiros passos."""
+    import billing as _billing
+    org_id = session.get('org_id', 1)
+    status = _billing.get_onboarding_status(org_id)
+    return render_template('onboarding.html',
+                           user_name=session.get('user_name', 'voce'),
+                           steps=status['steps'],
+                           progress_pct=status['progress_pct'],
+                           active_step=status['active_step'])
+
+
+@app.route('/billing')
+@login_required
+def billing_page():
+    """Status da assinatura e trial."""
+    import billing as _billing
+    org_id = session.get('org_id', 1)
+    return jsonify({
+        'ok': True,
+        'subscription': _billing.get_trial_status(org_id),
+        'onboarding': _billing.get_onboarding_status(org_id),
+    })
+
+
+@app.route('/billing/activate', methods=['POST'])
+@login_required
+def billing_activate():
+    """Ativa subscription apos pagamento (integracao com Pix/Stripe vira depois)."""
+    import billing as _billing
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    method = data.get('payment_method', 'pix')
+    _billing.activate_subscription(org_id, payment_method=method)
+    return jsonify({'ok': True, 'subscription': _billing.get_trial_status(org_id)})
 
 @app.route('/crm')
 @login_required
