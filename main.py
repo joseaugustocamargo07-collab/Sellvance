@@ -147,11 +147,12 @@ def ensure_db_ready():
             migrate_db()
             # Bootstrap modulos de auto-melhoria (telemetria, flags, pricing, insights)
             try:
-                import telemetry, feature_flags, pricing_ai, auto_insights
+                import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent
                 telemetry.ensure_tables()
                 feature_flags.ensure_tables()
                 pricing_ai.ensure_tables()
                 auto_insights.ensure_tables()
+                whatsapp_agent.ensure_tables()
                 telemetry.register_request_hooks(app)
                 from health_monitor import register_routes as _hm_register
                 _hm_register(app)
@@ -4008,6 +4009,49 @@ def admin_telemetry_events():
     limit = int(request.args.get('limit', 100))
     events = telemetry.get_recent_events(org_id=org_id, limit=limit, event_type=event_type)
     return jsonify({'ok': True, 'events': events, 'count': len(events)})
+
+
+@app.route('/admin')
+@login_required
+def admin_panel():
+    """Dashboard admin visual para auto-improvement."""
+    return render_template('admin_panel.html')
+
+
+@app.route('/admin/wa/stats')
+@login_required
+def admin_wa_stats():
+    """Estatisticas do agente WhatsApp."""
+    import whatsapp_agent
+    org_id = session.get('org_id', 1)
+    days = int(request.args.get('days', 7))
+    return jsonify({'ok': True, 'stats': whatsapp_agent.get_agent_stats(org_id, days)})
+
+
+@app.route('/admin/wa/conversations')
+@login_required
+def admin_wa_conversations():
+    """Lista conversas recentes."""
+    import whatsapp_agent
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'conversations': whatsapp_agent.get_conversations(org_id)})
+
+
+@app.route('/api/wa/incoming', methods=['POST'])
+def api_wa_incoming():
+    """Webhook do WhatsApp Business API (publico)."""
+    import whatsapp_agent
+    data = request.get_json() or {}
+    org_id = data.get('org_id', 1)
+    phone = data.get('phone', '')
+    name = data.get('name', 'cliente')
+    text = data.get('text', '')
+    if not phone or not text:
+        return jsonify({'ok': False, 'error': 'phone and text required'}), 400
+    response = whatsapp_agent.handle_incoming_message(org_id, phone, name, text)
+    if response is None:
+        return jsonify({'ok': True, 'handoff': True, 'msg': 'transferido para humano'})
+    return jsonify({'ok': True, 'response': response})
 
 
 if __name__ == '__main__':
