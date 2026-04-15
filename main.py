@@ -154,6 +154,20 @@ def ensure_db_ready():
                 print(f"[startup] DB size={_os.path.getsize(DB_PATH)} bytes")
             init_db()
             migrate_db()
+            # Migracao: garantir coluna credentials_json em api_integrations
+            # (usada pelo callback OAuth do Shopee e outros)
+            try:
+                from database import get_db as _gdb2
+                _d2 = _gdb2()
+                # Checa se a coluna ja existe
+                _cols = [r[1] for r in _d2.execute("PRAGMA table_info(api_integrations)").fetchall()]
+                if 'credentials_json' not in _cols:
+                    _d2.execute("ALTER TABLE api_integrations ADD COLUMN credentials_json TEXT DEFAULT '{}'")
+                    _d2.commit()
+                    print("[startup] ALTER TABLE: added api_integrations.credentials_json")
+                _d2.close()
+            except Exception as _e:
+                print(f"[startup] credentials_json migration warning: {_e}")
             # Bootstrap modulos de auto-melhoria (telemetria, flags, pricing, insights)
             try:
                 import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent, buybox_monitor
@@ -1954,54 +1968,72 @@ pre {{ white-space: pre-wrap; word-break: break-all; }}
 @app.route('/api/shopee/callback')
 def shopee_callback():
     """Handle OAuth callback from Shopee."""
-    code = request.args.get('code', '')
-    shop_id = request.args.get('shop_id', '')
+    import traceback as _tb
+    try:
+        code = request.args.get('code', '')
+        shop_id = request.args.get('shop_id', '')
 
-    if not code or not shop_id:
-        return jsonify({'ok': False, 'error': 'Missing code or shop_id',
-                        'params': dict(request.args)}), 400
+        if not code or not shop_id:
+            return jsonify({'ok': False, 'error': 'Missing code or shop_id',
+                            'params': dict(request.args)}), 400
 
-    from shopee_api import get_access_token, get_shop_info
-    # Exchange code for access token
-    token_resp = get_access_token(code, shop_id)
-    if 'error' in token_resp and not token_resp.get('access_token'):
-        return jsonify({'ok': False, 'error': 'Token exchange failed', 'details': token_resp}), 400
+        from shopee_api import get_access_token, get_shop_info
+        # Exchange code for access token
+        token_resp = get_access_token(code, shop_id)
+        if 'error' in token_resp and not token_resp.get('access_token'):
+            return jsonify({'ok': False, 'error': 'Token exchange failed', 'details': token_resp}), 400
 
-    access_token = token_resp.get('access_token', '')
-    refresh_token = token_resp.get('refresh_token', '')
-    expire_in = token_resp.get('expire_in', 14400)
-    import time as _time_mod
-    expire_ts = int(_time_mod.time()) + expire_in
+        access_token = token_resp.get('access_token', '')
+        refresh_token = token_resp.get('refresh_token', '')
+        expire_in = token_resp.get('expire_in', 14400)
+        import time as _time_mod
+        expire_ts = int(_time_mod.time()) + expire_in
 
-    # Get shop info
-    shop_info = get_shop_info(access_token, int(shop_id))
-    shop_name = ''
-    if shop_info.get('response'):
-        shop_name = shop_info['response'].get('shop_name', f'Shop {shop_id}')
+        # Get shop info (nao quebra se falhar)
+        shop_name = f'Shop {shop_id}'
+        try:
+            shop_info = get_shop_info(access_token, int(shop_id))
+            if isinstance(shop_info, dict) and shop_info.get('response'):
+                shop_name = shop_info['response'].get('shop_name') or shop_name
+        except Exception:
+            pass
 
-    # Save to DB
-    org_id = session.get('org_id', 1)
-    db = get_db()
-    creds = {
-        'shop_id': int(shop_id),
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'expire_in_ts': expire_ts,
-    }
-    existing = db.execute("SELECT id FROM api_integrations WHERE org_id=? AND platform='shopee'",
-                          (org_id,)).fetchone()
-    if existing:
-        db.execute("""UPDATE api_integrations SET status='connected', account_id=?, account_name=?,
-                      credentials_json=?, last_sync=datetime('now') WHERE id=?""",
-                   (str(shop_id), shop_name, json.dumps(creds), existing['id']))
-    else:
-        db.execute("""INSERT INTO api_integrations (org_id, platform, status, account_id, account_name, credentials_json)
-                      VALUES (?,?,?,?,?,?)""",
-                   (org_id, 'shopee', 'connected', str(shop_id), shop_name, json.dumps(creds)))
-    db.commit()
-    db.close()
+        # Save to DB — garante que coluna existe via ALTER defensivo
+        org_id = session.get('org_id', 1)
+        db = get_db()
+        try:
+            db.execute("ALTER TABLE api_integrations ADD COLUMN credentials_json TEXT DEFAULT '{}'")
+            db.commit()
+        except Exception:
+            pass  # coluna ja existe
+        creds = {
+            'shop_id': int(shop_id),
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'expire_in_ts': expire_ts,
+        }
+        existing = db.execute("SELECT id FROM api_integrations WHERE org_id=? AND platform='shopee'",
+                              (org_id,)).fetchone()
+        if existing:
+            db.execute("""UPDATE api_integrations SET status='connected', account_id=?, account_name=?,
+                          credentials_json=?, last_sync=datetime('now') WHERE id=?""",
+                       (str(shop_id), shop_name, json.dumps(creds), existing['id']))
+        else:
+            db.execute("""INSERT INTO api_integrations (org_id, platform, status, account_id, account_name, credentials_json)
+                          VALUES (?,?,?,?,?,?)""",
+                       (org_id, 'shopee', 'connected', str(shop_id), shop_name, json.dumps(creds)))
+        db.commit()
+        db.close()
 
-    return redirect('/integrations?shopee=connected')
+        return redirect('/integrations?shopee=connected')
+    except Exception as _e:
+        # Em vez de 500 generico, retornar JSON com traceback pra facilitar debug
+        return jsonify({
+            'ok': False,
+            'error': 'callback_crash',
+            'exception': str(_e)[:500],
+            'traceback': _tb.format_exc()[:2000],
+        }), 500
 
 
 @app.route('/api/shopee/sync')
