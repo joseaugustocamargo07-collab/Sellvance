@@ -4215,6 +4215,18 @@ def admin_scheduler_status():
     return jsonify({'ok': True, 'scheduler': background_scheduler.get_status()})
 
 
+@app.route('/manifest.json')
+def pwa_manifest():
+    """Manifest do PWA para instalacao no celular."""
+    return send_file('manifest.json', mimetype='application/manifest+json')
+
+
+@app.route('/sw.js')
+def pwa_service_worker():
+    """Service Worker para cache offline."""
+    return send_file('sw.js', mimetype='application/javascript')
+
+
 @app.route('/api/wa/incoming', methods=['POST'])
 def api_wa_incoming():
     """Webhook do WhatsApp Business API (publico)."""
