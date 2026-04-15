@@ -159,6 +159,12 @@ def ensure_db_ready():
                 content_ai.ensure_tables()
                 cohort_analytics.ensure_tables()
                 telemetry.register_request_hooks(app)
+                # Inicia scheduler in-process para tarefas periodicas
+                try:
+                    import background_scheduler
+                    background_scheduler.start_all()
+                except Exception as _se:
+                    print(f"[startup] scheduler warning: {_se}")
                 print("[startup] auto-improvement modules loaded")
             except Exception as _e:
                 print(f"[startup] auto-improvement bootstrap warning: {_e}")
@@ -4199,6 +4205,14 @@ def admin_cohorts_monthly():
     import cohort_analytics
     org_id = session.get('org_id', 1)
     return jsonify({'ok': True, 'cohorts': cohort_analytics.get_monthly_cohorts(org_id)})
+
+
+@app.route('/admin/scheduler')
+@login_required
+def admin_scheduler_status():
+    """Status do scheduler in-process."""
+    import background_scheduler
+    return jsonify({'ok': True, 'scheduler': background_scheduler.get_status()})
 
 
 @app.route('/api/wa/incoming', methods=['POST'])
