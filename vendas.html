@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Sellvance — A plataforma de gestao de marketplaces com IA de precificacao que recupera seu Buy Box automaticamente e aumenta seu faturamento ate 32%.">
+<meta name="theme-color" content="#6c63ff">
+<link rel="manifest" href="/manifest.json">
+
+<!-- Open Graph -->
+<meta property="og:title" content="Sellvance — Venda mais nos marketplaces com IA">
+<meta property="og:description" content="14 dias gratis. Sem cartao. A IA que recupera Buy Box, responde WhatsApp e aumenta seu ROAS enquanto voce dorme.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.sellvance.com.br/vendas">
+
+<title>Sellvance — A IA que faz sua loja vender sozinha nos marketplaces</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:#0a0a0f;color:#e8e8f0;overflow-x:hidden;line-height:1.5;-webkit-font-smoothing:antialiased;}
+a{color:inherit;text-decoration:none;}
+img{max-width:100%;display:block;}
+
+/* TOP BAR */
+.topbar{background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;text-align:center;padding:10px 20px;font-size:13px;font-weight:700;}
+.topbar a{text-decoration:underline;}
+
+/* NAV */
+.nav{position:sticky;top:0;z-index:100;padding:16px 32px;background:rgba(10,10,15,.92);backdrop-filter:blur(20px);border-bottom:1px solid rgba(108,99,255,.15);display:flex;align-items:center;justify-content:space-between;}
+.logo{font-size:22px;font-weight:900;background:linear-gradient(135deg,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.nav-cta{background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;padding:10px 22px;border-radius:10px;font-weight:700;font-size:14px;transition:transform .2s;}
+.nav-cta:hover{transform:translateY(-1px);}
+
+/* SECTIONS */
+.section{padding:80px 24px;max-width:1200px;margin:0 auto;}
+.section-sm{padding:60px 24px;max-width:1000px;margin:0 auto;}
+
+/* HERO */
+.hero{padding:80px 24px 100px;text-align:center;background:radial-gradient(ellipse at top,rgba(108,99,255,.18),transparent 60%);position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;top:20%;left:10%;width:300px;height:300px;background:radial-gradient(circle,rgba(236,72,153,.15),transparent 70%);filter:blur(40px);}
+.hero::after{content:'';position:absolute;bottom:10%;right:5%;width:400px;height:400px;background:radial-gradient(circle,rgba(108,99,255,.15),transparent 70%);filter:blur(60px);}
+.hero-inner{position:relative;z-index:1;max-width:900px;margin:0 auto;}
+.hero-badge{display:inline-block;padding:10px 22px;background:rgba(236,72,153,.1);border:1px solid rgba(236,72,153,.4);border-radius:100px;font-size:12px;font-weight:800;color:#f472b6;margin-bottom:28px;letter-spacing:1px;text-transform:uppercase;}
+.hero h1{font-size:clamp(36px,6vw,72px);font-weight:900;line-height:1.05;letter-spacing:-2px;margin-bottom:28px;}
+.hero h1 span{background:linear-gradient(135deg,#6c63ff,#ec4899,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.hero-sub{font-size:clamp(17px,2.2vw,22px);color:#a0a0b8;max-width:700px;margin:0 auto 40px;line-height:1.6;}
+.hero-sub strong{color:#fff;}
+.cta-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:24px;}
+.btn-primary{background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;padding:20px 42px;border-radius:14px;font-weight:800;font-size:17px;box-shadow:0 20px 60px rgba(108,99,255,.45);transition:all .2s;border:none;cursor:pointer;display:inline-block;}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 25px 70px rgba(108,99,255,.55);}
+.btn-secondary{background:rgba(255,255,255,.05);color:#fff;padding:20px 36px;border-radius:14px;font-weight:700;font-size:16px;border:1px solid rgba(255,255,255,.12);transition:all .2s;display:inline-block;}
+.btn-secondary:hover{background:rgba(255,255,255,.1);}
+.hero-guarantees{display:flex;gap:32px;justify-content:center;flex-wrap:wrap;color:#6868a0;font-size:13px;margin-top:28px;}
+.hero-guarantees span{display:flex;align-items:center;gap:6px;}
+
+/* SECTION TITLE */
+.section-label{text-align:center;font-size:12px;font-weight:800;color:#8b88ff;text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;}
+.section-title{text-align:center;font-size:clamp(28px,4.5vw,52px);font-weight:900;line-height:1.1;margin-bottom:18px;max-width:850px;margin-left:auto;margin-right:auto;letter-spacing:-1px;}
+.section-title span{background:linear-gradient(135deg,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.section-sub{text-align:center;font-size:18px;color:#9090a8;max-width:680px;margin:0 auto 60px;line-height:1.6;}
+
+/* DOR — PROBLEMS */
+.pain{background:#16161f;}
+.pain-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px;margin-top:40px;}
+.pain-item{background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.2);border-radius:14px;padding:26px;}
+.pain-item .icon{font-size:32px;margin-bottom:12px;}
+.pain-item h3{font-size:17px;font-weight:800;margin-bottom:8px;color:#fff;}
+.pain-item p{font-size:14px;color:#9090a8;line-height:1.6;}
+
+/* TURN */
+.turn{background:linear-gradient(180deg,#0a0a0f,#16161f);text-align:center;}
+.turn-big{font-size:clamp(24px,3vw,36px);font-weight:800;color:#fff;max-width:800px;margin:20px auto;line-height:1.3;}
+.turn-big span{background:linear-gradient(135deg,#10b981,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+
+/* FEATURES GRID */
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:24px;}
+.feature{background:linear-gradient(135deg,#16161f,#1a1a28);border:1px solid #2a2a3d;border-radius:18px;padding:36px 32px;transition:all .3s;position:relative;overflow:hidden;}
+.feature::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px;background:linear-gradient(90deg,#6c63ff,#ec4899);opacity:0;transition:opacity .3s;}
+.feature:hover{border-color:#6c63ff;transform:translateY(-6px);box-shadow:0 20px 60px rgba(108,99,255,.15);}
+.feature:hover::before{opacity:1;}
+.feature-icon{font-size:40px;margin-bottom:16px;}
+.feature h3{font-size:22px;font-weight:800;margin-bottom:12px;}
+.feature p{font-size:15px;color:#9090a8;line-height:1.7;}
+.feature .tag{display:inline-block;margin-top:14px;padding:4px 12px;background:rgba(16,185,129,.12);color:#10b981;border-radius:100px;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;}
+
+/* NUMBERS */
+.numbers{background:linear-gradient(135deg,#6c63ff,#ec4899);border-radius:24px;padding:60px 40px;margin:40px 0;}
+.numbers-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:32px;text-align:center;color:#fff;}
+.number-val{font-size:clamp(36px,5vw,56px);font-weight:900;letter-spacing:-1px;margin-bottom:6px;}
+.number-lbl{font-size:14px;opacity:.9;font-weight:600;}
+
+/* COMPARISON */
+.comparison{overflow-x:auto;margin-top:40px;}
+.comp-table{width:100%;border-collapse:separate;border-spacing:0;min-width:720px;}
+.comp-table th{text-align:center;padding:20px 16px;font-size:14px;font-weight:800;color:#9090a8;border-bottom:1px solid #2a2a3d;}
+.comp-table th.us{background:linear-gradient(135deg,rgba(108,99,255,.15),rgba(236,72,153,.15));color:#fff;border-radius:14px 14px 0 0;font-size:16px;}
+.comp-table td{padding:18px 16px;font-size:14px;color:#c0c0d0;text-align:center;border-bottom:1px solid #2a2a3d;}
+.comp-table td.us{background:rgba(108,99,255,.04);color:#fff;font-weight:700;}
+.comp-table td.feat{text-align:left;font-weight:600;color:#fff;}
+.comp-table tr:last-child td{border-bottom:none;}
+.comp-table tr:last-child td.us{border-radius:0 0 14px 14px;}
+.check{color:#10b981;font-size:20px;font-weight:900;}
+.cross{color:#ef4444;font-size:18px;}
+
+/* HOW IT WORKS */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px;}
+.step{text-align:center;padding:24px;}
+.step-num{display:inline-flex;width:64px;height:64px;background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;border-radius:50%;align-items:center;justify-content:center;font-size:26px;font-weight:900;margin-bottom:16px;box-shadow:0 15px 40px rgba(108,99,255,.3);}
+.step h4{font-size:18px;font-weight:800;margin-bottom:8px;}
+.step p{font-size:14px;color:#9090a8;line-height:1.6;}
+
+/* GUARANTEE */
+.guarantee{background:linear-gradient(135deg,#16161f,#1a1a28);border:2px solid #10b981;border-radius:20px;padding:50px 40px;text-align:center;margin:40px auto;max-width:800px;}
+.guarantee-icon{width:90px;height:90px;background:rgba(16,185,129,.15);border:3px solid #10b981;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:42px;margin:0 auto 20px;}
+.guarantee h2{font-size:26px;font-weight:900;margin-bottom:12px;}
+.guarantee p{font-size:16px;color:#9090a8;line-height:1.7;max-width:560px;margin:0 auto;}
+
+/* PRICING */
+.plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;margin-top:20px;}
+.plan{background:#16161f;border:1px solid #2a2a3d;border-radius:22px;padding:40px 32px;position:relative;transition:all .3s;}
+.plan.featured{border-color:#6c63ff;transform:scale(1.04);background:linear-gradient(135deg,#1a1a28,#16161f);box-shadow:0 30px 80px rgba(108,99,255,.2);}
+.plan.featured::before{content:'MAIS ESCOLHIDO';position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#6c63ff,#ec4899);padding:6px 18px;border-radius:100px;font-size:11px;font-weight:900;letter-spacing:1px;}
+.plan h4{font-size:14px;color:#8b88ff;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;}
+.plan .price-old{font-size:14px;color:#6c6c8a;text-decoration:line-through;margin-bottom:4px;}
+.plan .price{font-size:48px;font-weight:900;margin:4px 0 4px;letter-spacing:-2px;}
+.plan .price small{font-size:16px;color:#9090a8;font-weight:600;letter-spacing:0;}
+.plan .desc{font-size:14px;color:#9090a8;margin-bottom:28px;line-height:1.6;}
+.plan ul{list-style:none;margin-bottom:32px;}
+.plan li{font-size:14px;padding:9px 0;color:#c0c0d0;display:flex;align-items:flex-start;gap:10px;line-height:1.5;}
+.plan li::before{content:'✓';color:#10b981;font-weight:900;flex-shrink:0;}
+.plan-btn{display:block;width:100%;text-align:center;padding:16px;border-radius:12px;font-weight:800;font-size:15px;transition:all .2s;}
+.plan.featured .plan-btn{background:linear-gradient(135deg,#6c63ff,#8b5cf6);color:#fff;box-shadow:0 10px 30px rgba(108,99,255,.4);}
+.plan:not(.featured) .plan-btn{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.12);}
+.plan-btn:hover{transform:translateY(-2px);}
+
+/* FAQ */
+.faq{max-width:800px;margin:40px auto 0;}
+.faq-item{background:#16161f;border:1px solid #2a2a3d;border-radius:14px;margin-bottom:14px;overflow:hidden;transition:all .2s;}
+.faq-item[open]{border-color:#6c63ff;}
+.faq-item summary{padding:22px 28px;cursor:pointer;font-size:16px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:space-between;list-style:none;}
+.faq-item summary::-webkit-details-marker{display:none;}
+.faq-item summary::after{content:'+';font-size:24px;color:#6c63ff;transition:transform .3s;font-weight:300;}
+.faq-item[open] summary::after{transform:rotate(45deg);}
+.faq-item p{padding:0 28px 22px;color:#9090a8;font-size:14px;line-height:1.7;}
+
+/* CTA FINAL */
+.cta-final{background:linear-gradient(135deg,#6c63ff,#ec4899);border-radius:28px;padding:80px 40px;text-align:center;margin:60px auto;max-width:1000px;position:relative;overflow:hidden;}
+.cta-final::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,.1),transparent 50%);animation:pulse 4s infinite;}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.5;}50%{transform:scale(1.1);opacity:.8;}}
+.cta-final *{position:relative;z-index:1;}
+.cta-final h2{font-size:clamp(30px,4.5vw,48px);font-weight:900;margin-bottom:18px;letter-spacing:-1px;color:#fff;line-height:1.15;}
+.cta-final p{font-size:18px;color:rgba(255,255,255,.9);margin-bottom:36px;max-width:600px;margin-left:auto;margin-right:auto;line-height:1.6;}
+.cta-final .btn-white{background:#fff;color:#6c63ff;padding:22px 48px;border-radius:14px;font-weight:900;font-size:18px;display:inline-block;box-shadow:0 20px 60px rgba(0,0,0,.3);transition:transform .2s;}
+.cta-final .btn-white:hover{transform:translateY(-3px);}
+.cta-final small{display:block;margin-top:20px;color:rgba(255,255,255,.8);font-size:13px;}
+
+/* FOOTER */
+footer{padding:60px 24px 40px;text-align:center;color:#5050a0;font-size:13px;border-top:1px solid #2a2a3d;}
+footer .ftr-logo{font-size:22px;font-weight:900;margin-bottom:14px;background:linear-gradient(135deg,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+footer .ftr-links{margin-bottom:20px;}
+footer .ftr-links a{color:#9090a8;margin:0 12px;font-size:13px;}
+footer .ftr-links a:hover{color:#fff;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  🔥 OFERTA DE LANCAMENTO — Primeiros 100 sellers com 50% OFF nos 3 primeiros meses. <a href="/signup">Garantir minha vaga →</a>
+</div>
+
+<nav class="nav">
+  <a href="/" class="logo">Sellvance</a>
+  <a href="/signup" class="nav-cta">Comecar gratis</a>
+</nav>
+
+<!-- ═══════════════════════ HERO ═══════════════════════ -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-badge">✨ Novidade — IA de precificacao com rollout 2026</div>
+    <h1>A IA que faz sua loja <span>vender sozinha</span> nos marketplaces</h1>
+    <p class="hero-sub">
+      Enquanto voce dorme, a Sellvance <strong>recupera seu Buy Box</strong>, <strong>responde clientes no WhatsApp</strong>,
+      <strong>ajusta precos em tempo real</strong> e <strong>bloqueia devolucoes fraudulentas</strong>.
+      Tudo em uma plataforma unica conectada com Mercado Livre, Shopee, Amazon e TikTok Shop.
+    </p>
+    <div class="cta-row">
+      <a href="/signup" class="btn-primary">🚀 Quero meu teste gratis de 14 dias</a>
+      <a href="#como-funciona" class="btn-secondary">Ver como funciona</a>
+    </div>
+    <div class="hero-guarantees">
+      <span>✅ Sem cartao de credito</span>
+      <span>⚡ Setup em 5 minutos</span>
+      <span>🔒 Cancele quando quiser</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ DOR ═══════════════════════ -->
+<section class="pain">
+  <div class="section">
+    <div class="section-label">Reconhece alguma dessas dores?</div>
+    <h2 class="section-title">Voce ja perdeu dinheiro <span>hoje</span> e nem sabe</h2>
+    <p class="section-sub">Vendedores profissionais enfrentam estes problemas todos os dias. A diferenca e quem tem ferramenta pra resolver automatico.</p>
+
+    <div class="pain-grid">
+      <div class="pain-item">
+        <div class="icon">💸</div>
+        <h3>Perdeu o Buy Box e nem percebeu</h3>
+        <p>Competidor baixou R$ 2 no seu produto campeao, voce so descobre no fim do mes quando as vendas ja cairam 40%.</p>
+      </div>
+      <div class="pain-item">
+        <div class="icon">⏰</div>
+        <h3>Cliente espera resposta no WhatsApp por horas</h3>
+        <p>Mensagem chegou 22h47. Voce ve so de manha. O cliente ja comprou do concorrente que respondeu em 3 minutos.</p>
+      </div>
+      <div class="pain-item">
+        <div class="icon">📉</div>
+        <h3>Preco nos marketplaces desatualizado</h3>
+        <p>Voce atualiza no ML e esquece de mudar na Amazon. Vendeu com R$ 50 de prejuizo por SKU durante 3 semanas.</p>
+      </div>
+      <div class="pain-item">
+        <div class="icon">🔄</div>
+        <h3>Devolucoes que nao fazem sentido</h3>
+        <p>Cliente com 6 devolucoes em 30 dias continua devolvendo. Voce paga frete de ida e volta. Margem evaporada.</p>
+      </div>
+      <div class="pain-item">
+        <div class="icon">📊</div>
+        <h3>Sem visao do que esta funcionando</h3>
+        <p>Qual canal da mais lucro? Qual cliente vale a pena recuperar? Qual campanha escalar? Voce nao sabe, so "acha".</p>
+      </div>
+      <div class="pain-item">
+        <div class="icon">🪦</div>
+        <h3>Planilha de Excel virou Frankenstein</h3>
+        <p>5 abas, 40 formulas quebradas, 3 macros que ninguem mais entende. Toda decisao depende daquele arquivo que trava.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ VIRADA ═══════════════════════ -->
+<section class="turn">
+  <div class="section-sm">
+    <div class="section-label">E se tivesse um jeito</div>
+    <h2 class="section-title">De voce sair do <span>reativo</span> e entrar no <span>automatico</span>?</h2>
+    <p class="turn-big">
+      Imagine acordar amanha com <span>12 preco ajustados automaticamente</span>,
+      <span>34 mensagens de clientes ja respondidas</span>,
+      <span>3 devolucoes fraudulentas bloqueadas</span>
+      e <span>R$ 2.847 de faturamento adicional</span> — tudo feito pela IA enquanto voce dormia.
+    </p>
+    <p class="section-sub" style="margin-top:20px;">Isso nao e futurista. E o que a Sellvance faz desde o primeiro dia.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════ FEATURES ═══════════════════════ -->
+<section class="section" id="features">
+  <div class="section-label">O que voce ganha</div>
+  <h2 class="section-title">Tudo que um vendedor profissional precisa, <span>sem Frankenstein</span></h2>
+  <p class="section-sub">Cada feature abaixo, na plataforma concorrente, e um add-on que custa separado. Na Sellvance, tudo incluso.</p>
+
+  <div class="features-grid">
+    <div class="feature">
+      <div class="feature-icon">💰</div>
+      <h3>IA de Precificacao Dinamica</h3>
+      <p>Analisa competidor, margem minima, Buy Box e velocity. Ajusta o preco a cada 30 minutos respeitando sua margem minima. Voce nunca vende no prejuizo.</p>
+      <span class="tag">⚡ Auto-reprice</span>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📱</div>
+      <h3>Agente WhatsApp 24/7</h3>
+      <p>Classifica cada mensagem (duvida, compra, reclamacao), responde as faceis e transfere pra voce so o que precisa de humano. Deflection rate de ate 80%.</p>
+      <span class="tag">🤖 Atendimento AI</span>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🎯</div>
+      <h3>Monitor de Buy Box em Tempo Real</h3>
+      <p>Voce ganhou ou perdeu o Buy Box de qualquer SKU — notificacao instantanea + sugestao automatica de novo preco. Nunca mais perde venda por preco alto.</p>
+      <span class="tag">🔔 Real-time</span>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🛡️</div>
+      <h3>Detector de Fraude em Devolucoes</h3>
+      <p>IA analisa 6 sinais (historico do cliente, velocidade, valor, padrao de SKU) e flagga devolucoes suspeitas antes de voce aprovar reembolso.</p>
+      <span class="tag">💸 Economiza 8-12%</span>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">✍️</div>
+      <h3>Conteudo gerado por IA</h3>
+      <p>Titulos, descricoes e tags otimizadas para cada marketplace com score SEO automatico. Um clique e seu anuncio vira top-seller-ready.</p>
+      <span class="tag">📝 Content AI</span>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📊</div>
+      <h3>Analytics de Coorte + LTV</h3>
+      <p>Retencao por mes de aquisicao, LTV por canal, churn rate, CAC-to-LTV ratio. Saiba exatamente onde investir e onde parar de gastar.</p>
+      <span class="tag">🧠 Insights AI</span>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔗</div>
+      <h3>Integracao Nativa 4 Marketplaces</h3>
+      <p>Mercado Livre, Amazon, Shopee e TikTok Shop em uma tela so. OAuth seguro, sincronizacao a cada 15 minutos, zero configuracao manual.</p>
+      <span class="tag">⚡ OAuth 2.0</span>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🚀</div>
+      <h3>Trafego Pago Inteligente</h3>
+      <p>Ranking de campanhas Meta/Google/TikTok Ads por score de IA. A Sellvance sugere: escalar, otimizar ou pausar. Voce clica e aplica.</p>
+      <span class="tag">💡 Score IA</span>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📲</div>
+      <h3>PWA Mobile — instala no celular</h3>
+      <p>Adicione a Sellvance na tela inicial do seu celular. App nativo, funciona offline, push notification quando acontece algo importante.</p>
+      <span class="tag">📱 Mobile first</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ NUMBERS ═══════════════════════ -->
+<section class="section">
+  <div class="numbers">
+    <div class="numbers-grid">
+      <div>
+        <div class="number-val">+32%</div>
+        <div class="number-lbl">ROAS medio no primeiro mes</div>
+      </div>
+      <div>
+        <div class="number-val">80%</div>
+        <div class="number-lbl">Deflection de atendimento WhatsApp</div>
+      </div>
+      <div>
+        <div class="number-val">5min</div>
+        <div class="number-lbl">Setup inicial do zero ao primeiro sync</div>
+      </div>
+      <div>
+        <div class="number-val">24/7</div>
+        <div class="number-lbl">IA trabalhando sem parar</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ COMO FUNCIONA ═══════════════════════ -->
+<section class="section" id="como-funciona">
+  <div class="section-label">Como funciona</div>
+  <h2 class="section-title">Do cadastro ao primeiro resultado em <span>menos de 1 hora</span></h2>
+  <p class="section-sub">Voce nao precisa ser tecnico. Nao precisa contratar consultor. E literalmente apertar 4 botoes.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h4>Criar conta gratis</h4>
+      <p>14 dias completos sem cartao. Trial ativado automaticamente.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h4>Conectar marketplaces</h4>
+      <p>OAuth nativo com ML, Shopee, Amazon e TikTok Shop. 30 segundos cada.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h4>Definir regras de margem</h4>
+      <p>Upload de CSV com seus SKUs e preco minimo. Ou usa o template pronto.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <h4>Ativar a IA</h4>
+      <p>Liga as automacoes que quiser. A partir de agora, ela trabalha por voce.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ COMPARATIVO ═══════════════════════ -->
+<section class="section">
+  <div class="section-label">Comparativo</div>
+  <h2 class="section-title">Por que a Sellvance e diferente <span>(e melhor)</span></h2>
+  <p class="section-sub">A gente olhou o que os outros oferecem e construiu o que eles nao conseguem.</p>
+
+  <div class="comparison">
+    <table class="comp-table">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding-left:24px;">Feature</th>
+          <th class="us">Sellvance</th>
+          <th>Olist</th>
+          <th>Bling</th>
+          <th>Magis5</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="feat">IA de precificacao dinamica</td>
+          <td class="us"><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td>Basico</td>
+        </tr>
+        <tr>
+          <td class="feat">Agente WhatsApp autonomo com IA</td>
+          <td class="us"><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td class="feat">Monitor de Buy Box em tempo real</td>
+          <td class="us"><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td>Manual</td>
+        </tr>
+        <tr>
+          <td class="feat">Detector de fraude em devolucoes</td>
+          <td class="us"><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td class="feat">TikTok Shop (integracao nativa)</td>
+          <td class="us"><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td>Beta</td>
+        </tr>
+        <tr>
+          <td class="feat">Analytics de coorte + LTV</td>
+          <td class="us"><span class="check">✓</span></td>
+          <td>Basico</td>
+          <td><span class="cross">✗</span></td>
+          <td>Basico</td>
+        </tr>
+        <tr>
+          <td class="feat">Conteudo gerado por IA</td>
+          <td class="us"><span class="check">✓</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+        </tr>
+        <tr>
+          <td class="feat">Preco inicial/mes</td>
+          <td class="us">R$ 197</td>
+          <td>R$ 279+</td>
+          <td>R$ 89+</td>
+          <td>R$ 297+</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ═══════════════════════ GARANTIA ═══════════════════════ -->
+<section class="section-sm">
+  <div class="guarantee">
+    <div class="guarantee-icon">🛡️</div>
+    <h2>Garantia 100% risco zero</h2>
+    <p>
+      14 dias gratis, acesso completo, sem cartao de credito. Se nao achar que a Sellvance vale 10x o investimento,
+      <strong>voce simplesmente nao paga nada</strong>. E nem precisa avisar — se nao gostou, nao coloca o cartao. So isso.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════════════════ PRICING ═══════════════════════ -->
+<section class="section" id="pricing">
+  <div class="section-label">Planos</div>
+  <h2 class="section-title">Escolha seu plano e <span>comece hoje</span></h2>
+  <p class="section-sub">14 dias gratis em qualquer plano. Oferta de lancamento: 50% OFF nos 3 primeiros meses (primeiros 100 sellers).</p>
+
+  <div class="plans-grid">
+    <div class="plan">
+      <h4>Marketplaces</h4>
+      <div class="price-old">de R$ 394</div>
+      <div class="price">R$ 197<small>/mes</small></div>
+      <div class="desc">Para quem quer centralizar a gestao dos marketplaces sem IA.</div>
+      <ul>
+        <li>Mercado Livre, Shopee, Amazon, TikTok Shop</li>
+        <li>CRM e automacao de clientes</li>
+        <li>Logistica e estoque unificados</li>
+        <li>Pagina de pagamento via Pix/WhatsApp</li>
+        <li>Analytics basico de vendas</li>
+        <li>Suporte via WhatsApp</li>
+      </ul>
+      <a href="/signup?plan=marketplaces" class="plan-btn">Comecar gratis</a>
+    </div>
+
+    <div class="plan featured">
+      <h4>Completo ⭐</h4>
+      <div class="price-old">de R$ 794</div>
+      <div class="price">R$ 397<small>/mes</small></div>
+      <div class="desc">Tudo que a Sellvance oferece — incluindo todas as IAs ativas.</div>
+      <ul>
+        <li>Tudo do plano Marketplaces</li>
+        <li><strong>IA de Precificacao Dinamica</strong></li>
+        <li><strong>Agente WhatsApp 24/7</strong></li>
+        <li><strong>Monitor de Buy Box + auto-reprice</strong></li>
+        <li><strong>Detector de Fraude em devolucoes</strong></li>
+        <li>Trafego Pago (Meta, Google, TikTok Ads)</li>
+        <li>Analytics de coorte + LTV</li>
+        <li>Content AI (titulos, descricoes)</li>
+        <li>Suporte prioritario</li>
+      </ul>
+      <a href="/signup?plan=completo" class="plan-btn">Comecar gratis — mais escolhido</a>
+    </div>
+
+    <div class="plan">
+      <h4>Marketing</h4>
+      <div class="price-old">de R$ 494</div>
+      <div class="price">R$ 247<small>/mes</small></div>
+      <div class="desc">Para quem ja vende e quer escalar com trafego pago.</div>
+      <ul>
+        <li>Meta Ads, Google Ads, TikTok Ads</li>
+        <li>Ranking de campanhas por score IA</li>
+        <li>Sugestoes: pause/scale/optimize</li>
+        <li>ROAS por campanha e plataforma</li>
+        <li>Trafego pago no piloto automatico</li>
+        <li>Analytics avancado</li>
+        <li>Suporte via email</li>
+      </ul>
+      <a href="/signup?plan=marketing" class="plan-btn">Comecar gratis</a>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════ FAQ ═══════════════════════ -->
+<section class="section">
+  <div class="section-label">Perguntas frequentes</div>
+  <h2 class="section-title">Tem alguma <span>duvida</span>?</h2>
+
+  <div class="faq">
+    <details class="faq-item">
+      <summary>Preciso de conhecimento tecnico pra usar?</summary>
+      <p>Nao. A Sellvance foi desenhada pra vendedor, nao pra programador. Tudo visual, OAuth nativo (nenhuma chave pra copiar) e wizard de onboarding. Se voce sabe usar o ML ou Amazon seller central, voce sabe usar a Sellvance.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>A IA de precificacao nao vai vender meu produto abaixo do custo?</summary>
+      <p>Impossivel por design. Voce define o <strong>preco minimo</strong> e a <strong>margem minima</strong> de cada SKU. A IA respeita esses limites como lei. Se competidor baixar abaixo, ela nao acompanha — ela pausa e te notifica.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Quanto tempo leva pra configurar?</summary>
+      <p>De 5 a 15 minutos. Criar conta (1 min), conectar primeiro marketplace via OAuth (1 min), importar CSV de regras de preco (2 min), ativar a IA (10 segundos). Pronto. A Sellvance comeca a trabalhar imediatamente.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>E seguro conectar meus marketplaces?</summary>
+      <p>Totalmente. Usamos OAuth 2.0 — que e o padrao de seguranca do Google, Facebook, Apple. A Sellvance nunca ve sua senha dos marketplaces. E voce pode revogar o acesso a qualquer momento diretamente na plataforma deles.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>O WhatsApp Agent usa meu numero ou outro?</summary>
+      <p>Usa seu numero conectado via WhatsApp Business API (Meta). A Sellvance apenas orquestra — a mensagem sai do seu numero, o cliente ve seu nome/foto. Totalmente oficial e dentro das regras da Meta.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Posso cancelar a qualquer momento?</summary>
+      <p>Sim. Cancelamento em 1 clique direto pela plataforma, sem fidelidade, sem multa, sem "fale com atendente pra cancelar". Se a Sellvance nao estiver entregando valor, voce vai embora e ponto.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Funciona pra quem vende pouco (menos de 50 pedidos/dia)?</summary>
+      <p>Funciona, mas <strong>nao e o publico ideal</strong>. A Sellvance foi construida pra vendedor profissional (50-500 pedidos/dia). Se voce vende pouco, talvez ainda nao precise de automacao tao forte — vai ter ROI menor.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Qual a diferenca pra Olist, Bling e Magis5?</summary>
+      <p>Olist e ERP focado em emissao fiscal. Bling e ERP generico. Magis5 e hub de marketplaces sem IA real. A Sellvance e a <strong>unica</strong> que tem IA de precificacao dinamica + agente WhatsApp autonomo + fraud detector em uma plataforma so.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>E se eu tiver problemas, tem suporte?</summary>
+      <p>Tem. WhatsApp direto no plano Marketplaces e Completo, email no plano Marketing. Respondemos ate 4h uteis. No plano Completo, voce tem acesso prioritario e onboarding dedicado.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ═══════════════════════ CTA FINAL ═══════════════════════ -->
+<section class="section-sm">
+  <div class="cta-final">
+    <h2>Comece hoje. Pague so se amar.</h2>
+    <p>14 dias de acesso completo. Zero risco. Seu concorrente ja pode estar testando — voce vai ficar pra tras por mais quanto tempo?</p>
+    <a href="/signup?plan=completo" class="btn-white">🚀 Quero meu teste gratis agora</a>
+    <small>Sem cartao de credito • Sem fidelidade • Cancele quando quiser</small>
+  </div>
+</section>
+
+<!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+<footer>
+  <div class="ftr-logo">Sellvance</div>
+  <div class="ftr-links">
+    <a href="/">Inicio</a>
+    <a href="/vendas">Vendas</a>
+    <a href="#pricing">Precos</a>
+    <a href="/login">Entrar</a>
+    <a href="/signup">Criar conta</a>
+  </div>
+  <div style="color:#5050a0;font-size:12px;">
+    © 2026 Sellvance • A IA que faz sua loja vender sozinha nos marketplaces<br>
+    <span style="opacity:.6;">CNPJ XX.XXX.XXX/0001-XX • Todos os direitos reservados</span>
+  </div>
+</footer>
+
+<script>
+// Smooth scroll pros CTAs internos
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
+</script>
+</body>
+</html>

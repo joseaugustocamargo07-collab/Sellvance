@@ -269,6 +269,12 @@ def root():
     return render_template('landing.html')
 
 
+@app.route('/vendas')
+def sales_page():
+    """Pagina de vendas (longa, focada em conversao)."""
+    return render_template('vendas.html')
+
+
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
