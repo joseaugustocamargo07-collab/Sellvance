@@ -2026,8 +2026,28 @@ def shopee_debug():
     db = get_db()
     row = db.execute("SELECT * FROM api_integrations WHERE org_id=? AND platform='shopee'", (org_id,)).fetchone()
     db.close()
+
+    # Diagnostico das credenciais carregadas NO RUNTIME
+    import shopee_api as _shopee
+    partner_id = _shopee._get_partner_id()
+    partner_key = _shopee._get_partner_key()
+    api_host = _shopee._get_api_host()
+    # Mascarar key (mostra so primeiros 4 e ultimos 4 caracteres)
+    masked_key = f"{partner_key[:4]}...{partner_key[-4:]}" if len(partner_key) > 10 else '***'
+
+    config = {
+        'partner_id': partner_id,
+        'partner_key_masked': masked_key,
+        'partner_key_length': len(partner_key),
+        'api_host': api_host,
+        'env': (os.environ.get('SHOPEE_ENV') or 'sandbox (default)'),
+        'is_live_partner': partner_id == 2032624,
+        'is_test_partner': partner_id == 1231483,
+        'redirect_url': _shopee._get_redirect_url(),
+    }
+
     if not row:
-        return jsonify({'status': 'not_connected'})
+        return jsonify({'status': 'not_connected', 'config': config})
     info = dict(row)
     creds = json.loads(info.get('credentials_json', '{}'))
     # Don't expose full tokens
@@ -2038,6 +2058,7 @@ def shopee_debug():
         'expire_ts': creds.get('expire_in_ts'),
     }
     info['credentials_json'] = safe_creds
+    info['config'] = config
     return jsonify(info)
 
 

@@ -9,19 +9,31 @@ import urllib.error
 import urllib.parse
 import os
 
-# ── Credentials ──────────────────────────────────────────────────────────────
-PARTNER_ID = int(os.environ.get('SHOPEE_PARTNER_ID', '1231483'))
-PARTNER_KEY = os.environ.get('SHOPEE_PARTNER_KEY', 'shpk4b654753636764416547594961756c6f7749457254747468434a51504c53')
-# Redirect URL for OAuth — Railway domain
-REDIRECT_URL = os.environ.get('SHOPEE_REDIRECT_URL', 'https://www.sellvance.com.br/api/shopee/callback')
+# ── Credentials (runtime lookup — refletem mudancas de env sem reimport) ──
+def _get_partner_id():
+    return int(os.environ.get('SHOPEE_PARTNER_ID', '1231483'))
 
-# Shopee API host
-# For developing/test apps, use sandbox. For live apps, use production.
-_SHOPEE_ENV = os.environ.get('SHOPEE_ENV', 'sandbox')  # 'sandbox' or 'production'
-if _SHOPEE_ENV == 'sandbox':
-    API_HOST = 'https://partner.test-stable.shopeemobile.com'
-else:
-    API_HOST = 'https://partner.shopeemobile.com'
+def _get_partner_key():
+    # strip() remove espacos/quebras de linha acidentais ao colar no Railway
+    return (os.environ.get('SHOPEE_PARTNER_KEY', 'shpk4b654753636764416547594961756c6f7749457254747468434a51504c53') or '').strip()
+
+def _get_api_host():
+    env = (os.environ.get('SHOPEE_ENV', 'sandbox') or '').strip().lower()
+    if env == 'production':
+        return 'https://partner.shopeemobile.com'
+    return 'https://partner.test-stable.shopeemobile.com'
+
+def _get_redirect_url():
+    return os.environ.get('SHOPEE_REDIRECT_URL', 'https://www.sellvance.com.br/api/shopee/callback')
+
+# Backwards compat — codigo antigo que le PARTNER_ID/PARTNER_KEY/API_HOST continua funcionando
+# mas o valor e recalculado a cada acesso via property-like pattern nao e possivel em modulo,
+# entao mantemos os lookups antigos como snapshot inicial (pode ficar desatualizado)
+PARTNER_ID = _get_partner_id()
+PARTNER_KEY = _get_partner_key()
+API_HOST = _get_api_host()
+REDIRECT_URL = _get_redirect_url()
+_SHOPEE_ENV = (os.environ.get('SHOPEE_ENV', 'sandbox') or '').strip().lower()
 
 
 # ── Signature helpers ────────────────────────────────────────────────────────
@@ -111,16 +123,21 @@ def get_auth_url(redirect_url=None):
 
 def get_access_token(code, shop_id):
     """Exchange authorization code for access token."""
+    # Runtime lookup — garante que pega o valor atual das env vars
+    partner_id = _get_partner_id()
+    partner_key = _get_partner_key()
+    api_host = _get_api_host()
+
     path = '/api/v2/auth/token/get'
     ts = int(time.time())
-    base_string = f'{PARTNER_ID}{path}{ts}'
-    sign = hmac.new(PARTNER_KEY.encode(), base_string.encode(), hashlib.sha256).hexdigest()
+    base_string = f'{partner_id}{path}{ts}'
+    sign = hmac.new(partner_key.encode(), base_string.encode(), hashlib.sha256).hexdigest()
 
-    url = f'{API_HOST}{path}?partner_id={PARTNER_ID}&timestamp={ts}&sign={sign}'
+    url = f'{api_host}{path}?partner_id={partner_id}&timestamp={ts}&sign={sign}'
     data = {
         'code': code,
         'shop_id': int(shop_id),
-        'partner_id': PARTNER_ID,
+        'partner_id': partner_id,
     }
     body = json.dumps(data).encode()
     req = urllib.request.Request(url, data=body, method='POST', headers={
