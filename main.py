@@ -173,6 +173,7 @@ def ensure_db_ready():
                 import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent, buybox_monitor
                 import fraud_detector, content_ai, cohort_analytics, billing
                 import whatsapp_api, push_notifications, tiktok_shop_api
+                import checkout
                 telemetry.ensure_tables()
                 feature_flags.ensure_tables()
                 pricing_ai.ensure_tables()
@@ -186,6 +187,7 @@ def ensure_db_ready():
                 whatsapp_api.ensure_tables()
                 push_notifications.ensure_tables()
                 tiktok_shop_api.ensure_tables()
+                checkout.ensure_tables()
                 # Gerar chaves VAPID na primeira execucao
                 try:
                     push_notifications.get_or_create_vapid_keys()
@@ -559,6 +561,89 @@ def billing_activate():
     method = data.get('payment_method', 'pix')
     _billing.activate_subscription(org_id, payment_method=method)
     return jsonify({'ok': True, 'subscription': _billing.get_trial_status(org_id)})
+
+
+@app.route('/billing/upgrade')
+@login_required
+def billing_upgrade():
+    """Cria sessao de checkout e redireciona pro Pix."""
+    import checkout, billing as _billing
+    org_id = session.get('org_id', 1)
+    user_id = session.get('user_id')
+
+    # Buscar plano atual ou parametro
+    plan = request.args.get('plan')
+    if not plan:
+        sub = _billing.get_trial_status(org_id)
+        plan = sub.get('plan', 'completo')
+
+    # Pegar preco do plano
+    amount = _billing.PLAN_PRICING.get(plan, {}).get('price', 397)
+
+    # Criar sessao
+    result = checkout.create_session(org_id, user_id, plan, amount)
+    return redirect(f"/billing/checkout/{result['session_id']}")
+
+
+@app.route('/billing/checkout/<int:session_id>')
+@login_required
+def billing_checkout(session_id):
+    """Pagina visual de checkout com QR Pix."""
+    import checkout
+    org_id = session.get('org_id', 1)
+    sess = checkout.get_session(session_id, org_id=org_id)
+    if not sess:
+        return 'Sessao nao encontrada', 404
+    return render_template('checkout_page.html', session=sess)
+
+
+@app.route('/billing/session/<int:session_id>/status')
+@login_required
+def billing_session_status(session_id):
+    """Retorna status atual de uma sessao de checkout (usado pelo polling frontend)."""
+    import checkout
+    org_id = session.get('org_id', 1)
+    sess = checkout.get_session(session_id, org_id=org_id)
+    if not sess:
+        return jsonify({'ok': False, 'error': 'not found'}), 404
+    return jsonify({
+        'ok': True,
+        'status': sess.get('status'),
+        'session_id': session_id,
+    })
+
+
+@app.route('/admin/checkout/pending')
+@login_required
+def admin_checkout_pending():
+    """Lista sessoes de checkout pendentes para admin revisar/confirmar manualmente."""
+    import checkout
+    pending = checkout.get_pending_for_review(limit=100)
+    return jsonify({'ok': True, 'pending': pending, 'count': len(pending)})
+
+
+@app.route('/admin/checkout/<int:session_id>/confirm', methods=['POST'])
+@login_required
+def admin_checkout_confirm(session_id):
+    """Admin confirma pagamento manualmente (apos validar Pix recebido)."""
+    import checkout
+    data = request.get_json() or {}
+    notes = data.get('notes', '')
+    result = checkout.confirm_payment(
+        session_id,
+        confirmed_by=session.get('user_name', 'admin'),
+        notes=notes
+    )
+    return jsonify(result)
+
+
+@app.route('/admin/checkout/stats')
+@login_required
+def admin_checkout_stats():
+    """Estatisticas de checkout e payments."""
+    import checkout
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'stats': checkout.get_stats(org_id)})
 
 @app.route('/crm')
 @login_required

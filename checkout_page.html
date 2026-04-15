@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6c63ff">
+<title>Checkout — Sellvance</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:#0a0a0f;color:#e8e8f0;min-height:100vh;padding:24px;}
+.container{max-width:880px;margin:0 auto;}
+.logo{text-align:center;font-size:26px;font-weight:900;background:linear-gradient(135deg,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:32px;}
+
+.card{background:#16161f;border:1px solid #2a2a3d;border-radius:18px;padding:36px;margin-bottom:20px;}
+.card-title{font-size:22px;font-weight:900;margin-bottom:6px;}
+.card-sub{font-size:14px;color:#9090a8;margin-bottom:24px;line-height:1.6;}
+
+.summary{background:linear-gradient(135deg,#6c63ff,#8b5cf6);border-radius:14px;padding:28px 32px;color:#fff;margin-bottom:24px;}
+.summary-label{font-size:12px;opacity:.85;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;}
+.summary-plan{font-size:22px;font-weight:900;margin-bottom:10px;}
+.summary-amount{font-size:46px;font-weight:900;letter-spacing:-1px;}
+.summary-amount small{font-size:16px;font-weight:600;opacity:.8;}
+.summary-period{font-size:13px;opacity:.85;margin-top:4px;}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+@media(max-width:720px){.grid2{grid-template-columns:1fr;}}
+
+.qr-box{background:#fff;border-radius:14px;padding:20px;text-align:center;}
+.qr-box img{max-width:100%;display:block;margin:0 auto;}
+.qr-caption{font-size:13px;color:#1a1a2e;font-weight:700;margin-top:12px;}
+
+.pix-code-box{background:#0a0a0f;border:1px solid #2a2a3d;border-radius:12px;padding:16px;margin-bottom:16px;}
+.pix-code-label{font-size:11px;color:#9090a8;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
+.pix-code-value{font-family:'Consolas','Monaco',monospace;font-size:11px;color:#fff;word-break:break-all;line-height:1.6;max-height:80px;overflow-y:auto;}
+.copy-btn{width:100%;padding:14px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;margin-top:12px;}
+.copy-btn:hover{opacity:.9;}
+.copy-btn.copied{background:linear-gradient(135deg,#059669,#047857);}
+
+.instructions{background:rgba(108,99,255,.06);border:1px solid rgba(108,99,255,.2);border-radius:12px;padding:20px;margin-bottom:20px;}
+.instructions h3{font-size:14px;color:#8b88ff;font-weight:800;margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px;}
+.instructions ol{padding-left:22px;}
+.instructions li{font-size:13px;color:#c0c0d0;padding:6px 0;line-height:1.6;}
+.instructions li strong{color:#fff;}
+
+.timer{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:14px 18px;font-size:13px;color:#f59e0b;font-weight:700;text-align:center;margin-top:16px;}
+
+.status-badge{display:inline-block;padding:6px 14px;border-radius:100px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;}
+.status-pending{background:rgba(245,158,11,.15);color:#f59e0b;}
+.status-paid{background:rgba(16,185,129,.15);color:#10b981;}
+.status-expired{background:rgba(239,68,68,.15);color:#ef4444;}
+
+.actions{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap;}
+.btn-secondary{background:rgba(255,255,255,.05);color:#fff;padding:12px 24px;border:1px solid rgba(255,255,255,.12);border-radius:10px;font-weight:700;font-size:13px;text-decoration:none;display:inline-block;}
+.btn-secondary:hover{background:rgba(255,255,255,.08);}
+
+.success-card{background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(5,150,105,.05));border:2px solid #10b981;border-radius:18px;padding:40px;text-align:center;}
+.success-card .icon{font-size:64px;margin-bottom:16px;}
+.success-card h2{font-size:24px;font-weight:900;margin-bottom:10px;}
+.success-card p{color:#9090a8;font-size:14px;line-height:1.6;max-width:500px;margin:0 auto 24px;}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo">Sellvance</div>
+
+  {% if session.status == 'paid' %}
+    <div class="success-card">
+      <div class="icon">🎉</div>
+      <h2>Pagamento confirmado!</h2>
+      <p>Sua assinatura do plano <strong>{{ session.plan|title }}</strong> está ativa. Aproveite todos os recursos do Sellvance sem limitações.</p>
+      <a href="/dashboard" class="copy-btn" style="display:inline-block;width:auto;padding:14px 32px;text-decoration:none;">Ir para o Dashboard →</a>
+    </div>
+
+  {% elif session.status == 'expired' %}
+    <div class="card">
+      <div class="card-title">⏰ Sessão expirada</div>
+      <div class="card-sub">Essa sessão de checkout expirou após 30 minutos sem pagamento. Crie uma nova pra continuar.</div>
+      <a href="/billing/upgrade" class="copy-btn" style="display:inline-block;width:auto;padding:14px 32px;text-decoration:none;">Gerar novo Pix</a>
+    </div>
+
+  {% else %}
+    <div class="summary">
+      <div class="summary-label">Você está assinando</div>
+      <div class="summary-plan">Plano {{ session.plan|title }}</div>
+      <div class="summary-amount">R$ {{ '%.2f'|format(session.amount)|replace('.', ',') }}<small>/mês</small></div>
+      <div class="summary-period">Primeira cobrança hoje • Renovação mensal</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💳 Pagar com Pix</div>
+      <div class="card-sub">Escaneie o QR code ou copie o código Pix Copia e Cola. O pagamento é confirmado em até 10 minutos.</div>
+
+      <div class="grid2">
+        <div class="qr-box">
+          <img src="{{ session.pix_qrcode_url }}" alt="QR Code Pix">
+          <div class="qr-caption">📱 Aponte a câmera do app do seu banco</div>
+        </div>
+
+        <div>
+          <div class="pix-code-box">
+            <div class="pix-code-label">Pix Copia e Cola</div>
+            <div class="pix-code-value" id="pix-code">{{ session.pix_code }}</div>
+          </div>
+          <button class="copy-btn" onclick="copyPix(this)">📋 Copiar código Pix</button>
+
+          <div class="timer" id="timer">
+            ⏱️ Expira em <span id="time-left">30:00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="instructions">
+        <h3>Como pagar</h3>
+        <ol>
+          <li>Abre o app do <strong>seu banco</strong></li>
+          <li>Vai na seção <strong>"Pix"</strong></li>
+          <li>Escolha <strong>"Pagar com QR Code"</strong> ou <strong>"Pix Copia e Cola"</strong></li>
+          <li>Escaneie / cole o código acima</li>
+          <li>Confirme o valor de <strong>R$ {{ '%.2f'|format(session.amount)|replace('.', ',') }}</strong></li>
+          <li>Finalize o pagamento</li>
+          <li>A assinatura é ativada em até <strong>10 minutos</strong> após o pagamento</li>
+        </ol>
+      </div>
+
+      <div class="actions">
+        <a href="/dashboard" class="btn-secondary">Voltar ao Dashboard</a>
+        <a href="mailto:suporte@sellvance.com.br" class="btn-secondary">Problemas? Fale conosco</a>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+function copyPix(btn) {
+  const code = document.getElementById('pix-code').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    btn.classList.add('copied');
+    btn.textContent = '✓ Copiado!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.textContent = '📋 Copiar código Pix';
+    }, 2500);
+  });
+}
+
+// Timer countdown (30 minutos)
+{% if session.status == 'pending' %}
+let timeLeft = 30 * 60;
+const timerEl = document.getElementById('time-left');
+setInterval(() => {
+  if (timeLeft <= 0) {
+    timerEl.textContent = 'Expirado';
+    return;
+  }
+  timeLeft--;
+  const min = Math.floor(timeLeft / 60);
+  const sec = timeLeft % 60;
+  timerEl.textContent = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+}, 1000);
+
+// Poll status a cada 15 segundos
+setInterval(async () => {
+  try {
+    const r = await fetch('/billing/session/{{ session.id }}/status');
+    const d = await r.json();
+    if (d.status === 'paid') {
+      location.reload();
+    }
+  } catch(e) {}
+}, 15000);
+{% endif %}
+</script>
+
+</body>
+</html>
