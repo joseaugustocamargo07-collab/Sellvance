@@ -147,12 +147,13 @@ def ensure_db_ready():
             migrate_db()
             # Bootstrap modulos de auto-melhoria (telemetria, flags, pricing, insights)
             try:
-                import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent
+                import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent, buybox_monitor
                 telemetry.ensure_tables()
                 feature_flags.ensure_tables()
                 pricing_ai.ensure_tables()
                 auto_insights.ensure_tables()
                 whatsapp_agent.ensure_tables()
+                buybox_monitor.ensure_tables()
                 telemetry.register_request_hooks(app)
                 print("[startup] auto-improvement modules loaded")
             except Exception as _e:
@@ -4085,6 +4086,34 @@ def admin_wa_conversations():
     import whatsapp_agent
     org_id = session.get('org_id', 1)
     return jsonify({'ok': True, 'conversations': whatsapp_agent.get_conversations(org_id)})
+
+
+@app.route('/admin/buybox/stats')
+@login_required
+def admin_buybox_stats():
+    """Estatisticas de monitoramento de Buy Box."""
+    import buybox_monitor
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'stats': buybox_monitor.get_stats(org_id)})
+
+
+@app.route('/admin/buybox/alerts')
+@login_required
+def admin_buybox_alerts():
+    """Alertas de Buy Box pendentes."""
+    import buybox_monitor
+    org_id = session.get('org_id', 1)
+    return jsonify({'ok': True, 'alerts': buybox_monitor.get_alerts(org_id)})
+
+
+@app.route('/admin/buybox/status')
+@login_required
+def admin_buybox_status():
+    """Status atual de todos os SKUs monitorados."""
+    import buybox_monitor
+    org_id = session.get('org_id', 1)
+    marketplace = request.args.get('mp')
+    return jsonify({'ok': True, 'status': buybox_monitor.get_current_status(org_id, marketplace)})
 
 
 @app.route('/api/wa/incoming', methods=['POST'])
