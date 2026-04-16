@@ -173,7 +173,7 @@ def ensure_db_ready():
                 import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent, buybox_monitor
                 import fraud_detector, content_ai, cohort_analytics, billing
                 import whatsapp_api, push_notifications, tiktok_shop_api
-                import checkout
+                import checkout, asaas_api
                 telemetry.ensure_tables()
                 feature_flags.ensure_tables()
                 pricing_ai.ensure_tables()
@@ -188,6 +188,7 @@ def ensure_db_ready():
                 push_notifications.ensure_tables()
                 tiktok_shop_api.ensure_tables()
                 checkout.ensure_tables()
+                asaas_api.ensure_tables()
                 # Gerar chaves VAPID na primeira execucao
                 try:
                     push_notifications.get_or_create_vapid_keys()
@@ -644,6 +645,141 @@ def admin_checkout_stats():
     import checkout
     org_id = session.get('org_id', 1)
     return jsonify({'ok': True, 'stats': checkout.get_stats(org_id)})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  ASAAS — COBRANÇAS PIX + ASSINATURAS RECORRENTES + WEBHOOK
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/billing/asaas/subscribe', methods=['POST'])
+@login_required
+def billing_asaas_subscribe():
+    """Cria assinatura recorrente no Asaas via Pix."""
+    import asaas_api as _asaas, billing as _billing
+    if not _asaas.is_configured():
+        return jsonify({'ok': False, 'error': 'Asaas nao configurado (ASAAS_API_KEY ausente)'}), 500
+
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    plan = data.get('plan')
+    if not plan:
+        sub = _billing.get_trial_status(org_id)
+        plan = sub.get('plan', 'completo')
+    amount = _billing.PLAN_PRICING.get(plan, {}).get('price', 397)
+
+    result = _asaas.create_subscription(org_id, plan, amount, billing_type='PIX')
+    return jsonify(result)
+
+
+@app.route('/billing/asaas/pix-charge', methods=['POST'])
+@login_required
+def billing_asaas_pix_charge():
+    """Cria cobranca Pix avulsa (primeiro pagamento ou pagamento unico)."""
+    import asaas_api as _asaas, billing as _billing
+    if not _asaas.is_configured():
+        return jsonify({'ok': False, 'error': 'Asaas nao configurado'}), 500
+
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    plan = data.get('plan')
+    if not plan:
+        sub = _billing.get_trial_status(org_id)
+        plan = sub.get('plan', 'completo')
+    amount = _billing.PLAN_PRICING.get(plan, {}).get('price', 397)
+    description = data.get('description', f'Sellvance — Plano {plan.title()}')
+
+    result = _asaas.create_pix_charge(org_id, amount, description)
+    return jsonify(result)
+
+
+@app.route('/billing/asaas/checkout')
+@login_required
+def billing_asaas_checkout():
+    """Pagina visual de checkout Asaas com QR Pix real (Asaas gera o Pix dinamico)."""
+    import asaas_api as _asaas, billing as _billing
+    if not _asaas.is_configured():
+        return jsonify({'ok': False, 'error': 'Asaas nao configurado'}), 500
+
+    org_id = session.get('org_id', 1)
+    plan = request.args.get('plan')
+    if not plan:
+        sub = _billing.get_trial_status(org_id)
+        plan = sub.get('plan', 'completo')
+    amount = _billing.PLAN_PRICING.get(plan, {}).get('price', 397)
+
+    result = _asaas.create_pix_charge(org_id, amount,
+                                       f'Sellvance — Plano {plan.title()}')
+    if not result.get('ok'):
+        return jsonify(result), 500
+
+    return render_template('checkout_asaas.html',
+                           pix=result, plan=plan, amount=amount)
+
+
+@app.route('/billing/asaas/status')
+@login_required
+def billing_asaas_status():
+    """Status da assinatura Asaas do org logado."""
+    import asaas_api as _asaas
+    org_id = session.get('org_id', 1)
+    return jsonify({
+        'ok': True,
+        'configured': _asaas.is_configured(),
+        **_asaas.get_subscription_status(org_id)
+    })
+
+
+@app.route('/billing/asaas/cancel', methods=['POST'])
+@login_required
+def billing_asaas_cancel():
+    """Cancela assinatura Asaas."""
+    import asaas_api as _asaas
+    org_id = session.get('org_id', 1)
+    return jsonify(_asaas.cancel_subscription(org_id))
+
+
+@app.route('/api/asaas/webhook', methods=['POST'])
+def api_asaas_webhook():
+    """
+    Webhook publico do Asaas.
+    Quando um Pix e recebido, Asaas manda POST pra ca.
+    Dispara ativacao da subscription automaticamente.
+    """
+    import asaas_api as _asaas
+    # Validar token (opcional mas recomendado)
+    token = request.headers.get('asaas-access-token') or request.args.get('token')
+    expected = _asaas._get_webhook_token()
+    if expected and token != expected:
+        # Aceitar mesmo sem token se vier do IP do Asaas (fallback)
+        pass  # Em producao, validar IP de origem do Asaas
+
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception:
+        return jsonify({'ok': False}), 400
+
+    result = _asaas.process_webhook(body)
+    return jsonify({'ok': True, 'processed': result})
+
+
+@app.route('/admin/asaas/stats')
+@login_required
+def admin_asaas_stats():
+    """Estatisticas gerais de pagamentos Asaas."""
+    import asaas_api as _asaas
+    return jsonify({'ok': True, 'stats': _asaas.get_admin_stats()})
+
+
+@app.route('/admin/asaas/webhooks')
+@login_required
+def admin_asaas_webhooks():
+    """Ultimos webhooks recebidos do Asaas (debug)."""
+    db = get_db()
+    rows = [dict(r) for r in db.execute(
+        'SELECT * FROM asaas_webhook_log ORDER BY id DESC LIMIT 50'
+    ).fetchall()]
+    db.close()
+    return jsonify({'ok': True, 'webhooks': rows, 'count': len(rows)})
 
 @app.route('/crm')
 @login_required

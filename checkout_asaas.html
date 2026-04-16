@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#6c63ff">
+<title>Pagamento Pix — Sellvance</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:#0a0a0f;color:#e8e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+.container{max-width:520px;width:100%;}
+.logo{text-align:center;font-size:24px;font-weight:900;background:linear-gradient(135deg,#6c63ff,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:28px;}
+.card{background:#16161f;border:1px solid #2a2a3d;border-radius:18px;padding:32px;margin-bottom:20px;}
+.plan-badge{display:inline-block;padding:6px 14px;background:rgba(108,99,255,.15);color:#8b88ff;border-radius:100px;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;}
+.amount{font-size:48px;font-weight:900;margin-bottom:4px;letter-spacing:-2px;}
+.amount small{font-size:16px;font-weight:600;color:#9090a8;}
+.period{font-size:13px;color:#9090a8;margin-bottom:28px;}
+.qr-wrap{background:#fff;border-radius:14px;padding:20px;text-align:center;margin-bottom:20px;}
+.qr-wrap img{max-width:260px;margin:0 auto;display:block;}
+.qr-caption{font-size:12px;color:#333;font-weight:700;margin-top:10px;}
+.pix-code-box{background:#0a0a0f;border:1px solid #2a2a3d;border-radius:10px;padding:14px;margin-bottom:14px;}
+.pix-label{font-size:10px;color:#9090a8;text-transform:uppercase;letter-spacing:1px;font-weight:800;margin-bottom:6px;}
+.pix-value{font-family:'Consolas','Monaco',monospace;font-size:11px;color:#fff;word-break:break-all;line-height:1.6;max-height:80px;overflow-y:auto;}
+.copy-btn{width:100%;padding:16px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:12px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:14px;}
+.copy-btn:hover{opacity:.9;}
+.copy-btn.copied{background:#059669;}
+.steps{list-style:none;margin:16px 0;}
+.steps li{display:flex;gap:10px;padding:8px 0;font-size:13px;color:#c0c0d0;line-height:1.5;}
+.steps li::before{content:attr(data-n);flex-shrink:0;width:24px;height:24px;background:#6c63ff;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;}
+.status-bar{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:14px;text-align:center;font-size:13px;color:#f59e0b;font-weight:700;}
+.status-bar.paid{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.25);color:#10b981;}
+.secure{text-align:center;font-size:11px;color:#5050a0;margin-top:16px;}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="logo">Sellvance</div>
+
+  <div class="card">
+    <div class="plan-badge">Plano {{ plan|title }}</div>
+    <div class="amount">R$ {{ '%.2f'|format(amount)|replace('.', ',') }}<small>/mes</small></div>
+    <div class="period">Cobranca recorrente mensal via Pix</div>
+
+    {% if pix.pix_qrcode_b64 %}
+    <div class="qr-wrap">
+      <img src="data:image/png;base64,{{ pix.pix_qrcode_b64 }}" alt="QR Code Pix">
+      <div class="qr-caption">Aponte a camera do app do seu banco</div>
+    </div>
+    {% endif %}
+
+    {% if pix.pix_payload %}
+    <div class="pix-code-box">
+      <div class="pix-label">Pix Copia e Cola</div>
+      <div class="pix-value" id="pix-code">{{ pix.pix_payload }}</div>
+    </div>
+    <button class="copy-btn" id="copy-btn" onclick="copyPix()">Copiar codigo Pix</button>
+    {% endif %}
+
+    <ol class="steps">
+      <li data-n="1">Abre o <strong>app do seu banco</strong></li>
+      <li data-n="2">Vai em <strong>Pix → Pagar com QR Code</strong> ou <strong>Copia e Cola</strong></li>
+      <li data-n="3">Confirma o valor de <strong>R$ {{ '%.2f'|format(amount)|replace('.', ',') }}</strong></li>
+      <li data-n="4">Pronto! Assinatura ativada <strong>automaticamente</strong> em ate 1 minuto</li>
+    </ol>
+
+    <div class="status-bar" id="status-bar">
+      ⏳ Aguardando pagamento...
+    </div>
+  </div>
+
+  <div class="secure">🔒 Pagamento processado via Asaas — PSP regulado pelo Banco Central</div>
+</div>
+
+<script>
+function copyPix(){
+  const code = document.getElementById('pix-code').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.classList.add('copied');
+    btn.textContent = '✓ Copiado!';
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.textContent = 'Copiar codigo Pix';
+    }, 3000);
+  });
+}
+
+// Polling — verifica a cada 10s se o pagamento foi confirmado
+{% if pix.payment_id %}
+setInterval(async () => {
+  try {
+    const r = await fetch('/billing/asaas/status');
+    const d = await r.json();
+    if (d.last_payment && d.last_payment.status === 'RECEIVED') {
+      document.getElementById('status-bar').className = 'status-bar paid';
+      document.getElementById('status-bar').innerHTML = '✅ Pagamento confirmado! Redirecionando...';
+      setTimeout(() => window.location.href = '/dashboard', 2000);
+    }
+  } catch(e) {}
+}, 10000);
+{% endif %}
+</script>
+
+</body>
+</html>
