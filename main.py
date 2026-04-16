@@ -695,7 +695,8 @@ def billing_asaas_pix_charge():
 @app.route('/billing/asaas/checkout')
 @login_required
 def billing_asaas_checkout():
-    """Pagina visual de checkout Asaas com QR Pix real (Asaas gera o Pix dinamico)."""
+    """Pagina visual de checkout Asaas com QR Pix real (Asaas gera o Pix dinamico).
+    Aceita ?cpf=12345678900 na URL pra criar o customer com CPF/CNPJ."""
     import asaas_api as _asaas, billing as _billing
     if not _asaas.is_configured():
         return jsonify({'ok': False, 'error': 'Asaas nao configurado'}), 500
@@ -707,10 +708,25 @@ def billing_asaas_checkout():
         plan = sub.get('plan', 'completo')
     amount = _billing.PLAN_PRICING.get(plan, {}).get('price', 397)
 
+    # Se CPF/CNPJ veio como parametro, criar customer com ele
+    cpf_cnpj = request.args.get('cpf') or request.args.get('cnpj') or request.args.get('cpf_cnpj')
+    if cpf_cnpj:
+        db = get_db()
+        user = db.execute('SELECT name, email FROM users WHERE org_id=? LIMIT 1', (org_id,)).fetchone()
+        db.close()
+        if user:
+            _asaas.create_customer(org_id, user['name'], user['email'], cpf_cnpj=cpf_cnpj)
+
     result = _asaas.create_pix_charge(org_id, amount,
                                        f'Sellvance — Plano {plan.title()}')
     if not result.get('ok'):
-        return jsonify(result), 500
+        # Mostrar erro detalhado pra debug
+        return jsonify({
+            'ok': False,
+            'error': 'Falha ao gerar cobranca Pix',
+            'detail': result,
+            'hint': 'Se o erro for sobre customer, tente acessar /billing/asaas/checkout?cpf=SEU_CPF_AQUI (apenas numeros, sem pontos/tracos)'
+        }), 500
 
     return render_template('checkout_asaas.html',
                            pix=result, plan=plan, amount=amount)
