@@ -754,20 +754,27 @@ def billing_asaas_cancel():
     return jsonify(_asaas.cancel_subscription(org_id))
 
 
-@app.route('/api/asaas/webhook', methods=['POST'])
+@app.route('/api/asaas/webhook', methods=['GET', 'POST'])
 def api_asaas_webhook():
     """
     Webhook publico do Asaas.
-    Quando um Pix e recebido, Asaas manda POST pra ca.
-    Dispara ativacao da subscription automaticamente.
+    GET: usado pelo painel Asaas para validar a URL ao salvar.
+    POST: recebe eventos reais (Pix recebido, assinatura, etc).
     """
+    import hmac
     import asaas_api as _asaas
-    # Validar token (opcional mas recomendado)
-    token = request.headers.get('asaas-access-token') or request.args.get('token')
+
+    if request.method == 'GET':
+        return 'OK', 200
+
     expected = _asaas._get_webhook_token()
-    if expected and token != expected:
-        # Aceitar mesmo sem token se vier do IP do Asaas (fallback)
-        pass  # Em producao, validar IP de origem do Asaas
+    if not expected:
+        # Sem token configurado no servidor — recusar tudo por seguranca.
+        return jsonify({'ok': False, 'error': 'webhook_not_configured'}), 503
+
+    received = request.headers.get('asaas-access-token') or request.args.get('token') or ''
+    if not hmac.compare_digest(received, expected):
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 401
 
     try:
         body = request.get_json(force=True) or {}
