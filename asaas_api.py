@@ -30,7 +30,8 @@ def _get_api_base():
 
 
 def _get_webhook_token():
-    return (os.environ.get('ASAAS_WEBHOOK_TOKEN', 'sellvance_asaas_hook_2026') or '').strip()
+    # Sem default: se a env var nao estiver setada, o webhook recusa tudo.
+    return (os.environ.get('ASAAS_WEBHOOK_TOKEN', '') or '').strip()
 
 
 def is_configured():
