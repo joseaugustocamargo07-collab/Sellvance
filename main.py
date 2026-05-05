@@ -1,7 +1,7 @@
 # Sellvance App — main server
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_file
 from database import get_db
-from auth import login_required, verify_password, hash_password
+from auth import login_required, verify_password, hash_password, needs_rehash
 from traffic_ai import analyze_all, calc_metrics, score_campaign
 import os
 import json
@@ -437,8 +437,13 @@ def login():
             return render_template('login.html', error='Preencha email e senha')
         db   = get_db()
         user = db.execute('SELECT * FROM users WHERE LOWER(email) = ?', (email,)).fetchone()
-        db.close()
         if user and verify_password(password, user['password_hash']):
+            # Re-hash transparente: senha bate em formato legado -> migra pra bcrypt agora.
+            if needs_rehash(user['password_hash']):
+                db.execute('UPDATE users SET password_hash = ? WHERE id = ?',
+                           (hash_password(password), user['id']))
+                db.commit()
+            db.close()
             session.permanent = True
             session['user_id']   = user['id']
             session['user_name'] = user['name']
@@ -446,6 +451,7 @@ def login():
             session['org_name']  = user['org_name']
             session['plan']      = get_org_plan(user['org_id'])
             return redirect(url_for('dashboard'))
+        db.close()
         return render_template('login.html', error='Email ou senha invalidos')
     return render_template('login.html')
 
