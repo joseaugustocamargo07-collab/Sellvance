@@ -106,6 +106,7 @@ def run_pagespeed_audit(url, strategy='mobile'):
         'url': url,
         'strategy': strategy,
         'category': ['performance', 'accessibility', 'best-practices', 'seo'],
+        'locale': 'pt_BR',
     }
     api_key = _get_google_api_key()
     if api_key:
