@@ -432,3 +432,423 @@ def get_pages(org_id):
     ).fetchall()]
     db.close()
     return rows
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  ANALISE COMPLETA COM IA — keyword extraction + long-tail + diagnostico
+# ══════════════════════════════════════════════════════════════════════════
+
+# Stop words em portugues (filtrar palavras sem valor SEO)
+_STOP_WORDS_PT = set('''
+    a ao aos as com da das de do dos e em es eu ha ja la lhe lhes lo ma mas me
+    meu na nas nao nem no nos o os ou para pela pelas pelo pelos por qual quando
+    que se sem seu sua te tem um uma uns umas voce nos na no pra pro isso essa
+    esse esta este foi ser ter como mais entre sobre ate pode podem tambem ja
+    ainda so sao era eram foi foram muito bem aqui ali onde tudo todo toda todos
+    site www http https html php com br org net page home contato sobre
+'''.split())
+
+
+def _extract_keywords_from_html(html, url=''):
+    """
+    Extrai keywords relevantes do conteudo HTML.
+    Analisa: title, H1-H3, meta keywords, texto visivel, alt text.
+    Retorna lista ordenada por frequencia/relevancia.
+    """
+    keywords = {}
+
+    # Peso por onde a palavra aparece
+    WEIGHTS = {'title': 5, 'h1': 4, 'h2': 3, 'h3': 2, 'meta_kw': 3, 'body': 1, 'alt': 2}
+
+    # Title
+    title_match = re.search(r'<title[^>]*>([^<]+)</title>', html, re.I)
+    if title_match:
+        for w in _tokenize(title_match.group(1)):
+            keywords[w] = keywords.get(w, 0) + WEIGHTS['title']
+
+    # H1-H3
+    for tag, weight_key in [('h1', 'h1'), ('h2', 'h2'), ('h3', 'h3')]:
+        for m in re.finditer(rf'<{tag}[^>]*>(.*?)</{tag}>', html, re.I | re.S):
+            text = re.sub(r'<[^>]+>', '', m.group(1))
+            for w in _tokenize(text):
+                keywords[w] = keywords.get(w, 0) + WEIGHTS[weight_key]
+
+    # Meta keywords
+    kw_match = re.search(r'<meta\s+name=["\']keywords["\']\s+content=["\']([^"\']*)', html, re.I)
+    if kw_match:
+        for w in _tokenize(kw_match.group(1)):
+            keywords[w] = keywords.get(w, 0) + WEIGHTS['meta_kw']
+
+    # Body text (peso menor)
+    body_match = re.search(r'<body[^>]*>(.*?)</body>', html, re.I | re.S)
+    if body_match:
+        text = re.sub(r'<script[^>]*>.*?</script>', '', body_match.group(1), flags=re.I | re.S)
+        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.I | re.S)
+        text = re.sub(r'<[^>]+>', ' ', text)
+        for w in _tokenize(text):
+            keywords[w] = keywords.get(w, 0) + WEIGHTS['body']
+
+    # Alt text de imagens
+    for m in re.finditer(r'alt=["\']([^"\']+)["\']', html, re.I):
+        for w in _tokenize(m.group(1)):
+            keywords[w] = keywords.get(w, 0) + WEIGHTS['alt']
+
+    # Filtrar e ordenar
+    filtered = {k: v for k, v in keywords.items()
+                if len(k) > 3 and k not in _STOP_WORDS_PT and v >= 2}
+    sorted_kw = sorted(filtered.items(), key=lambda x: x[1], reverse=True)
+    return [{'keyword': k, 'relevance': v} for k, v in sorted_kw[:30]]
+
+
+def _tokenize(text):
+    """Tokeniza texto em palavras normalizadas."""
+    text = text.lower()
+    text = re.sub(r'[^a-záàâãéèêíïóôõúüç\s]', ' ', text)
+    words = text.split()
+    return [w for w in words if len(w) > 2 and w not in _STOP_WORDS_PT]
+
+
+def _extract_phrases(html, min_words=3, max_words=6):
+    """
+    Extrai frases de cauda longa (long-tail) do conteudo.
+    Prioriza frases de H1, H2, title e paragrafos.
+    """
+    phrases = {}
+
+    # Fontes de frases
+    sources = []
+    # Title
+    title_m = re.search(r'<title[^>]*>([^<]+)</title>', html, re.I)
+    if title_m:
+        sources.append((title_m.group(1), 5))
+    # H1-H3
+    for tag, weight in [('h1', 4), ('h2', 3), ('h3', 2)]:
+        for m in re.finditer(rf'<{tag}[^>]*>(.*?)</{tag}>', html, re.I | re.S):
+            text = re.sub(r'<[^>]+>', '', m.group(1))
+            sources.append((text, weight))
+    # Paragrafos
+    for m in re.finditer(r'<p[^>]*>(.*?)</p>', html, re.I | re.S):
+        text = re.sub(r'<[^>]+>', '', m.group(1))
+        if len(text) > 30:
+            sources.append((text, 1))
+
+    for text, weight in sources:
+        text = text.lower().strip()
+        text = re.sub(r'[^a-záàâãéèêíïóôõúüç\s]', ' ', text)
+        words = [w for w in text.split() if len(w) > 2 and w not in _STOP_WORDS_PT]
+        # Gerar n-grams
+        for n in range(min_words, min(max_words + 1, len(words) + 1)):
+            for i in range(len(words) - n + 1):
+                phrase = ' '.join(words[i:i+n])
+                if len(phrase) > 10:
+                    phrases[phrase] = phrases.get(phrase, 0) + weight
+
+    sorted_phrases = sorted(phrases.items(), key=lambda x: x[1], reverse=True)
+    return [{'phrase': p, 'relevance': v} for p, v in sorted_phrases[:20]]
+
+
+def _generate_keyword_suggestions(extracted_keywords, title='', niche=''):
+    """
+    Gera sugestoes de keywords baseado nas extraidas + nicho.
+    Adiciona variações de long-tail e perguntas comuns.
+    """
+    suggestions = []
+    top_keywords = [k['keyword'] for k in extracted_keywords[:8]]
+
+    # Prefixos de busca comuns no Brasil
+    prefixes = ['melhor', 'como', 'onde', 'qual', 'quanto custa', 'preço']
+    suffixes = ['perto de mim', 'online', 'em {city}', 'barato', 'profissional',
+                'de qualidade', 'confiável', 'avaliação', 'opinião']
+    questions = ['como funciona {kw}', 'quanto custa {kw}', 'qual melhor {kw}',
+                 '{kw} vale a pena', '{kw} funciona mesmo', 'onde encontrar {kw}',
+                 '{kw} antes e depois', '{kw} resultados']
+
+    for kw in top_keywords[:5]:
+        # Variações com prefixo
+        for p in prefixes[:3]:
+            suggestions.append({
+                'keyword': f'{p} {kw}',
+                'type': 'long_tail',
+                'intent': 'informacional' if p in ('como', 'onde', 'qual') else 'transacional',
+            })
+        # Variações com sufixo
+        for s in suffixes[:3]:
+            suggestions.append({
+                'keyword': f'{kw} {s}'.replace('{city}', 'São Paulo'),
+                'type': 'local' if 'perto' in s or '{city}' in s else 'long_tail',
+                'intent': 'transacional',
+            })
+        # Perguntas
+        for q in questions[:3]:
+            suggestions.append({
+                'keyword': q.format(kw=kw),
+                'type': 'pergunta',
+                'intent': 'informacional',
+            })
+
+    # Remover duplicatas preservando ordem
+    seen = set()
+    unique = []
+    for s in suggestions:
+        if s['keyword'] not in seen:
+            seen.add(s['keyword'])
+            unique.append(s)
+
+    return unique[:25]
+
+
+def _generate_ai_diagnosis(page_data, pagespeed_data=None):
+    """
+    Gera diagnostico inteligente com recomendacoes priorizadas.
+    Analisa todos os dados coletados e produz um relatorio acionavel em PT-BR.
+    """
+    diagnosis = {
+        'score_geral': 0,
+        'resumo': '',
+        'problemas_criticos': [],
+        'melhorias_recomendadas': [],
+        'oportunidades_keywords': [],
+        'proximos_passos': [],
+    }
+
+    issues = page_data.get('issues', [])
+    title = page_data.get('title', '')
+    meta_desc = page_data.get('meta_desc', '')
+    h1 = page_data.get('h1', '')
+    word_count = page_data.get('word_count', 0)
+    page_score = page_data.get('page_score', 0)
+    keywords = page_data.get('extracted_keywords', [])
+    phrases = page_data.get('long_tail_phrases', [])
+
+    # Score geral ponderado
+    perf_score = pagespeed_data.get('performance', 0) if pagespeed_data else 50
+    seo_score = pagespeed_data.get('seo_score', 0) if pagespeed_data else 50
+    diagnosis['score_geral'] = int(page_score * 0.4 + perf_score * 0.3 + seo_score * 0.3)
+
+    # ── Problemas criticos ──
+    for issue in issues:
+        if issue.get('type') == 'critical':
+            diagnosis['problemas_criticos'].append({
+                'problema': issue['msg'],
+                'impacto': 'Alto — afeta diretamente o posicionamento no Google',
+                'como_resolver': _get_fix_suggestion(issue['msg']),
+            })
+
+    # ── Analise do Title ──
+    if title:
+        top_kw = keywords[0]['keyword'] if keywords else ''
+        if top_kw and top_kw not in title.lower():
+            diagnosis['melhorias_recomendadas'].append({
+                'area': 'Title',
+                'problema': f'A keyword principal "{top_kw}" nao aparece no titulo da pagina',
+                'sugestao': f'Inclua "{top_kw}" no inicio do title. Ex: "{top_kw.title()} — {title[:30]}..."',
+                'prioridade': 'Alta',
+            })
+        if len(title) < 40:
+            diagnosis['melhorias_recomendadas'].append({
+                'area': 'Title',
+                'problema': f'Title muito curto ({len(title)} caracteres)',
+                'sugestao': 'Expanda o title pra 50-60 caracteres incluindo a keyword principal e um beneficio',
+                'prioridade': 'Media',
+            })
+
+    # ── Analise da Meta Description ──
+    if meta_desc:
+        if len(meta_desc) < 120:
+            diagnosis['melhorias_recomendadas'].append({
+                'area': 'Meta Description',
+                'problema': f'Meta description curta ({len(meta_desc)} chars)',
+                'sugestao': 'Expanda pra 150-160 chars. Inclua keyword principal + CTA (call-to-action). Ex: "Saiba mais", "Agende agora", "Confira"',
+                'prioridade': 'Media',
+            })
+    else:
+        diagnosis['melhorias_recomendadas'].append({
+            'area': 'Meta Description',
+            'problema': 'Pagina sem meta description',
+            'sugestao': 'Adicione <meta name="description" content="..."> com 150-160 chars descrevendo o conteudo + CTA',
+            'prioridade': 'Alta',
+        })
+
+    # ── Analise do H1 ──
+    if not h1:
+        diagnosis['melhorias_recomendadas'].append({
+            'area': 'H1',
+            'problema': 'Pagina sem tag H1',
+            'sugestao': 'Adicione um unico H1 na pagina com a keyword principal. O H1 deve ser diferente do title.',
+            'prioridade': 'Alta',
+        })
+    elif h1 == title:
+        diagnosis['melhorias_recomendadas'].append({
+            'area': 'H1',
+            'problema': 'H1 identico ao title — perda de oportunidade de rankear pra variacao da keyword',
+            'sugestao': f'Mude o H1 pra uma variacao. Title: "{title[:40]}..." → H1 pode usar sinonimos ou long-tail',
+            'prioridade': 'Baixa',
+        })
+
+    # ── Analise de conteudo ──
+    if word_count < 300:
+        diagnosis['melhorias_recomendadas'].append({
+            'area': 'Conteudo',
+            'problema': f'Conteudo muito curto ({word_count} palavras)',
+            'sugestao': 'Paginas com >600 palavras rankeiam em media 2x melhor. Adicione secoes com FAQ, depoimentos, detalhes do servico/produto.',
+            'prioridade': 'Alta',
+        })
+    elif word_count < 600:
+        diagnosis['melhorias_recomendadas'].append({
+            'area': 'Conteudo',
+            'problema': f'Conteudo abaixo do ideal ({word_count} palavras)',
+            'sugestao': 'Ideal >600 palavras. Adicione FAQ com perguntas frequentes (excelente pra long-tail), descricoes detalhadas, e CTAs.',
+            'prioridade': 'Media',
+        })
+
+    # ── Performance ──
+    if pagespeed_data:
+        lcp = pagespeed_data.get('lcp_ms', 0)
+        if lcp > 4000:
+            diagnosis['problemas_criticos'].append({
+                'problema': f'LCP (Largest Contentful Paint) de {lcp}ms — muito lento (ideal: <2500ms)',
+                'impacto': 'Critico — Google penaliza sites lentos no ranking desde 2021 (Core Web Vitals)',
+                'como_resolver': 'Comprima imagens (WebP), use lazy loading, ative cache do servidor, considere CDN (Cloudflare gratis)',
+            })
+        fcp = pagespeed_data.get('fcp_ms', 0)
+        if fcp > 3000:
+            diagnosis['melhorias_recomendadas'].append({
+                'area': 'Performance',
+                'problema': f'FCP (First Contentful Paint) de {fcp}ms — lento',
+                'sugestao': 'Reduza CSS/JS bloqueante, use font-display:swap, minimize recursos carregados antes do primeiro render',
+                'prioridade': 'Alta',
+            })
+
+    # ── Oportunidades de keywords ──
+    if keywords:
+        top_5 = keywords[:5]
+        for kw in top_5:
+            diagnosis['oportunidades_keywords'].append({
+                'keyword': kw['keyword'],
+                'relevancia': kw['relevance'],
+                'dica': f'Aparece {kw["relevance"]}x no site. {"Ja esta bem posicionada." if kw["relevance"] >= 5 else "Aumente a frequencia naturalmente no conteudo."}',
+            })
+
+    if phrases:
+        diagnosis['oportunidades_keywords'].append({
+            'keyword': 'FRASES LONG-TAIL DETECTADAS',
+            'relevancia': 0,
+            'dica': f'{len(phrases)} frases de cauda longa encontradas. Long-tail tem menos concorrencia e maior taxa de conversao.',
+        })
+
+    # ── Proximos passos priorizados ──
+    if diagnosis['problemas_criticos']:
+        diagnosis['proximos_passos'].append(
+            '🔴 URGENTE: Resolva os problemas criticos listados acima — eles estao impedindo seu ranking'
+        )
+    if not page_data.get('has_schema'):
+        diagnosis['proximos_passos'].append(
+            '📋 Adicione Schema markup (JSON-LD) — ajuda o Google a entender seu conteudo e pode gerar rich snippets'
+        )
+    if not page_data.get('has_og'):
+        diagnosis['proximos_passos'].append(
+            '📱 Adicione Open Graph tags — melhora como seu link aparece quando compartilhado no Facebook/WhatsApp/LinkedIn'
+        )
+    if word_count < 600:
+        diagnosis['proximos_passos'].append(
+            '✍️ Expanda o conteudo pra >600 palavras com secoes de FAQ, depoimentos e CTAs'
+        )
+    if keywords:
+        diagnosis['proximos_passos'].append(
+            f'🎯 Foque na keyword principal: "{keywords[0]["keyword"]}" — use ela no title, H1, primeiro paragrafo e alt text das imagens'
+        )
+    diagnosis['proximos_passos'].append(
+        '🔄 Rode este audit novamente em 30 dias pra medir progresso'
+    )
+
+    # ── Resumo ──
+    score = diagnosis['score_geral']
+    n_crit = len(diagnosis['problemas_criticos'])
+    n_melh = len(diagnosis['melhorias_recomendadas'])
+    if score >= 80:
+        diagnosis['resumo'] = f'Site em boa forma ({score}/100). {n_melh} melhorias sugeridas pra chegar ao topo.'
+    elif score >= 50:
+        diagnosis['resumo'] = f'Site precisa de atencao ({score}/100). {n_crit} problemas criticos e {n_melh} melhorias recomendadas.'
+    else:
+        diagnosis['resumo'] = f'Site com problemas serios ({score}/100). {n_crit} problemas criticos precisam ser resolvidos antes de investir em trafego.'
+
+    return diagnosis
+
+
+def _get_fix_suggestion(issue_msg):
+    """Retorna sugestao de correcao pra um problema conhecido."""
+    msg = issue_msg.lower()
+    if 'title' in msg:
+        return 'Adicione uma tag <title> unica e descritiva com 50-60 caracteres incluindo sua keyword principal.'
+    if 'meta description' in msg:
+        return 'Adicione <meta name="description" content="..."> com 150-160 caracteres. Inclua keyword + beneficio + CTA.'
+    if 'h1' in msg:
+        return 'Adicione uma unica tag <h1> com sua keyword principal. Deve ser diferente do title.'
+    if 'https' in msg:
+        return 'Instale certificado SSL (gratis via Let\'s Encrypt). Google penaliza sites HTTP desde 2018.'
+    if 'viewport' in msg:
+        return 'Adicione <meta name="viewport" content="width=device-width, initial-scale=1.0"> no <head>.'
+    if 'alt' in msg:
+        return 'Adicione atributo alt="" descritivo em todas as imagens. Use a keyword principal quando relevante.'
+    if 'schema' in msg:
+        return 'Adicione JSON-LD com @type apropriado (LocalBusiness, Product, Article, etc). Use schema.org pra referencia.'
+    return 'Corrija conforme as boas praticas de SEO atuais.'
+
+
+def run_full_analysis(url, strategy='mobile'):
+    """
+    ANALISE COMPLETA — combina tudo:
+    1. PageSpeed Insights (performance + core web vitals)
+    2. On-page SEO (title, H1, meta, etc)
+    3. Keyword extraction (palavras relevantes do conteudo)
+    4. Long-tail phrases (frases de cauda longa)
+    5. Keyword suggestions (variações e perguntas)
+    6. Diagnostico IA (analise inteligente com recomendacoes)
+    """
+    result = {'ok': True, 'url': url}
+
+    # 1. PageSpeed
+    pagespeed = run_pagespeed_audit(url, strategy)
+    result['pagespeed'] = pagespeed if pagespeed.get('ok') else {'error': pagespeed.get('error', 'falhou')}
+
+    # 2. On-page
+    onpage = analyze_page(url)
+    result['onpage'] = onpage if onpage.get('ok') else {'error': onpage.get('error', 'falhou')}
+
+    # 3. Keywords (precisa do HTML)
+    if onpage.get('ok'):
+        try:
+            req = urllib.request.Request(url, headers={
+                'User-Agent': 'Mozilla/5.0 (compatible; Sellvance SEO Bot/1.0)'
+            })
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                html = resp.read().decode('utf-8', errors='replace')
+        except Exception:
+            html = ''
+
+        if html:
+            extracted = _extract_keywords_from_html(html, url)
+            phrases = _extract_phrases(html)
+            suggestions = _generate_keyword_suggestions(extracted, title=onpage.get('title', ''))
+            result['keywords'] = {
+                'extracted': extracted,
+                'long_tail_phrases': phrases,
+                'suggestions': suggestions,
+            }
+            # Enriquecer onpage com keywords pra IA
+            onpage['extracted_keywords'] = extracted
+            onpage['long_tail_phrases'] = phrases
+        else:
+            result['keywords'] = {'extracted': [], 'long_tail_phrases': [], 'suggestions': []}
+    else:
+        result['keywords'] = {'extracted': [], 'long_tail_phrases': [], 'suggestions': []}
+
+    # 4. Diagnostico IA
+    if onpage.get('ok'):
+        ps_data = pagespeed if pagespeed.get('ok') else None
+        diagnosis = _generate_ai_diagnosis(onpage, ps_data)
+        result['diagnosis'] = diagnosis
+    else:
+        result['diagnosis'] = {'score_geral': 0, 'resumo': 'Nao foi possivel analisar a pagina.'}
+
+    return result

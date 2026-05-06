@@ -358,6 +358,27 @@ def seo_analyze_page():
     return jsonify(result)
 
 
+@app.route('/seo/full-analysis', methods=['POST'])
+@login_required
+def seo_full_analysis():
+    """Analise completa: PageSpeed + On-page + Keywords + Long-tail + IA."""
+    import seo_tools
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    url = data.get('url', '').strip()
+    strategy = data.get('strategy', 'mobile')
+    if not url:
+        return jsonify({'ok': False, 'error': 'URL obrigatoria'}), 400
+    if not url.startswith('http'):
+        url = f'https://{url}'
+    result = seo_tools.run_full_analysis(url, strategy)
+    if result.get('pagespeed', {}).get('ok'):
+        seo_tools.save_audit(org_id, result['pagespeed'])
+    if result.get('onpage', {}).get('ok'):
+        seo_tools.save_page_analysis(org_id, result['onpage'])
+    return jsonify(result)
+
+
 @app.route('/seo/keywords', methods=['POST'])
 @login_required
 def seo_add_keyword():

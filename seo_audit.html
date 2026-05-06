@@ -2,7 +2,7 @@
 {% set page = 'seo-audit' %}
 {% block title %}Site Audit{% endblock %}
 {% block content %}
-<h1 style="font-size:22px;font-weight:900;margin-bottom:20px;">🩺 Site Audit — PageSpeed + SEO</h1>
+<h1 style="font-size:22px;font-weight:900;margin-bottom:20px;">🩺 Analise SEO Completa</h1>
 
 <div class="card" style="padding:24px;margin-bottom:20px;">
   <div class="sec-title">Analisar URL</div>
@@ -12,20 +12,56 @@
       <option value="mobile">📱 Mobile</option>
       <option value="desktop">🖥️ Desktop</option>
     </select>
-    <button id="audit-btn" onclick="runAudit()" style="padding:12px 24px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;white-space:nowrap;">Analisar</button>
+    <button id="audit-btn" onclick="runAudit()" style="padding:12px 24px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;white-space:nowrap;">🔍 Analise Completa</button>
   </div>
+  <div style="font-size:11px;color:var(--text2);margin-top:8px;">Analisa: Performance, SEO On-page, Keywords, Long-tail, Diagnostico com IA</div>
 </div>
 
-<div id="audit-result" style="display:none;">
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;" id="scores"></div>
-  <div class="card" style="padding:20px;margin-bottom:16px;" id="vitals"></div>
-  <div class="card" style="padding:20px;margin-bottom:16px;" id="issues-box"></div>
-  <div class="card" style="padding:20px;" id="opps-box"></div>
+<div id="loading" style="display:none;text-align:center;padding:40px;">
+  <div style="font-size:48px;margin-bottom:16px;">⏳</div>
+  <div style="font-size:16px;font-weight:700;">Analisando site completo...</div>
+  <div style="font-size:13px;color:var(--text2);margin-top:6px;">Performance + SEO + Keywords + IA (30-90 segundos)</div>
+</div>
+
+<div id="result" style="display:none;">
+
+  <!-- DIAGNOSTICO IA (principal) -->
+  <div id="ia-box" class="card" style="padding:24px;margin-bottom:20px;border-left:4px solid var(--accent);"></div>
+
+  <!-- SCORES -->
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;" id="scores"></div>
+
+  <!-- CORE WEB VITALS -->
+  <div class="card" style="padding:20px;margin-bottom:20px;" id="vitals"></div>
+
+  <!-- PROBLEMAS CRITICOS -->
+  <div id="criticos-box" class="card" style="padding:20px;margin-bottom:20px;display:none;border-left:4px solid var(--red);"></div>
+
+  <!-- MELHORIAS RECOMENDADAS -->
+  <div id="melhorias-box" class="card" style="padding:20px;margin-bottom:20px;display:none;border-left:4px solid var(--yellow);"></div>
+
+  <!-- KEYWORDS EXTRAIDAS -->
+  <div id="kw-box" class="card" style="padding:20px;margin-bottom:20px;"></div>
+
+  <!-- FRASES LONG-TAIL -->
+  <div id="lt-box" class="card" style="padding:20px;margin-bottom:20px;"></div>
+
+  <!-- SUGESTOES DE KEYWORDS -->
+  <div id="sug-box" class="card" style="padding:20px;margin-bottom:20px;"></div>
+
+  <!-- PROXIMOS PASSOS -->
+  <div id="passos-box" class="card" style="padding:20px;margin-bottom:20px;border-left:4px solid var(--green);"></div>
+
+  <!-- ON-PAGE DETALHES -->
+  <div id="onpage-box" class="card" style="padding:20px;margin-bottom:20px;"></div>
+
+  <!-- PROBLEMAS PAGESPEED -->
+  <div id="issues-box" class="card" style="padding:20px;margin-bottom:20px;"></div>
 </div>
 
 {% if audits %}
 <div class="card" style="padding:20px;margin-top:24px;">
-  <div class="sec-title">📋 Historico de Audits</div>
+  <div class="sec-title">📋 Historico de Analises</div>
   <table style="width:100%;font-size:13px;">
     <thead><tr style="color:var(--text2);"><th style="text-align:left;padding:8px;">URL</th><th>Performance</th><th>SEO</th><th>Data</th></tr></thead>
     <tbody>
@@ -43,55 +79,173 @@
 {% endif %}
 
 <script>
+function sc(v){return v>=80?'var(--green)':v>=50?'var(--yellow)':'var(--red)';}
+
 async function runAudit(){
-  const url = document.getElementById('audit-url').value.trim();
-  const strategy = document.getElementById('audit-strategy').value;
+  const url=document.getElementById('audit-url').value.trim();
+  const strategy=document.getElementById('audit-strategy').value;
   if(!url){alert('Digite uma URL');return;}
-  const btn = document.getElementById('audit-btn');
-  btn.disabled=true; btn.textContent='Analisando... (30-60s)';
-  document.getElementById('audit-result').style.display='none';
+  document.getElementById('audit-btn').disabled=true;
+  document.getElementById('loading').style.display='block';
+  document.getElementById('result').style.display='none';
   try{
-    const r=await fetch('/seo/audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,strategy})});
+    const r=await fetch('/seo/full-analysis',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,strategy})});
     const d=await r.json();
-    if(d.ok) showResult(d); else alert('Erro: '+(d.error||JSON.stringify(d)));
+    if(d.ok) showFull(d); else alert('Erro: '+(d.error||JSON.stringify(d)));
   }catch(e){alert('Erro: '+e.message);}
-  btn.disabled=false; btn.textContent='Analisar';
+  document.getElementById('audit-btn').disabled=false;
+  document.getElementById('loading').style.display='none';
 }
 
-function scoreColor(v){return v>=80?'#10b981':v>=50?'#f59e0b':'#ef4444';}
+function showFull(d){
+  document.getElementById('result').style.display='block';
+  const ps=d.pagespeed||{};
+  const op=d.onpage||{};
+  const kw=d.keywords||{};
+  const di=d.diagnosis||{};
 
-function showResult(d){
-  document.getElementById('audit-result').style.display='block';
-  document.getElementById('scores').innerHTML=[
-    ['Performance',d.performance],['Acessibilidade',d.accessibility],
-    ['Boas Praticas',d.best_practices],['SEO',d.seo_score]
-  ].map(([l,v])=>`<div class="card" style="padding:20px;text-align:center;">
-    <div style="font-size:36px;font-weight:900;color:${scoreColor(v)}">${v}</div>
-    <div style="font-size:11px;color:var(--text2);text-transform:uppercase;margin-top:4px;">${l}</div>
-  </div>`).join('');
-
-  document.getElementById('vitals').innerHTML=`
-    <div class="sec-title">Core Web Vitals</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
-      ${[['FCP',d.fcp_ms+'ms'],['LCP',d.lcp_ms+'ms'],['CLS',d.cls],['TBT',d.tbt_ms+'ms'],['Speed Index',d.speed_index+'ms']].map(([l,v])=>
-        `<div style="background:var(--bg2);padding:12px;border-radius:8px;text-align:center;">
-          <div style="font-size:11px;color:var(--text2);">${l}</div>
-          <div style="font-size:18px;font-weight:800;">${v}</div>
-        </div>`).join('')}
+  // IA DIAGNOSTICO
+  document.getElementById('ia-box').innerHTML=`
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+      <div style="font-size:56px;font-weight:900;color:${sc(di.score_geral||0)}">${di.score_geral||0}</div>
+      <div>
+        <div style="font-size:18px;font-weight:900;">🤖 Diagnostico da IA</div>
+        <div style="font-size:14px;color:var(--text2);margin-top:4px;">${di.resumo||'Analisando...'}</div>
+      </div>
     </div>`;
 
-  const issuesHtml=(d.issues||[]).map(i=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-    <span style="color:${scoreColor(i.score*100)};font-weight:700;">${Math.round(i.score*100)}</span>
-    <strong style="margin-left:8px;">${i.title}</strong>
-    <span style="color:var(--text2);margin-left:8px;">${i.display_value||''}</span>
-  </div>`).join('');
-  document.getElementById('issues-box').innerHTML=`<div class="sec-title">⚠️ Problemas (${(d.issues||[]).length})</div>${issuesHtml||'<div style="color:var(--text2);font-size:13px;">Nenhum problema critico</div>'}`;
+  // SCORES
+  const scores=[
+    ['Score Geral',di.score_geral||0],
+    ['Performance',ps.performance||0],
+    ['SEO',ps.seo_score||0],
+    ['Acessibilidade',ps.accessibility||0],
+    ['On-page',op.page_score||0]
+  ];
+  document.getElementById('scores').innerHTML=scores.map(([l,v])=>`
+    <div class="card" style="padding:16px;text-align:center;">
+      <div style="font-size:32px;font-weight:900;color:${sc(v)}">${v}</div>
+      <div style="font-size:10px;color:var(--text2);text-transform:uppercase;margin-top:4px;">${l}</div>
+    </div>`).join('');
 
-  const oppsHtml=(d.opportunities||[]).map(i=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-    <strong>${i.title}</strong>
-    <span style="color:var(--green);margin-left:8px;">${i.display_value||''}</span>
-  </div>`).join('');
-  document.getElementById('opps-box').innerHTML=`<div class="sec-title">💡 Oportunidades (${(d.opportunities||[]).length})</div>${oppsHtml||'<div style="color:var(--text2);font-size:13px;">Nenhuma oportunidade detectada</div>'}`;
+  // CORE WEB VITALS
+  if(ps.ok){
+    const vitals=[['FCP',ps.fcp_ms+'ms',ps.fcp_ms<1800],['LCP',ps.lcp_ms+'ms',ps.lcp_ms<2500],['CLS',ps.cls,ps.cls<0.1],['TBT',ps.tbt_ms+'ms',ps.tbt_ms<200],['Speed Index',ps.speed_index+'ms',ps.speed_index<3400]];
+    document.getElementById('vitals').innerHTML=`<div class="sec-title">⚡ Core Web Vitals</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">
+      ${vitals.map(([l,v,ok])=>`<div style="background:var(--bg2);padding:12px;border-radius:8px;text-align:center;">
+        <div style="font-size:11px;color:var(--text2);">${l}</div>
+        <div style="font-size:18px;font-weight:800;color:${ok?'var(--green)':'var(--red)'}">${v}</div>
+      </div>`).join('')}</div>`;
+  }
+
+  // PROBLEMAS CRITICOS
+  const crit=di.problemas_criticos||[];
+  if(crit.length){
+    const el=document.getElementById('criticos-box');
+    el.style.display='block';
+    el.innerHTML=`<div class="sec-title" style="color:var(--red);">🔴 Problemas Criticos (${crit.length})</div>
+      ${crit.map(c=>`<div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:10px;padding:14px;margin-bottom:10px;">
+        <div style="font-size:14px;font-weight:700;color:#fca5a5;margin-bottom:6px;">${c.problema}</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;"><strong>Impacto:</strong> ${c.impacto}</div>
+        <div style="font-size:12px;color:var(--green);"><strong>Como resolver:</strong> ${c.como_resolver}</div>
+      </div>`).join('')}`;
+  }
+
+  // MELHORIAS
+  const melh=di.melhorias_recomendadas||[];
+  if(melh.length){
+    const el=document.getElementById('melhorias-box');
+    el.style.display='block';
+    el.innerHTML=`<div class="sec-title" style="color:var(--yellow);">🟡 Melhorias Recomendadas (${melh.length})</div>
+      ${melh.map(m=>`<div style="background:rgba(245,158,11,.04);border:1px solid rgba(245,158,11,.15);border-radius:10px;padding:14px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:14px;font-weight:700;color:var(--text);">${m.area}</span>
+          <span style="font-size:10px;padding:3px 8px;border-radius:100px;background:${m.prioridade==='Alta'?'rgba(239,68,68,.15);color:#ef4444':m.prioridade==='Media'?'rgba(245,158,11,.15);color:#f59e0b':'rgba(16,185,129,.15);color:#10b981'};font-weight:700;">${m.prioridade}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">${m.problema}</div>
+        <div style="font-size:12px;color:var(--accent);">💡 ${m.sugestao}</div>
+      </div>`).join('')}`;
+  }
+
+  // KEYWORDS EXTRAIDAS
+  const ext=kw.extracted||[];
+  if(ext.length){
+    document.getElementById('kw-box').innerHTML=`<div class="sec-title">🎯 Keywords Encontradas no Site (${ext.length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${ext.map(k=>`<span style="padding:6px 14px;background:rgba(108,99,255,.1);border:1px solid rgba(108,99,255,.25);color:var(--accent);border-radius:100px;font-size:12px;font-weight:700;">
+        ${k.keyword} <small style="opacity:.6;">×${k.relevance}</small>
+      </span>`).join('')}</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:10px;">Palavras extraidas do titulo, H1-H3, meta tags e conteudo. Maior relevancia = mais destaque no site.</div>`;
+  }
+
+  // FRASES LONG-TAIL
+  const lt=kw.long_tail_phrases||[];
+  if(lt.length){
+    document.getElementById('lt-box').innerHTML=`<div class="sec-title">📝 Frases de Cauda Longa (Long-tail)</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Frases especificas que atraem trafego qualificado com menos concorrencia.</div>
+      <table style="width:100%;font-size:13px;">
+      <thead><tr style="color:var(--text2);"><th style="text-align:left;padding:6px;">Frase</th><th style="text-align:center;">Relevancia</th></tr></thead>
+      <tbody>${lt.map(p=>`<tr style="border-top:1px solid var(--border);">
+        <td style="padding:8px;font-weight:600;">"${p.phrase}"</td>
+        <td style="text-align:center;"><span style="background:rgba(16,185,129,.15);color:var(--green);padding:2px 8px;border-radius:100px;font-size:11px;font-weight:700;">${p.relevance}</span></td>
+      </tr>`).join('')}</tbody></table>`;
+  }
+
+  // SUGESTOES DE KEYWORDS
+  const sug=kw.suggestions||[];
+  if(sug.length){
+    document.getElementById('sug-box').innerHTML=`<div class="sec-title">💡 Sugestoes de Keywords (IA)</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Keywords derivadas que podem gerar mais trafego — baseadas no conteudo atual.</div>
+      <table style="width:100%;font-size:13px;">
+      <thead><tr style="color:var(--text2);"><th style="text-align:left;padding:6px;">Keyword Sugerida</th><th>Tipo</th><th>Intencao</th></tr></thead>
+      <tbody>${sug.slice(0,15).map(s=>`<tr style="border-top:1px solid var(--border);">
+        <td style="padding:8px;font-weight:600;">${s.keyword}</td>
+        <td><span style="padding:2px 8px;border-radius:100px;font-size:10px;font-weight:700;background:${s.type==='pergunta'?'rgba(59,130,246,.15);color:var(--blue)':s.type==='local'?'rgba(236,72,153,.15);color:var(--pink)':'rgba(108,99,255,.15);color:var(--accent)'};">${s.type}</span></td>
+        <td style="font-size:12px;color:var(--text2);">${s.intent}</td>
+      </tr>`).join('')}</tbody></table>`;
+  }
+
+  // PROXIMOS PASSOS
+  const passos=di.proximos_passos||[];
+  if(passos.length){
+    document.getElementById('passos-box').innerHTML=`<div class="sec-title" style="color:var(--green);">✅ Proximos Passos (Priorizados)</div>
+      ${passos.map((p,i)=>`<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:14px;display:flex;gap:10px;align-items:flex-start;">
+        <span style="flex-shrink:0;width:24px;height:24px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;">${i+1}</span>
+        <span>${p}</span>
+      </div>`).join('')}`;
+  }
+
+  // ON-PAGE DETALHES
+  if(op.ok){
+    document.getElementById('onpage-box').innerHTML=`<div class="sec-title">📄 Detalhes On-page</div>
+      <table style="width:100%;font-size:13px;">
+      ${[
+        ['Title',op.title||'(vazio)','50-60 chars: '+(op.title||'').length],
+        ['Meta Description',(op.meta_desc||'(vazio)').substring(0,80)+'...','150-160 chars: '+(op.meta_desc||'').length],
+        ['H1',op.h1||'(vazio)',''],
+        ['Palavras',op.word_count,'Ideal: >600'],
+        ['Schema (JSON-LD)',op.has_schema?'✅ Sim':'❌ Nao',''],
+        ['Open Graph',op.has_og?'✅ Sim':'❌ Nao',''],
+        ['Canonical',op.has_canonical?'✅ Sim':'❌ Nao',''],
+        ['Imagens sem Alt',op.images_without_alt+' de '+op.total_images,''],
+      ].map(([l,v,h])=>`<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px;color:var(--text2);font-weight:600;width:180px;">${l}</td>
+        <td style="padding:8px;font-weight:600;">${v}</td>
+        <td style="padding:8px;font-size:11px;color:var(--text2);">${h}</td>
+      </tr>`).join('')}</table>`;
+  }
+
+  // ISSUES PAGESPEED
+  const iss=(ps.issues||[]).concat(ps.opportunities||[]);
+  if(iss.length){
+    document.getElementById('issues-box').innerHTML=`<div class="sec-title">⚠️ Problemas de Performance (${iss.length})</div>
+      ${iss.map(i=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <span style="color:${sc((i.score||0)*100)};font-weight:700;min-width:30px;display:inline-block;">${Math.round((i.score||0)*100)}</span>
+        <strong style="margin-left:6px;">${i.title}</strong>
+        <span style="color:var(--text2);margin-left:6px;">${i.display_value||''}</span>
+      </div>`).join('')}`;
+  }
 }
 </script>
 {% endblock %}
