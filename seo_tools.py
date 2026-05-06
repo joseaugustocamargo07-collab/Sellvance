@@ -122,13 +122,26 @@ def run_pagespeed_audit(url, strategy='mobile'):
                 data = json.loads(resp.read().decode())
             break  # sucesso, sai do loop
         except urllib.error.HTTPError as e:
+            err_body = ''
+            try:
+                err_body = e.read().decode('utf-8', errors='replace')[:1000]
+            except Exception:
+                pass
             if e.code == 429 and attempt < max_retries:
-                _time.sleep(5 * (attempt + 1))  # espera 5s, 10s
+                _time.sleep(5 * (attempt + 1))
                 continue
-            hint = ''
             if e.code == 429:
-                hint = ' — Configure GOOGLE_API_KEY no Railway pra ter 25.000 requests/dia (gratis). Acesse console.cloud.google.com → APIs → PageSpeed Insights API → Criar chave.'
-            return {'ok': False, 'error': f'HTTP Error {e.code}{hint}'}
+                hint = 'Rate limit atingido. Configure GOOGLE_API_KEY no Railway pra 25.000 req/dia.'
+                return {'ok': False, 'error': hint}
+            if e.code == 400:
+                # Google nao conseguiu analisar a pagina (ex: site lento, bloqueado, JS-only)
+                try:
+                    err_json = json.loads(err_body)
+                    msg = err_json.get('error', {}).get('message', 'Erro desconhecido')
+                except Exception:
+                    msg = err_body[:300]
+                return {'ok': False, 'error': f'Google nao conseguiu analisar esta pagina: {msg}', 'code': 400}
+            return {'ok': False, 'error': f'HTTP Error {e.code}: {err_body[:200]}'}
         except Exception as e:
             return {'ok': False, 'error': str(e)[:300]}
 
