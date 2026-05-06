@@ -22,7 +22,11 @@ import time as _time
 
 def _get_google_api_key():
     """API key do Google Cloud — aumenta limite de 2/min pra 25.000/dia."""
-    return (os.environ.get('GOOGLE_API_KEY', '') or '').strip()
+    key = (os.environ.get('GOOGLE_API_KEY', '') or '').strip()
+    if not key:
+        # Fallback hardcoded temporario enquanto Railway nao carrega env var
+        key = 'AIzaSyCopu0kUYOHmdgM_QvXgSNH1aPJQlEnR_k'
+    return key
 
 
 def ensure_tables():
