@@ -17,6 +17,13 @@ from database import get_db
 
 PAGESPEED_API = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed'
 
+import os
+import time as _time
+
+def _get_google_api_key():
+    """API key do Google Cloud — aumenta limite de 2/min pra 25.000/dia."""
+    return (os.environ.get('GOOGLE_API_KEY', '') or '').strip()
+
 
 def ensure_tables():
     """Bootstrap das tabelas de SEO."""
@@ -96,15 +103,30 @@ def run_pagespeed_audit(url, strategy='mobile'):
         'strategy': strategy,
         'category': ['performance', 'accessibility', 'best-practices', 'seo'],
     }
+    api_key = _get_google_api_key()
+    if api_key:
+        params['key'] = api_key
     query = urllib.parse.urlencode(params, doseq=True)
     api_url = f'{PAGESPEED_API}?{query}'
 
-    try:
-        req = urllib.request.Request(api_url, headers={'User-Agent': 'Sellvance/1.0'})
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode())
-    except Exception as e:
-        return {'ok': False, 'error': str(e)[:300]}
+    # Retry com backoff pra lidar com 429 (rate limit)
+    max_retries = 2
+    for attempt in range(max_retries + 1):
+        try:
+            req = urllib.request.Request(api_url, headers={'User-Agent': 'Sellvance/1.0'})
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                data = json.loads(resp.read().decode())
+            break  # sucesso, sai do loop
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < max_retries:
+                _time.sleep(5 * (attempt + 1))  # espera 5s, 10s
+                continue
+            hint = ''
+            if e.code == 429:
+                hint = ' — Configure GOOGLE_API_KEY no Railway pra ter 25.000 requests/dia (gratis). Acesse console.cloud.google.com → APIs → PageSpeed Insights API → Criar chave.'
+            return {'ok': False, 'error': f'HTTP Error {e.code}{hint}'}
+        except Exception as e:
+            return {'ok': False, 'error': str(e)[:300]}
 
     # Parse scores
     categories = data.get('lighthouseResult', {}).get('categories', {})
