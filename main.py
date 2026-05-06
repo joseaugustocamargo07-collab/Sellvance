@@ -10,25 +10,42 @@ from functools import wraps
 # ── Plan access control ──────────────────────────────────────────────────────
 # Plan definitions: which pages each plan can access
 PLAN_ACCESS = {
+    # ── Novos planos (Google + Meta + SEO) ────────────────────────────
+    'starter': {
+        'label': 'Starter',
+        'pages': ['dashboard', 'traffic', 'ranking', 'integrations', 'settings'],
+        'integrations': ['meta', 'google', 'google_analytics'],
+    },
+    'professional': {
+        'label': 'Professional',
+        'pages': ['dashboard', 'traffic', 'ranking', 'seo', 'analytics', 'integrations', 'settings'],
+        'integrations': ['meta', 'google', 'google_analytics', 'google_search_console'],
+    },
+    'expert': {
+        'label': 'Expert',
+        'pages': ['dashboard', 'traffic', 'ranking', 'seo', 'analytics', 'content', 'competitors', 'integrations', 'settings'],
+        'integrations': ['meta', 'google', 'google_analytics', 'google_search_console', 'google_business'],
+    },
+    # ── Legacy plans (backwards compat) ──────────────────────────────
     'marketplaces': {
-        'label': 'Marketplaces',
-        'pages': ['dashboard', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'pagamentos', 'integrations', 'settings'],
-        'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop'],
+        'label': 'Starter',
+        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'integrations', 'settings'],
+        'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'google_analytics'],
     },
     'marketing': {
-        'label': 'Marketing',
-        'pages': ['dashboard', 'traffic', 'ranking', 'integrations', 'settings'],
+        'label': 'Professional',
+        'pages': ['dashboard', 'traffic', 'ranking', 'seo', 'analytics', 'integrations', 'settings'],
         'integrations': ['meta', 'google', 'tiktok', 'google_analytics'],
     },
     'completo': {
-        'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'pagamentos', 'integrations', 'settings'],
-        'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
+        'label': 'Expert',
+        'pages': ['dashboard', 'traffic', 'ranking', 'seo', 'analytics', 'content', 'competitors', 'marketplaces', 'crm', 'integrations', 'settings'],
+        'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics', 'google_search_console'],
     },
-    'growth': {  # legacy — treat as completo
-        'label': 'Completo',
-        'pages': ['dashboard', 'traffic', 'ranking', 'marketplaces', 'crm', 'automacao', 'logistica', 'vulnerability', 'mini-loja', 'pagamentos', 'integrations', 'settings'],
-        'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics'],
+    'growth': {
+        'label': 'Expert',
+        'pages': ['dashboard', 'traffic', 'ranking', 'seo', 'analytics', 'content', 'competitors', 'marketplaces', 'crm', 'integrations', 'settings'],
+        'integrations': ['amazon', 'shopee', 'mercado_livre', 'tiktok_shop', 'meta', 'google', 'tiktok', 'google_analytics', 'google_search_console'],
     },
 }
 
@@ -172,6 +189,7 @@ def ensure_db_ready():
             try:
                 import telemetry, feature_flags, pricing_ai, auto_insights, whatsapp_agent, buybox_monitor
                 import fraud_detector, content_ai, cohort_analytics, billing
+                import seo_tools, google_analytics
                 import whatsapp_api, push_notifications, tiktok_shop_api
                 import checkout, asaas_api
                 telemetry.ensure_tables()
@@ -184,6 +202,8 @@ def ensure_db_ready():
                 content_ai.ensure_tables()
                 cohort_analytics.ensure_tables()
                 billing.ensure_tables()
+                seo_tools.ensure_tables()
+                google_analytics.ensure_tables()
                 whatsapp_api.ensure_tables()
                 push_notifications.ensure_tables()
                 tiktok_shop_api.ensure_tables()
@@ -276,6 +296,143 @@ def root():
 def sales_page():
     """Pagina de vendas (longa, focada em conversao)."""
     return render_template('vendas.html')
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  SEO INTELLIGENCE
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/seo')
+@login_required
+@plan_required('seo')
+def seo_dashboard():
+    """Dashboard SEO — keywords, audits, paginas analisadas."""
+    import seo_tools
+    org_id = session.get('org_id', 1)
+    return render_template('seo_dashboard.html',
+                           keywords=seo_tools.get_keywords(org_id),
+                           audits=seo_tools.get_audit_history(org_id),
+                           pages=seo_tools.get_pages(org_id))
+
+
+@app.route('/seo/audit', methods=['GET', 'POST'])
+@login_required
+@plan_required('seo')
+def seo_audit():
+    """Roda audit de performance + SEO via Google PageSpeed."""
+    import seo_tools
+    org_id = session.get('org_id', 1)
+
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        url = data.get('url', '').strip()
+        strategy = data.get('strategy', 'mobile')
+        if not url:
+            return jsonify({'ok': False, 'error': 'URL obrigatoria'}), 400
+        if not url.startswith('http'):
+            url = f'https://{url}'
+        result = seo_tools.run_pagespeed_audit(url, strategy)
+        if result.get('ok'):
+            seo_tools.save_audit(org_id, result)
+        return jsonify(result)
+
+    return render_template('seo_audit.html',
+                           audits=seo_tools.get_audit_history(org_id))
+
+
+@app.route('/seo/analyze-page', methods=['POST'])
+@login_required
+def seo_analyze_page():
+    """Analisa SEO on-page de uma URL."""
+    import seo_tools
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    url = data.get('url', '').strip()
+    if not url:
+        return jsonify({'ok': False, 'error': 'URL obrigatoria'}), 400
+    if not url.startswith('http'):
+        url = f'https://{url}'
+    result = seo_tools.analyze_page(url)
+    if result.get('ok'):
+        seo_tools.save_page_analysis(org_id, result)
+    return jsonify(result)
+
+
+@app.route('/seo/keywords', methods=['POST'])
+@login_required
+def seo_add_keyword():
+    """Adiciona keyword pra monitorar."""
+    import seo_tools
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    keyword = data.get('keyword', '').strip()
+    if not keyword:
+        return jsonify({'ok': False, 'error': 'keyword obrigatoria'}), 400
+    return jsonify(seo_tools.add_keyword(org_id, keyword, url=data.get('url')))
+
+
+@app.route('/seo/content')
+@login_required
+@plan_required('content')
+def seo_content():
+    """Content AI — gerar conteudo otimizado."""
+    return render_template('seo_content.html')
+
+
+@app.route('/seo/content/generate', methods=['POST'])
+@login_required
+def seo_content_generate():
+    """Gera conteudo SEO-optimized."""
+    import content_ai
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    marketplace = data.get('marketplace', 'mercado_livre')
+    result = content_ai.generate_full(org_id, data, marketplace, save=True)
+    return jsonify({'ok': True, 'content': result})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  GOOGLE ANALYTICS 4
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/analytics')
+@login_required
+@plan_required('analytics')
+def analytics_dashboard():
+    """Google Analytics 4 dashboard."""
+    import google_analytics as ga
+    org_id = session.get('org_id', 1)
+    days = int(request.args.get('days', 30))
+    overview = ga.get_overview(org_id, days)
+    sources = ga.get_traffic_sources(org_id, days)
+    pages = ga.get_top_pages(org_id, days)
+    return render_template('analytics_dashboard.html',
+                           overview=overview, sources=sources,
+                           top_pages=pages, days=days)
+
+
+@app.route('/analytics/sources')
+@login_required
+def analytics_sources():
+    """Fontes de trafego GA4."""
+    import google_analytics as ga
+    org_id = session.get('org_id', 1)
+    days = int(request.args.get('days', 30))
+    return jsonify(ga.get_traffic_sources(org_id, days))
+
+
+@app.route('/analytics/config', methods=['POST'])
+@login_required
+def analytics_save_config():
+    """Salva property_id do GA4."""
+    import google_analytics as ga
+    org_id = session.get('org_id', 1)
+    data = request.get_json() or {}
+    property_id = data.get('property_id', '').strip()
+    if not property_id:
+        return jsonify({'ok': False, 'error': 'property_id obrigatorio'}), 400
+    ga.save_config(org_id, property_id)
+    return jsonify({'ok': True})
 
 
 @app.route('/api/integrations/status')

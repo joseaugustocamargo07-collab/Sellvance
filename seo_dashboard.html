@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% block title %}SEO{% endblock %}
+{% block topbar_title %}SEO Intelligence{% endblock %}
+
+{% block content %}
+
+<!-- AUDIT FORM -->
+<div class="card" style="margin-bottom:20px;border-top:3px solid var(--accent)">
+  <div class="sec-title">Site Audit</div>
+  <div style="display:flex;gap:10px;align-items:flex-end">
+    <div style="flex:1">
+      <label class="form-label">URL do site para auditoria</label>
+      <input type="url" id="audit_url" class="form-input" placeholder="https://exemplo.com.br">
+    </div>
+    <button class="btn btn-primary" onclick="runAudit()" id="btn_audit" style="height:38px">Analisar</button>
+  </div>
+  <div id="audit_result" style="margin-top:14px;display:none"></div>
+</div>
+
+<!-- ADD KEYWORD -->
+<div class="card" style="margin-bottom:20px">
+  <div class="sec-title">Adicionar Keyword</div>
+  <div style="display:flex;gap:10px;align-items:flex-end">
+    <div style="flex:1">
+      <label class="form-label">Palavra-chave para monitorar</label>
+      <input type="text" id="kw_input" class="form-input" placeholder="ex: crm marketing digital">
+    </div>
+    <button class="btn btn-primary" onclick="addKeyword()" id="btn_kw" style="height:38px">Adicionar</button>
+  </div>
+  <div id="kw_result" style="margin-top:10px;display:none"></div>
+</div>
+
+<!-- ANALYZE PAGE -->
+<div class="card" style="margin-bottom:20px">
+  <div class="sec-title">Analisar Pagina</div>
+  <div style="display:flex;gap:10px;align-items:flex-end">
+    <div style="flex:1">
+      <label class="form-label">URL da pagina para analise on-page</label>
+      <input type="url" id="page_url" class="form-input" placeholder="https://exemplo.com.br/pagina">
+    </div>
+    <button class="btn btn-primary" onclick="analyzePage()" id="btn_page" style="height:38px">Analisar</button>
+  </div>
+  <div id="page_result" style="margin-top:14px;display:none"></div>
+</div>
+
+<!-- KEYWORDS TABLE -->
+<div class="card" style="margin-bottom:20px">
+  <div class="sec-title">Keywords Monitoradas</div>
+  {% if keywords %}
+  <div style="overflow-x:auto">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Keyword</th>
+          <th style="text-align:center">Posicao</th>
+          <th style="text-align:right">Cliques</th>
+          <th style="text-align:right">Impressoes</th>
+          <th style="text-align:center">CTR</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for kw in keywords %}
+        <tr>
+          <td style="font-weight:600">{{ kw.keyword }}</td>
+          <td style="text-align:center">
+            {% set pos = kw.current_position|default(0)|int %}
+            <span class="badge {% if pos <= 3 %}b-green{% elif pos <= 10 %}b-blue{% elif pos <= 20 %}b-yellow{% else %}b-red{% endif %}">
+              #{{ pos if pos > 0 else '-' }}
+            </span>
+          </td>
+          <td style="text-align:right;color:var(--green)">{{ kw.clicks|default(0) }}</td>
+          <td style="text-align:right;color:var(--text2)">{{ kw.impressions|default(0) }}</td>
+          <td style="text-align:center">{{ kw.ctr|default(0) }}%</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:30px;color:var(--text2)">
+    <div style="font-size:28px;margin-bottom:8px">🔑</div>
+    <div style="font-size:14px;font-weight:600">Nenhuma keyword monitorada</div>
+    <div style="font-size:12px;margin-top:4px">Adicione palavras-chave acima para monitorar posicionamento</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- RECENT AUDITS -->
+<div class="card" style="margin-bottom:20px">
+  <div class="sec-title">Auditorias Recentes</div>
+  {% if audits %}
+  <div style="overflow-x:auto">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>URL</th>
+          <th style="text-align:center">Performance</th>
+          <th style="text-align:center">SEO Score</th>
+          <th style="text-align:right">Data</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for a in audits %}
+        <tr>
+          <td>
+            <div style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ a.url }}">{{ a.url }}</div>
+          </td>
+          <td style="text-align:center">
+            {% set perf = a.performance|default(0)|int %}
+            <span style="font-weight:800;color:{% if perf >= 80 %}var(--green){% elif perf >= 50 %}var(--yellow){% else %}var(--red){% endif %}">{{ perf }}</span>
+          </td>
+          <td style="text-align:center">
+            {% set score = a.seo_score|default(0)|int %}
+            <span style="display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;font-weight:900;font-size:14px;border:2px solid {% if score >= 80 %}var(--green){% elif score >= 50 %}var(--yellow){% else %}var(--red){% endif %};color:{% if score >= 80 %}var(--green){% elif score >= 50 %}var(--yellow){% else %}var(--red){% endif %}">{{ score }}</span>
+          </td>
+          <td style="text-align:right;color:var(--text2);font-size:12px">{{ a.created_at|default('-') }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:30px;color:var(--text2)">
+    <div style="font-size:28px;margin-bottom:8px">🩺</div>
+    <div style="font-size:14px;font-weight:600">Nenhuma auditoria realizada</div>
+    <div style="font-size:12px;margin-top:4px">Use o formulario acima para auditar um site</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ANALYZED PAGES -->
+<div class="card" style="margin-bottom:20px">
+  <div class="sec-title">Paginas Analisadas</div>
+  {% if pages %}
+  <div style="overflow-x:auto">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>URL</th>
+          <th>Titulo</th>
+          <th style="text-align:center">Score</th>
+          <th>Problemas</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for p in pages %}
+        <tr>
+          <td>
+            <div style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ p.url }}">{{ p.url }}</div>
+          </td>
+          <td>
+            <div style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ p.title|default('-') }}">{{ p.title|default('-') }}</div>
+          </td>
+          <td style="text-align:center">
+            {% set ps = p.page_score|default(0)|int %}
+            <span class="badge {% if ps >= 80 %}b-green{% elif ps >= 50 %}b-yellow{% else %}b-red{% endif %}">{{ ps }}</span>
+          </td>
+          <td>
+            {% set issues = p.issues if p.issues is iterable and p.issues is not string else [] %}
+            {% if issues %}
+              {% for issue in issues[:3] %}
+                <span class="badge b-red" style="margin:2px">{{ issue }}</span>
+              {% endfor %}
+              {% if issues|length > 3 %}
+                <span class="badge b-purple">+{{ issues|length - 3 }}</span>
+              {% endif %}
+            {% else %}
+              <span class="badge b-green">OK</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:30px;color:var(--text2)">
+    <div style="font-size:28px;margin-bottom:8px">📄</div>
+    <div style="font-size:14px;font-weight:600">Nenhuma pagina analisada</div>
+    <div style="font-size:12px;margin-top:4px">Analise paginas individuais para identificar problemas on-page</div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+/* ── Site Audit ── */
+function runAudit() {
+  var url = document.getElementById('audit_url').value.trim();
+  if (!url) return;
+  var btn = document.getElementById('btn_audit');
+  var box = document.getElementById('audit_result');
+  btn.disabled = true;
+  btn.textContent = 'Analisando...';
+  box.style.display = 'none';
+
+  fetch('/seo/audit', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({url: url})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    btn.disabled = false;
+    btn.textContent = 'Analisar';
+    box.style.display = 'block';
+    if (data.error) {
+      box.innerHTML = '<div class="alert alert-error">' + data.error + '</div>';
+      return;
+    }
+    var perf = data.performance || 0;
+    var seo = data.seo_score || 0;
+    var perfColor = perf >= 80 ? 'var(--green)' : perf >= 50 ? 'var(--yellow)' : 'var(--red)';
+    var seoColor = seo >= 80 ? 'var(--green)' : seo >= 50 ? 'var(--yellow)' : 'var(--red)';
+    var h = '<div class="alert alert-success" style="display:flex;align-items:center;gap:20px">';
+    h += '<div style="text-align:center"><div style="font-size:11px;color:var(--text2)">Performance</div><div style="font-size:28px;font-weight:900;color:' + perfColor + '">' + perf + '</div></div>';
+    h += '<div style="text-align:center"><div style="font-size:11px;color:var(--text2)">SEO Score</div><div style="font-size:28px;font-weight:900;color:' + seoColor + '">' + seo + '</div></div>';
+    if (data.recommendations && data.recommendations.length) {
+      h += '<div style="flex:1"><div style="font-size:11px;color:var(--text2);margin-bottom:4px">Recomendacoes</div>';
+      data.recommendations.forEach(function(r) {
+        h += '<div style="font-size:12px;margin-bottom:2px">&#8226; ' + r + '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+    box.innerHTML = h;
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Analisar';
+    box.style.display = 'block';
+    box.innerHTML = '<div class="alert alert-error">Erro ao processar auditoria. Tente novamente.</div>';
+  });
+}
+
+/* ── Analyze Page ── */
+function analyzePage() {
+  var url = document.getElementById('page_url').value.trim();
+  if (!url) return;
+  var btn = document.getElementById('btn_page');
+  var box = document.getElementById('page_result');
+  btn.disabled = true;
+  btn.textContent = 'Analisando...';
+  box.style.display = 'none';
+
+  fetch('/seo/analyze-page', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({url: url})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    btn.disabled = false;
+    btn.textContent = 'Analisar';
+    box.style.display = 'block';
+    if (data.error) {
+      box.innerHTML = '<div class="alert alert-error">' + data.error + '</div>';
+      return;
+    }
+    var sc = data.page_score || 0;
+    var scColor = sc >= 80 ? 'var(--green)' : sc >= 50 ? 'var(--yellow)' : 'var(--red)';
+    var h = '<div style="padding:14px 18px;border-radius:10px;background:var(--card2);border:1px solid var(--border)">';
+    h += '<div style="display:flex;align-items:center;gap:16px;margin-bottom:10px">';
+    h += '<div style="width:48px;height:48px;border-radius:50%;border:3px solid ' + scColor + ';display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:' + scColor + '">' + sc + '</div>';
+    h += '<div><div style="font-weight:700">' + (data.title || 'Sem titulo') + '</div><div style="font-size:12px;color:var(--text2)">' + (data.url || url) + '</div></div></div>';
+    if (data.issues && data.issues.length) {
+      h += '<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">Problemas encontrados:</div>';
+      data.issues.forEach(function(issue) {
+        h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="color:var(--red)">&#9679;</span><span style="font-size:13px">' + issue + '</span></div>';
+      });
+    } else {
+      h += '<div class="badge b-green" style="margin-top:6px">Nenhum problema critico encontrado</div>';
+    }
+    h += '</div>';
+    box.innerHTML = h;
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Analisar';
+    box.style.display = 'block';
+    box.innerHTML = '<div class="alert alert-error">Erro ao analisar pagina. Tente novamente.</div>';
+  });
+}
+
+/* ── Add Keyword ── */
+function addKeyword() {
+  var kw = document.getElementById('kw_input').value.trim();
+  if (!kw) return;
+  var btn = document.getElementById('btn_kw');
+  var box = document.getElementById('kw_result');
+  btn.disabled = true;
+  btn.textContent = 'Adicionando...';
+  box.style.display = 'none';
+
+  fetch('/seo/keywords', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({keyword: kw})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    btn.disabled = false;
+    btn.textContent = 'Adicionar';
+    box.style.display = 'block';
+    if (data.error) {
+      box.innerHTML = '<div class="alert alert-error">' + data.error + '</div>';
+    } else {
+      box.innerHTML = '<div class="alert alert-success">Keyword "' + kw + '" adicionada com sucesso.</div>';
+      document.getElementById('kw_input').value = '';
+      setTimeout(function() { location.reload(); }, 1200);
+    }
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Adicionar';
+    box.style.display = 'block';
+    box.innerHTML = '<div class="alert alert-error">Erro ao adicionar keyword. Tente novamente.</div>';
+  });
+}
+</script>
+{% endblock %}

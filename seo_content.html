@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% set page = 'content' %}
+{% block title %}Content AI{% endblock %}
+{% block content %}
+<h1 style="font-size:22px;font-weight:900;margin-bottom:20px;">✍️ Content AI — Gerador de SEO</h1>
+
+<div class="card" style="padding:24px;margin-bottom:20px;">
+  <div class="sec-title">Gerar conteudo otimizado</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+    <div>
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Nome do produto/servico *</label>
+      <input id="c-name" placeholder="Ex: Consultoria de Marketing Digital" style="width:100%;padding:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px;">
+    </div>
+    <div>
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Marca</label>
+      <input id="c-brand" placeholder="Ex: Sellvance" style="width:100%;padding:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px;">
+    </div>
+  </div>
+  <div style="margin-top:14px;">
+    <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Keyword principal</label>
+    <input id="c-key" placeholder="Ex: marketing digital para pequenas empresas" style="width:100%;padding:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px;">
+  </div>
+  <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+    <div>
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Beneficios (separados por virgula)</label>
+      <textarea id="c-benefits" rows="2" placeholder="Ex: Resultados rapidos, ROI comprovado, Suporte 24/7" style="width:100%;padding:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px;resize:vertical;"></textarea>
+    </div>
+    <div>
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Features/Caracteristicas</label>
+      <textarea id="c-features" rows="2" placeholder="Ex: Dashboard em tempo real, IA preditiva, Relatorios PDF" style="width:100%;padding:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:13px;resize:vertical;"></textarea>
+    </div>
+  </div>
+  <button onclick="generate()" style="margin-top:16px;padding:12px 28px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">✨ Gerar conteudo</button>
+</div>
+
+<div id="result" style="display:none;">
+  <div class="card" style="padding:24px;margin-bottom:14px;">
+    <div class="sec-title">📝 Titulo gerado</div>
+    <div id="r-title" style="font-size:18px;font-weight:800;color:var(--text);padding:12px;background:var(--bg2);border-radius:8px;"></div>
+  </div>
+  <div class="card" style="padding:24px;margin-bottom:14px;">
+    <div class="sec-title">📄 Meta Description</div>
+    <div id="r-desc" style="font-size:14px;color:var(--text);padding:12px;background:var(--bg2);border-radius:8px;white-space:pre-wrap;line-height:1.6;"></div>
+  </div>
+  <div class="card" style="padding:24px;margin-bottom:14px;">
+    <div class="sec-title">🏷️ Tags sugeridas</div>
+    <div id="r-tags" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+  </div>
+  <div class="card" style="padding:24px;">
+    <div class="sec-title">📊 Score SEO</div>
+    <div id="r-score" style="font-size:48px;font-weight:900;text-align:center;"></div>
+  </div>
+</div>
+
+<script>
+async function generate(){
+  const name=document.getElementById('c-name').value.trim();
+  if(!name){alert('Nome obrigatorio');return;}
+  const body={
+    name,
+    brand:document.getElementById('c-brand').value.trim(),
+    key_feature:document.getElementById('c-key').value.trim(),
+    benefits:(document.getElementById('c-benefits').value||'').split(',').map(s=>s.trim()).filter(Boolean),
+    features:(document.getElementById('c-features').value||'').split(',').map(s=>s.trim()).filter(Boolean),
+  };
+  const r=await fetch('/seo/content/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json();
+  if(d.ok){
+    const c=d.content;
+    document.getElementById('result').style.display='block';
+    document.getElementById('r-title').textContent=c.title;
+    document.getElementById('r-desc').textContent=c.description;
+    document.getElementById('r-tags').innerHTML=(c.tags||[]).map(t=>`<span style="padding:4px 12px;background:rgba(108,99,255,.15);color:#8b88ff;border-radius:100px;font-size:12px;font-weight:700;">${t}</span>`).join('');
+    const sc=c.seo_score;
+    document.getElementById('r-score').innerHTML=`<span style="color:${sc>=80?'#10b981':sc>=50?'#f59e0b':'#ef4444'}">${sc}/100</span>`;
+  }else{alert('Erro: '+JSON.stringify(d));}
+}
+</script>
+{% endblock %}

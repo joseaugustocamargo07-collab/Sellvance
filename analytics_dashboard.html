@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Google Analytics{% endblock %}
+{% block topbar_title %}Google Analytics{% endblock %}
+
+{% block content %}
+
+<!-- PERIOD SELECTOR -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+  <div style="font-size:13px;color:var(--text2)">Periodo de dados</div>
+  <div style="display:flex;gap:4px">
+    {% set current_days = request.args.get('days', '30') %}
+    {% for d in ['7', '15', '30', '90'] %}
+    <a href="?days={{ d }}"
+       style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;text-decoration:none;
+       {% if current_days == d %}background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;{% else %}background:var(--card2);color:var(--text2);border:1px solid var(--border);{% endif %}">
+      {{ d }}d
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+{% if overview.get('error') or overview.get('status') == 'not_configured' %}
+<!-- NOT CONFIGURED CARD -->
+<div class="card" style="text-align:center;padding:50px 30px;border-top:3px solid var(--yellow)">
+  <div style="font-size:40px;margin-bottom:12px">📈</div>
+  <div style="font-size:20px;font-weight:900;margin-bottom:6px">Conecte seu Google Analytics</div>
+  <div style="font-size:13px;color:var(--text2);margin-bottom:24px;max-width:480px;margin-left:auto;margin-right:auto">
+    Insira o Property ID do Google Analytics 4 para visualizar metricas de trafego, conversoes e comportamento do seu site.
+  </div>
+  <div style="display:flex;gap:10px;justify-content:center;align-items:flex-end;max-width:420px;margin:0 auto">
+    <div style="flex:1;text-align:left">
+      <label class="form-label">Property ID (GA4)</label>
+      <input type="text" id="ga_property_id" class="form-input" placeholder="ex: 123456789">
+    </div>
+    <button class="btn btn-primary" onclick="saveGaConfig()" id="btn_ga_save" style="height:38px">Salvar</button>
+  </div>
+  <div id="ga_config_result" style="margin-top:14px"></div>
+  <div style="margin-top:20px;font-size:11px;color:var(--text3)">
+    Encontre o Property ID em Google Analytics &rarr; Admin &rarr; Property Settings
+  </div>
+</div>
+
+{% else %}
+<!-- KPI CARDS -->
+{% set d = overview.get('data', {}) %}
+<div class="grid g4" style="margin-bottom:20px">
+  <div class="card" style="border-top:3px solid var(--blue)">
+    <div class="card-title">Sessoes</div>
+    <div class="kpi-val" style="color:var(--blue)">{{ "{:,}".format(d.get('sessions', 0)|int) }}</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:75%;background:var(--blue)"></div></div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--accent)">
+    <div class="card-title">Usuarios</div>
+    <div class="kpi-val" style="color:var(--accent)">{{ "{:,}".format(d.get('users', 0)|int) }}</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:65%;background:var(--accent)"></div></div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--pink)">
+    <div class="card-title">Novos Usuarios</div>
+    <div class="kpi-val" style="color:var(--pink)">{{ "{:,}".format(d.get('new_users', 0)|int) }}</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:55%;background:var(--pink)"></div></div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--green)">
+    <div class="card-title">Pageviews</div>
+    <div class="kpi-val" style="color:var(--green)">{{ "{:,}".format(d.get('pageviews', 0)|int) }}</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:80%;background:var(--green)"></div></div>
+  </div>
+</div>
+
+<div class="grid g4" style="margin-bottom:20px">
+  <div class="card" style="border-top:3px solid var(--yellow)">
+    <div class="card-title">Bounce Rate</div>
+    <div class="kpi-val" style="color:var(--yellow)">{{ d.get('bounce_rate', 0) }}%</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:{{ d.get('bounce_rate', 0) }}%;background:var(--yellow)"></div></div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--text2)">
+    <div class="card-title">Duracao Media (seg)</div>
+    <div class="kpi-val" style="color:var(--text)">{{ d.get('avg_session_sec', 0)|int }}s</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:{{ [d.get('avg_session_sec', 0)|int, 300]|min / 3 }}%;background:var(--accent2)"></div></div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--green)">
+    <div class="card-title">Conversoes</div>
+    <div class="kpi-val" style="color:var(--green)">{{ "{:,}".format(d.get('conversions', 0)|int) }}</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:60%;background:var(--green)"></div></div>
+  </div>
+  <div class="card" style="border-top:3px solid var(--accent)">
+    <div class="card-title">Receita</div>
+    <div class="kpi-val" style="color:var(--accent)">R$ {{ "{:,.2f}".format(d.get('revenue', 0)|float) }}</div>
+    <div class="kpi-bar"><div class="kpi-bar-fill" style="width:70%;background:var(--accent)"></div></div>
+  </div>
+</div>
+
+<!-- TRAFFIC SOURCES -->
+<div class="card" style="margin-bottom:20px">
+  <div class="sec-title">Fontes de Trafego</div>
+  {% set src_list = sources.get('sources', []) if sources else [] %}
+  {% if src_list %}
+  <div style="overflow-x:auto">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Fonte</th>
+          <th>Midia</th>
+          <th style="text-align:right">Sessoes</th>
+          <th style="text-align:right">Usuarios</th>
+          <th style="text-align:right">Conversoes</th>
+          <th style="text-align:right">Receita</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in src_list %}
+        <tr>
+          <td style="font-weight:600">{{ s.source|default('-') }}</td>
+          <td><span class="badge b-blue">{{ s.medium|default('-') }}</span></td>
+          <td style="text-align:right">{{ "{:,}".format(s.sessions|default(0)|int) }}</td>
+          <td style="text-align:right;color:var(--text2)">{{ "{:,}".format(s.users|default(0)|int) }}</td>
+          <td style="text-align:right;color:var(--green)">{{ s.conversions|default(0) }}</td>
+          <td style="text-align:right;color:var(--accent)">R$ {{ "{:,.2f}".format(s.revenue|default(0)|float) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:30px;color:var(--text2)">
+    <div style="font-size:28px;margin-bottom:8px">🔗</div>
+    <div style="font-size:14px;font-weight:600">Sem dados de fontes de trafego</div>
+    <div style="font-size:12px;margin-top:4px">Os dados aparecerao assim que o Analytics coletar informacoes suficientes</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- TOP PAGES -->
+<div class="card" style="margin-bottom:20px">
+  <div class="sec-title">Paginas Mais Visitadas</div>
+  {% set pg_list = top_pages.get('pages', []) if top_pages else [] %}
+  {% if pg_list %}
+  <div style="overflow-x:auto">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>Pagina</th>
+          <th style="text-align:right">Pageviews</th>
+          <th style="text-align:right">Tempo Medio (seg)</th>
+          <th style="text-align:center">Bounce Rate</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for pg in pg_list %}
+        <tr>
+          <td>
+            <div style="max-width:350px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ pg.path|default('-') }}">{{ pg.path|default('-') }}</div>
+          </td>
+          <td style="text-align:right;font-weight:700;color:var(--blue)">{{ "{:,}".format(pg.pageviews|default(0)|int) }}</td>
+          <td style="text-align:right;color:var(--text2)">{{ pg.avg_time_sec|default(0)|int }}s</td>
+          <td style="text-align:center">
+            {% set br = pg.bounce_rate|default(0)|float %}
+            <span class="badge {% if br <= 40 %}b-green{% elif br <= 60 %}b-yellow{% else %}b-red{% endif %}">{{ br }}%</span>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:30px;color:var(--text2)">
+    <div style="font-size:28px;margin-bottom:8px">📄</div>
+    <div style="font-size:14px;font-weight:600">Sem dados de paginas</div>
+    <div style="font-size:12px;margin-top:4px">Os dados aparecerao assim que o Analytics coletar informacoes suficientes</div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+/* ── Save GA Config ── */
+function saveGaConfig() {
+  var pid = document.getElementById('ga_property_id');
+  if (!pid) return;
+  var val = pid.value.trim();
+  if (!val) return;
+  var btn = document.getElementById('btn_ga_save');
+  var box = document.getElementById('ga_config_result');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  fetch('/analytics/config', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({property_id: val})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+    if (data.error) {
+      box.innerHTML = '<div class="alert alert-error">' + data.error + '</div>';
+    } else {
+      box.innerHTML = '<div class="alert alert-success">Google Analytics configurado com sucesso. Recarregando...</div>';
+      setTimeout(function() { location.reload(); }, 1500);
+    }
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+    box.innerHTML = '<div class="alert alert-error">Erro ao salvar configuracao. Tente novamente.</div>';
+  });
+}
+</script>
+{% endblock %}

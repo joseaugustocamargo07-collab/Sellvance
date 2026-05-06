@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+{% set page = 'seo-audit' %}
+{% block title %}Site Audit{% endblock %}
+{% block content %}
+<h1 style="font-size:22px;font-weight:900;margin-bottom:20px;">🩺 Site Audit — PageSpeed + SEO</h1>
+
+<div class="card" style="padding:24px;margin-bottom:20px;">
+  <div class="sec-title">Analisar URL</div>
+  <div style="display:flex;gap:10px;">
+    <input id="audit-url" placeholder="https://www.seusite.com.br" style="flex:1;padding:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:14px;">
+    <select id="audit-strategy" style="padding:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:8px;">
+      <option value="mobile">📱 Mobile</option>
+      <option value="desktop">🖥️ Desktop</option>
+    </select>
+    <button id="audit-btn" onclick="runAudit()" style="padding:12px 24px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;white-space:nowrap;">Analisar</button>
+  </div>
+</div>
+
+<div id="audit-result" style="display:none;">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;" id="scores"></div>
+  <div class="card" style="padding:20px;margin-bottom:16px;" id="vitals"></div>
+  <div class="card" style="padding:20px;margin-bottom:16px;" id="issues-box"></div>
+  <div class="card" style="padding:20px;" id="opps-box"></div>
+</div>
+
+{% if audits %}
+<div class="card" style="padding:20px;margin-top:24px;">
+  <div class="sec-title">📋 Historico de Audits</div>
+  <table style="width:100%;font-size:13px;">
+    <thead><tr style="color:var(--text2);"><th style="text-align:left;padding:8px;">URL</th><th>Performance</th><th>SEO</th><th>Data</th></tr></thead>
+    <tbody>
+    {% for a in audits %}
+    <tr style="border-top:1px solid var(--border);">
+      <td style="padding:8px;max-width:300px;overflow:hidden;text-overflow:ellipsis;">{{ a.url }}</td>
+      <td style="text-align:center;"><span style="color:{% if a.performance>=80 %}var(--green){% elif a.performance>=50 %}var(--yellow){% else %}var(--red){% endif %};font-weight:700;">{{ a.performance }}</span></td>
+      <td style="text-align:center;"><span style="color:{% if a.seo_score>=80 %}var(--green){% elif a.seo_score>=50 %}var(--yellow){% else %}var(--red){% endif %};font-weight:700;">{{ a.seo_score }}</span></td>
+      <td style="text-align:center;color:var(--text2);">{{ a.created_at[:16] }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+async function runAudit(){
+  const url = document.getElementById('audit-url').value.trim();
+  const strategy = document.getElementById('audit-strategy').value;
+  if(!url){alert('Digite uma URL');return;}
+  const btn = document.getElementById('audit-btn');
+  btn.disabled=true; btn.textContent='Analisando... (30-60s)';
+  document.getElementById('audit-result').style.display='none';
+  try{
+    const r=await fetch('/seo/audit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,strategy})});
+    const d=await r.json();
+    if(d.ok) showResult(d); else alert('Erro: '+(d.error||JSON.stringify(d)));
+  }catch(e){alert('Erro: '+e.message);}
+  btn.disabled=false; btn.textContent='Analisar';
+}
+
+function scoreColor(v){return v>=80?'#10b981':v>=50?'#f59e0b':'#ef4444';}
+
+function showResult(d){
+  document.getElementById('audit-result').style.display='block';
+  document.getElementById('scores').innerHTML=[
+    ['Performance',d.performance],['Acessibilidade',d.accessibility],
+    ['Boas Praticas',d.best_practices],['SEO',d.seo_score]
+  ].map(([l,v])=>`<div class="card" style="padding:20px;text-align:center;">
+    <div style="font-size:36px;font-weight:900;color:${scoreColor(v)}">${v}</div>
+    <div style="font-size:11px;color:var(--text2);text-transform:uppercase;margin-top:4px;">${l}</div>
+  </div>`).join('');
+
+  document.getElementById('vitals').innerHTML=`
+    <div class="sec-title">Core Web Vitals</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+      ${[['FCP',d.fcp_ms+'ms'],['LCP',d.lcp_ms+'ms'],['CLS',d.cls],['TBT',d.tbt_ms+'ms'],['Speed Index',d.speed_index+'ms']].map(([l,v])=>
+        `<div style="background:var(--bg2);padding:12px;border-radius:8px;text-align:center;">
+          <div style="font-size:11px;color:var(--text2);">${l}</div>
+          <div style="font-size:18px;font-weight:800;">${v}</div>
+        </div>`).join('')}
+    </div>`;
+
+  const issuesHtml=(d.issues||[]).map(i=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+    <span style="color:${scoreColor(i.score*100)};font-weight:700;">${Math.round(i.score*100)}</span>
+    <strong style="margin-left:8px;">${i.title}</strong>
+    <span style="color:var(--text2);margin-left:8px;">${i.display_value||''}</span>
+  </div>`).join('');
+  document.getElementById('issues-box').innerHTML=`<div class="sec-title">⚠️ Problemas (${(d.issues||[]).length})</div>${issuesHtml||'<div style="color:var(--text2);font-size:13px;">Nenhum problema critico</div>'}`;
+
+  const oppsHtml=(d.opportunities||[]).map(i=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+    <strong>${i.title}</strong>
+    <span style="color:var(--green);margin-left:8px;">${i.display_value||''}</span>
+  </div>`).join('');
+  document.getElementById('opps-box').innerHTML=`<div class="sec-title">💡 Oportunidades (${(d.opportunities||[]).length})</div>${oppsHtml||'<div style="color:var(--text2);font-size:13px;">Nenhuma oportunidade detectada</div>'}`;
+}
+</script>
+{% endblock %}
